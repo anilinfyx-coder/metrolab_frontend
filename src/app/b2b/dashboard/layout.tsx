@@ -14,12 +14,12 @@ export default function B2bDashboardLayout({ children }: { children: React.React
   const router = useRouter();
   useEffect(() => {
     const token = localStorage.getItem('b2b_token');
-    if (!token) router.push('/b2b/login');
+    if (!token) router.push('/');
   }, [router]);
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={b2bNavItems} basePath="/b2b/dashboard" tokenKey="b2b_token" userKey="b2b_user" loginPath="/b2b/login" />
+      <Sidebar navItems={b2bNavItems} basePath="/b2b/dashboard" tokenKey="b2b_token" userKey="b2b_user" loginPath="/" />
       <div className="main-content">{children}</div>
     </div>
   );

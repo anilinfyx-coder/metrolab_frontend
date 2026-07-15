@@ -12,12 +12,12 @@ export default function CorporateDashboardLayout({ children }: { children: React
   const router = useRouter();
   useEffect(() => {
     const token = localStorage.getItem('corporate_token');
-    if (!token) router.push('/corporate/login');
+    if (!token) router.push('/');
   }, [router]);
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={corporateNavItems} basePath="/corporate/dashboard" tokenKey="corporate_token" userKey="corporate_user" loginPath="/corporate/login" />
+      <Sidebar navItems={corporateNavItems} basePath="/corporate/dashboard" tokenKey="corporate_token" userKey="corporate_user" loginPath="/" />
       <div className="main-content">{children}</div>
     </div>
   );

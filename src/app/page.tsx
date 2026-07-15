@@ -1,99 +1,180 @@
 'use client';
-import Link from 'next/link';
+import { useState, FormEvent, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
-export default function LandingPage() {
-  const portals = [
-    { title: 'Super Admin', path: '/superadmin/login', desc: 'System configuration and global management', icon: '⚡', color: '#8e44ad' },
-    { title: 'Admin / Staff', path: '/admin/login', desc: 'Lab operations and daily management', icon: '👨‍💼', color: '#18BADD' },
-    { title: 'B2B Client', path: '/b2b/login', desc: 'Partner clinics and hospitals portal', icon: '🏢', color: '#27ae60' },
-    { title: 'Corporate Client', path: '/corporate/login', desc: 'Employee testing and corporate dashboard', icon: '🏭', color: '#e67e22' },
-  ];
+export default function UnifiedLoginPage() {
+  const router = useRouter();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Auto clear any old tokens if someone explicitly goes to login
+  useEffect(() => {
+    localStorage.removeItem('superadmin_token');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('b2b_token');
+    localStorage.removeItem('corporate_token');
+  }, []);
+
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    
+    try {
+      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+      const res = await fetch(`${API}/api/Auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      
+      if (data.response_code === '200') {
+        const user = data.obj;
+        const portal = user.portal;
+        
+        // Save token and user based on portal
+        if (portal === 'superadmin') {
+          localStorage.setItem('superadmin_token', user.token);
+          localStorage.setItem('superadmin_user', JSON.stringify(user));
+          router.push('/superadmin/dashboard');
+        } else if (portal === 'admin') {
+          localStorage.setItem('admin_token', user.token);
+          localStorage.setItem('admin_user', JSON.stringify(user));
+          router.push('/admin/dashboard');
+        } else if (portal === 'b2b') {
+          localStorage.setItem('b2b_token', user.token);
+          localStorage.setItem('b2b_user', JSON.stringify(user));
+          router.push('/b2b/dashboard');
+        } else if (portal === 'corporate') {
+          localStorage.setItem('corporate_token', user.token);
+          localStorage.setItem('corporate_user', JSON.stringify(user));
+          router.push('/corporate/dashboard');
+        } else {
+          setError('Unknown portal role');
+        }
+      } else {
+        setError(typeof data.obj === 'string' ? data.obj : 'Invalid credentials');
+      }
+    } catch {
+      setError('Unable to connect to server. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div style={{
       minHeight: '100vh',
       display: 'flex',
-      flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       background: 'linear-gradient(135deg, #f4f6f8 0%, #dde3ea 100%)',
-      padding: '2rem',
+      padding: '1rem',
     }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-        <div style={{
-          width: 72, height: 72, borderRadius: 18,
-          background: '#18BADD',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '2rem', fontWeight: 700, color: 'white',
-          margin: '0 auto 1rem',
-          boxShadow: '0 6px 20px rgba(24,186,221,0.3)',
-        }}>ML</div>
-        <h1 style={{ fontSize: '1.8rem', fontWeight: 700, color: '#2c3e50', marginBottom: '0.4rem' }}>Metrolab</h1>
-        <p style={{ color: '#7f8c9a', fontSize: '0.9rem', fontStyle: 'italic' }}>
-          Precision is our Home Mark
-        </p>
-        <p style={{ color: '#7f8c9a', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-          Please select your portal to continue
-        </p>
-      </div>
-
-      {/* Portal cards */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '1.25rem',
+        background: '#ffffff',
+        border: '1px solid #e6e9ed',
+        borderRadius: 12,
+        padding: '2.5rem',
         width: '100%',
-        maxWidth: 1100,
+        maxWidth: 420,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
       }}>
-        {portals.map(p => (
-          <Link key={p.title} href={p.path} style={{ textDecoration: 'none' }}>
-            <div style={{
-              background: '#ffffff',
-              border: '1px solid #e6e9ed',
-              borderRadius: 10,
-              padding: '1.75rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              gap: '0.75rem',
-              height: '100%',
-            }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = p.color;
-                (e.currentTarget as HTMLDivElement).style.boxShadow = `0 6px 20px ${p.color}25`;
-                (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-3px)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = '#e6e9ed';
-                (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)';
-                (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
-              }}
-            >
-              <div style={{
-                width: 52, height: 52, borderRadius: 12,
-                background: `${p.color}18`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '1.5rem',
-              }}>{p.icon}</div>
-              <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#2c3e50', marginBottom: '0.3rem' }}>{p.title}</h3>
-                <p style={{ fontSize: '0.8rem', color: '#7f8c9a', lineHeight: 1.5 }}>{p.desc}</p>
-              </div>
-              <div style={{ marginTop: 'auto', color: p.color, fontWeight: 600, fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                Enter Portal →
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: 16,
+            background: '#18BADD',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '1.75rem', margin: '0 auto 1rem', color: 'white', fontWeight: 'bold',
+            boxShadow: `0 6px 20px rgba(24,186,221,0.4)`,
+          }}>ML</div>
+          <h1 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#2c3e50', marginBottom: '0.3rem' }}>Metrolab Login</h1>
+          <p style={{ fontSize: '0.85rem', color: '#7f8c9a' }}>Enter your email and password to continue</p>
+        </div>
 
-      <p style={{ color: '#aab4be', fontSize: '0.78rem', marginTop: '2.5rem' }}>
-        Metrolab v2.0 — Node.js / Next.js Edition
-      </p>
+        <form onSubmit={handleLogin}>
+          <div style={{ marginBottom: '1.1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#2c3e50', marginBottom: '0.35rem' }}>
+              Email or Username
+            </label>
+            <input
+              type="text"
+              placeholder="Enter email or username"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+              autoComplete="username"
+              style={{
+                width: '100%', padding: '0.6rem 0.9rem',
+                background: '#fff', border: '1px solid #e6e9ed',
+                borderRadius: 6, color: '#2c3e50', fontSize: '0.875rem',
+                fontFamily: 'inherit', outline: 'none',
+                transition: 'border-color 0.15s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#18BADD'}
+              onBlur={e => e.target.style.borderColor = '#e6e9ed'}
+            />
+          </div>
+          
+          <div style={{ marginBottom: '1.25rem' }}>
+            <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#2c3e50', marginBottom: '0.35rem' }}>
+              Password
+            </label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              style={{
+                width: '100%', padding: '0.6rem 0.9rem',
+                background: '#fff', border: '1px solid #e6e9ed',
+                borderRadius: 6, color: '#2c3e50', fontSize: '0.875rem',
+                fontFamily: 'inherit', outline: 'none',
+                transition: 'border-color 0.15s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#18BADD'}
+              onBlur={e => e.target.style.borderColor = '#e6e9ed'}
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.2)',
+              borderRadius: 6, padding: '0.65rem 0.9rem', marginBottom: '1rem',
+              fontSize: '0.83rem', color: '#c0392b',
+            }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: '100%', padding: '0.7rem',
+              background: loading ? '#a0d4e0' : '#18BADD',
+              color: 'white', border: 'none', borderRadius: 6,
+              fontSize: '0.9rem', fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit', transition: 'background 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+            }}
+            onMouseEnter={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#12a0be'; }}
+            onMouseLeave={e => { if (!loading) (e.currentTarget as HTMLButtonElement).style.background = '#18BADD'; }}
+          >
+            {loading ? '⏳ Signing in...' : '🔐 Sign In'}
+          </button>
+        </form>
+
+        <div style={{ textAlign: 'center', marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e6e9ed' }}>
+          <span style={{ fontSize: '0.72rem', color: '#aab4be' }}>Metrolab — Precision is our Home Mark</span>
+        </div>
+      </div>
     </div>
   );
 }

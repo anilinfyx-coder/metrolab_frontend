@@ -23,7 +23,7 @@ export default function Sidebar({
   basePath = '/admin/dashboard',
   tokenKey = 'admin_token',
   userKey = 'admin_user',
-  loginPath = '/admin/login',
+  loginPath = '/',
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();

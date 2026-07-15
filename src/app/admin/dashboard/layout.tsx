@@ -16,12 +16,12 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
-    if (!token) router.push('/admin/login');
+    if (!token) router.push('/');
   }, [router]);
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={adminNavItems} basePath="/admin/dashboard" tokenKey="admin_token" userKey="admin_user" loginPath="/admin/login" />
+      <Sidebar navItems={adminNavItems} basePath="/admin/dashboard" tokenKey="admin_token" userKey="admin_user" loginPath="/" />
       <div className="main-content">
         {children}
       </div>

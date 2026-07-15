@@ -15,12 +15,12 @@ export default function SuperAdminDashboardLayout({ children }: { children: Reac
   const router = useRouter();
   useEffect(() => {
     const token = localStorage.getItem('superadmin_token');
-    if (!token) router.push('/superadmin/login');
+    if (!token) router.push('/');
   }, [router]);
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={superAdminNavItems} basePath="/superadmin/dashboard" tokenKey="superadmin_token" userKey="superadmin_user" loginPath="/superadmin/login" />
+      <Sidebar navItems={superAdminNavItems} basePath="/superadmin/dashboard" tokenKey="superadmin_token" userKey="superadmin_user" loginPath="/" />
       <div className="main-content">{children}</div>
     </div>
   );
