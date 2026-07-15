@@ -1,5 +1,6 @@
 'use client';
 import Sidebar, { NavItem } from '../../components/Sidebar';
+import AppFooter from '../../components/AppFooter';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -23,7 +24,8 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
     <div className="app-layout">
       <Sidebar navItems={adminNavItems} basePath="/admin/dashboard" tokenKey="admin_token" userKey="admin_user" loginPath="/" />
       <div className="main-content">
-        {children}
+        <div className="main-content-body">{children}</div>
+        <AppFooter />
       </div>
     </div>
   );

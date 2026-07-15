@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 export type NavItem = {
@@ -21,24 +21,15 @@ interface SidebarProps {
 export default function Sidebar({
   navItems,
   basePath = '/admin/dashboard',
-  tokenKey = 'admin_token',
   userKey = 'admin_user',
-  loginPath = '/',
 }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [user, setUser] = useState<{ name?: string; email?: string } | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem(userKey);
     if (stored) setUser(JSON.parse(stored));
   }, [userKey]);
-
-  const signOut = () => {
-    localStorage.removeItem(tokenKey);
-    localStorage.removeItem(userKey);
-    router.push(loginPath);
-  };
 
   // Group nav items by section
   const sections = navItems.reduce<Record<string, typeof navItems>>((acc, item) => {
@@ -58,8 +49,8 @@ export default function Sidebar({
         <div className="sidebar-logo-left">
           <div className="sidebar-logo-icon">ML</div>
           <div>
-            <div className="sidebar-logo-text">Metrolab</div>
-            <div style={{ fontSize: '0.65rem', color: '#aab4be', fontStyle: 'italic', marginTop: '1px' }}>
+            <div className="sidebar-logo-text">METRO LAB</div>
+            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.92)', fontStyle: 'italic', marginTop: '1px' }}>
               Precision is our Home Mark
             </div>
           </div>
@@ -73,15 +64,15 @@ export default function Sidebar({
       {user && (
         <div style={{
           padding: '0.65rem 1rem',
-          background: '#22262a',
-          borderBottom: '1px solid #3a4149',
+          background: 'rgba(0,0,0,0.12)',
+          borderBottom: '1px solid rgba(255,255,255,0.12)',
           display: 'flex',
           alignItems: 'center',
           gap: '0.5rem',
         }}>
           <div style={{
             width: 30, height: 30, borderRadius: '50%',
-            background: 'var(--primary)', color: 'white',
+            background: 'var(--sidebar-active)', color: '#003d54',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '0.75rem', fontWeight: 700, flexShrink: 0
           }}>
@@ -91,7 +82,7 @@ export default function Sidebar({
             <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user.name}
             </div>
-            <div style={{ fontSize: '0.7rem', color: '#aab4be', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.9)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {user.email}
             </div>
           </div>
@@ -123,30 +114,12 @@ export default function Sidebar({
         ))}
       </nav>
 
-      <div className="sidebar-footer" style={{ background: 'transparent' }}>
-        <div style={{ marginBottom: '0.5rem' }} className="sidebar-link-text">
-          <Link href="/" style={{ fontSize: '0.75rem', color: '#aab4be', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+      <div className="sidebar-footer" style={{ background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+        <div className="sidebar-link-text">
+          <Link href="/" style={{ fontSize: '0.75rem', color: '#ffffff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
             ← Switch Portal
           </Link>
         </div>
-        <button
-          id="signout-btn"
-          onClick={signOut}
-          className="sidebar-link-text"
-          style={{
-            width: '100%', padding: '0.5rem 0.85rem',
-            background: 'transparent', border: '1px solid #3a4149',
-            borderRadius: 6, color: '#aab4be',
-            fontSize: '0.82rem', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: '0.4rem',
-            justifyContent: 'center', fontFamily: 'inherit',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(231,76,60,0.1)'; (e.currentTarget as HTMLButtonElement).style.color = '#e74c3c'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(231,76,60,0.3)'; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = '#aab4be'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#3a4149'; }}
-        >
-          🚪 Sign Out
-        </button>
       </div>
     </aside>
   );

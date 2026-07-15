@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -9,6 +11,7 @@ interface SpecimenType { id: number; name: string; description: string; status: 
 const emptyForm = { name: '', description: '', id: null as number | null };
 
 export default function SpecimenTypePage() {
+  const confirmDialog = useConfirm();
   const [types, setTypes] = useState<SpecimenType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -40,7 +43,13 @@ export default function SpecimenTypePage() {
   };
 
   const remove = async (id: number) => {
-    if (!confirm('Delete this Specimen Type?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Specimen Type, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/SpecimenType/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     loadData();
   };
@@ -55,12 +64,9 @@ export default function SpecimenTypePage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Specimen Types</h1>
-        <div className="topnav-actions">
+      <TopNav title="Specimen Types">
           <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm }); setShowModal(true); }}>➕ Add Specimen Type</button>
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         {showModal && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>

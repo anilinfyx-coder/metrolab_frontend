@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -169,9 +170,7 @@ export default function PatientDemographicPage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Patient Demographic</h1>
-      </div>
+      <TopNav title="Patient Demographic" />
       <div style={{ padding: '1.5rem' }}>
         {msg && (
           <div style={{

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import TopNav from '../../components/TopNav';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -36,15 +37,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <div className="topnav">
-        <h1 className="topnav-title">Dashboard</h1>
-        <div className="topnav-actions">
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </span>
-          <div className="avatar" id="avatar-btn">A</div>
-        </div>
-      </div>
+      <TopNav title="Dashboard" />
 
       <div className="page-content">
         <div className="page-header">

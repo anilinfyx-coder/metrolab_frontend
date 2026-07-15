@@ -1,5 +1,6 @@
 'use client';
 import Sidebar, { NavItem } from '../../components/Sidebar';
+import AppFooter from '../../components/AppFooter';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -20,7 +21,10 @@ export default function B2bDashboardLayout({ children }: { children: React.React
   return (
     <div className="app-layout">
       <Sidebar navItems={b2bNavItems} basePath="/b2b/dashboard" tokenKey="b2b_token" userKey="b2b_user" loginPath="/" />
-      <div className="main-content">{children}</div>
+      <div className="main-content">
+        <div className="main-content-body">{children}</div>
+        <AppFooter />
+      </div>
     </div>
   );
 }

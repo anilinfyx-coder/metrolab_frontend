@@ -1,5 +1,6 @@
 'use client';
 import Sidebar, { NavItem } from '../../components/Sidebar';
+import AppFooter from '../../components/AppFooter';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -21,7 +22,10 @@ export default function SuperAdminDashboardLayout({ children }: { children: Reac
   return (
     <div className="app-layout">
       <Sidebar navItems={superAdminNavItems} basePath="/superadmin/dashboard" tokenKey="superadmin_token" userKey="superadmin_user" loginPath="/" />
-      <div className="main-content">{children}</div>
+      <div className="main-content">
+        <div className="main-content-body">{children}</div>
+        <AppFooter />
+      </div>
     </div>
   );
 }

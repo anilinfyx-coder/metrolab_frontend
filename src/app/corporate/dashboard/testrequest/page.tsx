@@ -1,10 +1,13 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
 
 export default function TestRequestsPage() {
+  const confirmDialog = useConfirm();
   const [requests, setRequests] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,13 @@ export default function TestRequestsPage() {
     if (altC + drugC > total) return alert("Count in Drug + Alternate exceeds total employees");
     if (altC + alcC > total) return alert("Count in Alcohol + Alternate exceeds total employees");
 
-    if (!confirm('This is Random Pulling. Once this request has been generated, it will get auto submitted to your Lab. This cannot be reverted. Confirm?')) return;
+    const ok = await confirmDialog({
+      title: 'This is Random Pulling, Please confirm',
+      message: 'Once this request has been generated, it will get auto submitted to your Lab. This cannot be reverted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM',
+    });
+    if (!ok) return;
 
     setSaving(true);
 
@@ -120,7 +129,13 @@ export default function TestRequestsPage() {
   };
 
   const remove = async (id: number) => {
-    if (!confirm('Delete this request?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Test Request, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/TestRequest/deleteTestRequest`, { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json', token: getToken() },
@@ -133,12 +148,9 @@ export default function TestRequestsPage() {
     <div className="page-content">
       {viewMode === 'LIST' && (
         <>
-          <div className="topnav">
-            <h1 className="topnav-title">List of Test Requests</h1>
-            <div className="topnav-actions">
-              <button className="btn btn-primary" onClick={() => setViewMode('GENERATE')}>Generate Test Request</button>
-            </div>
-          </div>
+          <TopNav title="List of Test Requests">
+          <button className="btn btn-primary" onClick={() => setViewMode('GENERATE')}>Generate Test Request</button>
+        </TopNav>
           <div className="card" style={{ padding: '1rem' }}>
             {loading ? <div>Loading...</div> : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
@@ -174,12 +186,9 @@ export default function TestRequestsPage() {
 
       {viewMode === 'GENERATE' && (
         <>
-          <div className="topnav">
-            <h1 className="topnav-title">Test Request Detail</h1>
-            <div className="topnav-actions">
-              <button className="btn btn-ghost" onClick={() => setViewMode('LIST')}>Close</button>
-            </div>
-          </div>
+          <TopNav title="Test Request Detail">
+          <button className="btn btn-ghost" onClick={() => setViewMode('LIST')}>Close</button>
+        </TopNav>
           
           <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>

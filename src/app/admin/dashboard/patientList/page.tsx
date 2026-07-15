@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -42,12 +43,9 @@ export default function PatientListPage() {
   if (selected) {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Patient History — {selected.name}</h1>
-          <div className="topnav-actions">
-            <button className="btn btn-ghost" id="back-to-list-btn" onClick={() => setSelected(null)}>← Back to List</button>
-          </div>
-        </div>
+        <TopNav title={`Patient History — ${selected.name || ''}`}>
+          <button className="btn btn-ghost" id="back-to-list-btn" onClick={() => setSelected(null)}>← Back to List</button>
+        </TopNav>
         <div style={{ padding: '1.5rem' }}>
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div className="card-header"><span className="card-title">👤 Patient Info</span></div>
@@ -95,13 +93,10 @@ export default function PatientListPage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Patient List</h1>
-        <div className="topnav-actions">
+      <TopNav title="Patient List">
           <input id="patient-search" type="text" placeholder="Search by name, mobile, SSN..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 280 }} />
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>

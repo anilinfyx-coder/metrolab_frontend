@@ -1,6 +1,8 @@
 'use client';
 import { useState, useEffect } from 'react';
 import ApplyTestForm from './ApplyTestForm';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -18,6 +20,7 @@ interface WaitingEntry {
 }
 
 export default function WaitingListPage() {
+  const confirmDialog = useConfirm();
   const [entries, setEntries] = useState<WaitingEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -34,7 +37,13 @@ export default function WaitingListPage() {
   useEffect(() => { loadData(); }, []);
 
   const remove = async (id: number) => {
-    if (!confirm('Remove this entry from the waiting list?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to remove Waiting List entry, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/WaitingList/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     loadData();
   };
@@ -48,14 +57,11 @@ export default function WaitingListPage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Waiting List</h1>
-        <div className="topnav-actions">
+      <TopNav title="Waiting List">
           <input id="wl-search" type="text" placeholder="Search by name, mobile, requisition..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 280 }} />
           <button className="btn btn-ghost" onClick={loadData} style={{ fontSize: '0.875rem' }}>🔄 Refresh</button>
-        </div>
-      </div>
+        </TopNav>
 
       <div style={{ padding: '1.5rem' }}>
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
