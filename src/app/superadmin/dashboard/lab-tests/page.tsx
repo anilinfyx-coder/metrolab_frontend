@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -16,6 +18,7 @@ interface LabTest {
 const emptyTest: Partial<LabTest> = { name: '', description: '' };
 
 export default function LabTestsPage() {
+  const confirmDialog = useConfirm();
   const [tests, setTests] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -61,19 +64,22 @@ export default function LabTestsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this lab test?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Lab Test, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API_BASE}/api/LabTests/${id}`, { method: 'DELETE', headers });
     fetchTests();
   };
 
   return (
     <>
-      <div className="topnav">
-        <h1 className="topnav-title">Lab Tests</h1>
-        <div className="topnav-actions">
+      <TopNav title="Lab Tests">
           <button id="add-labtest-btn" className="btn btn-primary" onClick={openAdd}>➕ Add Lab Test</button>
-        </div>
-      </div>
+        </TopNav>
 
       <div className="page-content">
         <div className="page-header">

@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -50,6 +52,7 @@ const CHECKBOX_FIELDS = [
 ];
 
 export default function LabTestCategoryPage() {
+  const confirmDialog = useConfirm();
   const [tests, setTests] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('list');
@@ -106,7 +109,13 @@ export default function LabTestCategoryPage() {
     else { setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : JSON.stringify(d.obj) }); }
   };
   const remove = async (id: number) => {
-    if (!confirm('Delete this Lab Test? This cannot be restored.')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Lab Test, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/LabTests/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     loadTests();
   };
@@ -150,7 +159,13 @@ export default function LabTestCategoryPage() {
     if (selectedTest) openSpecimen(selectedTest);
   };
   const deleteSpecimen = async (id: number) => {
-    if (!confirm('Delete this specimen type link?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Specimen Type link, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/SpecimenTypeDrugLinking/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     if (selectedTest) openSpecimen(selectedTest);
   };
@@ -178,7 +193,13 @@ export default function LabTestCategoryPage() {
     if (selectedTest) openQuestions(selectedTest);
   };
   const deleteQuestion = async (id: number) => {
-    if (!confirm('Delete this question?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Question, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/ReportQuestions/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     if (selectedTest) openQuestions(selectedTest);
   };
@@ -206,7 +227,13 @@ export default function LabTestCategoryPage() {
     if (selectedTest) openResultParams(selectedTest);
   };
   const deleteResult = async (id: number) => {
-    if (!confirm('Delete this parameter?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Parameter, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/ReportRequestParameters/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     if (selectedTest) openResultParams(selectedTest);
   };
@@ -220,12 +247,9 @@ export default function LabTestCategoryPage() {
   if (view === 'form') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Lab Test Type Detail</h1>
-          <div className="topnav-actions">
-            <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
-          </div>
-        </div>
+        <TopNav title="Lab Test Type Detail">
+          <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem' }}>
           {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
           <div className="card">
@@ -282,10 +306,9 @@ export default function LabTestCategoryPage() {
   if (view === 'specimen') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Specimen Types — {selectedTest?.name}</h1>
-          <div className="topnav-actions"><button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button></div>
-        </div>
+        <TopNav title={`Specimen Types — ${selectedTest?.name || ''}`}>
+          <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
           <div className="card">
             <div className="card-header"><span className="card-title">Link Specimen Type Detail</span></div>
@@ -335,10 +358,9 @@ export default function LabTestCategoryPage() {
   if (view === 'question') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Test Report Questions — {selectedTest?.name}</h1>
-          <div className="topnav-actions"><button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button></div>
-        </div>
+        <TopNav title={`Test Report Questions — ${selectedTest?.name || ''}`}>
+          <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '380px 1fr', gap: '1.5rem', alignItems: 'start' }}>
           <div className="card">
             <div className="card-header"><span className="card-title">Test Report Question Detail</span></div>
@@ -401,10 +423,9 @@ export default function LabTestCategoryPage() {
   if (view === 'result') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Test Result Parameters — {selectedTest?.name}</h1>
-          <div className="topnav-actions"><button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button></div>
-        </div>
+        <TopNav title={`Test Result Parameters — ${selectedTest?.name || ''}`}>
+          <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '400px 1fr', gap: '1.5rem', alignItems: 'start' }}>
           <div className="card">
             <div className="card-header"><span className="card-title">Test Result Parameter Detail</span></div>
@@ -474,15 +495,12 @@ export default function LabTestCategoryPage() {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Lab Test Categories</h1>
-        <div className="topnav-actions">
+      <TopNav title="Lab Test Categories">
           <input type="text" placeholder="Search tests..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 220 }} />
           <button className="btn btn-ghost" onClick={loadTests}>🔄 Refresh</button>
           <button className="btn btn-primary" onClick={openAdd}>➕ Add</button>
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>

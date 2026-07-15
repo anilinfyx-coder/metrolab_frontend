@@ -1,5 +1,8 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
+import ListingTable, { ActionIcons, ListingHeaderActions, ListingColumn } from '../../../components/ListingTable';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
@@ -8,23 +11,56 @@ function getUser() { return typeof window !== 'undefined' ? JSON.parse(localStor
 interface CorporateClient {
   id: number; company_name: string; contact_person_name: string;
   email: string; mobile: string; status: boolean; address?: string;
-  country_id?: string; state_id?: string; city_id?: string; district_id?: string;
-  region_id?: string; pincode?: string; password?: string;
+  country_id?: number | string | null; state_id?: number | string | null;
+  city_id?: number | string | null; pincode?: string; password?: string;
 }
 
-const emptyClient = { 
-  company_name: '', contact_person_name: '', email: '', mobile: '', 
-  address: '', country_id: '', state_id: '', city_id: '', district_id: '', 
-  region_id: '', pincode: '', password: '' 
+interface GeoItem { id: number; name: string; country_id?: number; state_id?: number; }
+
+const emptyClient = {
+  company_name: '', contact_person_name: '', email: '', mobile: '',
+  address: '', country_id: '', state_id: '', city_id: '', pincode: '', password: ''
 };
 
+/** Same password rules as Staff Users / B2B Profile */
+function validatePassword(password: string): string | null {
+  const pwd = password.trim();
+  if (!pwd) return 'Password is required.';
+  if (pwd.length < 6) return 'Password must be at least 6 characters.';
+  if (/[^a-zA-Z0-9@#]/.test(pwd)) return 'Only @ # are allowed as special characters in password.';
+  return null;
+}
+
+const columns: ListingColumn<CorporateClient>[] = [
+  { key: 'company_name', label: 'Company Name', sortable: true },
+  { key: 'contact_person_name', label: 'Contact', sortable: true },
+  { key: 'mobile', label: 'Mobile', sortable: true },
+  { key: 'email', label: 'Email', sortable: true },
+  {
+    key: 'status',
+    label: 'Status',
+    sortable: true,
+    getValue: (r) => (r.status ? 'Active' : 'Inactive'),
+    render: (r) => (
+      <span className={`badge ${r.status ? 'badge-success' : 'badge-danger'}`}>
+        {r.status ? 'Active' : 'Inactive'}
+      </span>
+    ),
+  },
+];
+
 export default function CorporateClientPage() {
+  const confirmDialog = useConfirm();
+  const [view, setView] = useState<'list' | 'form'>('list');
   const [clients, setClients] = useState<CorporateClient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...emptyClient, id: null as number | null });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const [countries, setCountries] = useState<GeoItem[]>([]);
+  const [states, setStates] = useState<GeoItem[]>([]);
+  const [cities, setCities] = useState<GeoItem[]>([]);
 
   const loadData = () => {
     setLoading(true);
@@ -32,142 +68,348 @@ export default function CorporateClientPage() {
       .then(r => r.json())
       .then(d => {
         if (d.response_code === '200') {
-          setClients(d.obj); 
+          const b2bId = getUser().id;
+          const all = d.obj || [];
+          setClients(b2bId ? all.filter((c: any) => Number(c.b2b_client_id) === Number(b2bId)) : all);
         }
       })
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  const loadCountries = () => {
+    fetch(`${API}/api/Country`, { headers: { token: getToken() } })
+      .then(r => r.json())
+      .then(d => { if (d.response_code === '200') setCountries(d.obj || []); });
+  };
+
+  useEffect(() => {
+    loadData();
+    loadCountries();
+  }, []);
+
+  useEffect(() => {
+    if (!form.country_id) {
+      setStates([]);
+      return;
+    }
+    fetch(`${API}/api/State?country_id=${form.country_id}`, { headers: { token: getToken() } })
+      .then(r => r.json())
+      .then(d => { if (d.response_code === '200') setStates(d.obj || []); });
+  }, [form.country_id]);
+
+  useEffect(() => {
+    if (!form.state_id) {
+      setCities([]);
+      return;
+    }
+    fetch(`${API}/api/City?state_id=${form.state_id}`, { headers: { token: getToken() } })
+      .then(r => r.json())
+      .then(d => { if (d.response_code === '200') setCities(d.obj || []); });
+  }, [form.state_id]);
+
+  const filteredStates = useMemo(
+    () => states.filter(s => !form.country_id || Number(s.country_id) === Number(form.country_id)),
+    [states, form.country_id]
+  );
+  const filteredCities = useMemo(
+    () => cities.filter(c => !form.state_id || Number(c.state_id) === Number(form.state_id)),
+    [cities, form.state_id]
+  );
+
+  const openAdd = () => {
+    setForm({ ...emptyClient, id: null });
+    setMsg(null);
+    setView('form');
+  };
+
+  const openEdit = (c: CorporateClient) => {
+    setForm({
+      company_name: c.company_name || '',
+      contact_person_name: c.contact_person_name || '',
+      email: c.email || '',
+      mobile: c.mobile || '',
+      address: c.address || '',
+      country_id: c.country_id != null ? String(c.country_id) : '',
+      state_id: c.state_id != null ? String(c.state_id) : '',
+      city_id: c.city_id != null ? String(c.city_id) : '',
+      pincode: c.pincode || '',
+      password: '',
+      id: c.id,
+    });
+    setMsg(null);
+    setView('form');
+  };
+
+  const closeForm = () => {
+    setView('list');
+    setForm({ ...emptyClient, id: null });
+    setMsg(null);
+  };
+
+  const resetForm = () => {
+    if (form.id) {
+      const existing = clients.find(c => c.id === form.id);
+      if (existing) openEdit(existing);
+      else setForm({ ...emptyClient, id: form.id });
+    } else {
+      setForm({ ...emptyClient, id: null });
+    }
+    setMsg(null);
+  };
 
   const save = async () => {
-    if (!form.company_name || !form.email) {
-      setMsg({ type: 'error', text: 'Company Name and Email are required.' }); return;
+    if (!form.company_name.trim() || !form.contact_person_name.trim() || !form.mobile.trim() ||
+        !form.email.trim() || !form.address.trim() || !form.country_id || !form.state_id || !form.city_id) {
+      setMsg({ type: 'error', text: 'Please fill all required fields.' });
+      return;
     }
-    setSaving(true); setMsg(null);
+    if (!form.id && !form.password.trim()) {
+      setMsg({ type: 'error', text: 'Password is required for new corporate clients.' });
+      return;
+    }
+    if (!form.id || form.password.trim()) {
+      const pwdError = validatePassword(form.password);
+      if (pwdError) {
+        setMsg({ type: 'error', text: pwdError });
+        return;
+      }
+    }
+
+    setSaving(true);
+    setMsg(null);
     const method = form.id ? 'PUT' : 'POST';
     const url = `${API}/api/CorporateClients${form.id ? `/${form.id}` : ''}`;
-    
-    // Convert empty strings to null for integers
-    const payload: any = { ...form, b2b_client_id: getUser().id };
-    ['country_id', 'state_id', 'city_id', 'district_id', 'region_id'].forEach(k => {
-      if (!payload[k]) payload[k] = null;
-    });
 
-    await fetch(url, {
+    const payload: Record<string, unknown> = {
+      company_name: form.company_name.trim(),
+      contact_person_name: form.contact_person_name.trim(),
+      email: form.email.trim(),
+      mobile: form.mobile.trim(),
+      address: form.address.trim(),
+      country_id: form.country_id ? Number(form.country_id) : null,
+      state_id: form.state_id ? Number(form.state_id) : null,
+      city_id: form.city_id ? Number(form.city_id) : null,
+      pincode: form.pincode.trim() || null,
+      b2b_client_id: getUser().id,
+    };
+    if (form.password.trim()) payload.password = form.password.trim();
+
+    const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
-    
+    const d = await res.json();
     setSaving(false);
-    setShowModal(false);
-    loadData();
+
+    if (d.response_code === '200') {
+      closeForm();
+      loadData();
+    } else {
+      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Failed to save corporate client.' });
+    }
   };
 
   const toggleStatus = async (c: CorporateClient) => {
     await fetch(`${API}/api/CorporateClients/${c.id}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !c.status })
+      body: JSON.stringify({ status: !c.status }),
     });
     loadData();
   };
 
   const remove = async (id: number) => {
-    if (!confirm('Delete this corporate client?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Corporate Client, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/CorporateClients/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     loadData();
   };
 
-  return (
-    <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Corporate Clients</h1>
-        <div className="topnav-actions">
-          <button className="btn btn-primary" onClick={() => { setShowModal(true); setMsg(null); setForm({ ...emptyClient, id: null }); }}>➕ Add Client</button>
-        </div>
-      </div>
-      <div style={{ padding: '1.5rem' }}>
-        {showModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-            <div className="card" style={{ width: '100%', maxWidth: 700, margin: '1rem', maxHeight: '90vh', overflowY: 'auto' }}>
-              <div className="card-header"><span className="card-title">{form.id ? '✏️ Edit Corporate Client' : '➕ Add Corporate Client'}</span></div>
-              <div className="card-body">
-                {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.85rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
-                
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text)' }}>Basic Info</h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
-                  <div className="form-group"><label>Company Name <span style={{ color: '#ef4444' }}>*</span></label><input type="text" value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} /></div>
-                  <div className="form-group"><label>Contact Person</label><input type="text" value={form.contact_person_name} onChange={e => setForm(p => ({ ...p, contact_person_name: e.target.value }))} /></div>
-                  <div className="form-group"><label>Email <span style={{ color: '#ef4444' }}>*</span></label><input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
-                  <div className="form-group"><label>Mobile</label><input type="text" value={form.mobile} onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))} /></div>
-                  <div className="form-group"><label>Password {form.id && <span style={{ fontSize: '0.75rem', fontWeight: 400, color: 'var(--text-muted)' }}>(Leave blank to keep current)</span>}</label>
-                    <input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Set Login Password" />
+  if (view === 'form') {
+    return (
+      <div className="page-content" style={{ paddingTop: 0 }}>
+        <TopNav title="Manage Corporate Client" />
+        <div style={{ padding: '1.25rem 1.5rem' }}>
+          <div className="card">
+            <div className="listing-card-header">
+              <h2 className="listing-card-title">Corporate Client Details</h2>
+              <button type="button" className="listing-header-link" onClick={closeForm}>Close</button>
+            </div>
+            <div className="card-body">
+              {msg && (
+                <div
+                  style={{
+                    background: msg.type === 'success' ? 'rgba(0,128,0,0.08)' : 'rgba(231,76,60,0.08)',
+                    border: `1px solid ${msg.type === 'success' ? 'rgba(0,128,0,0.25)' : 'rgba(231,76,60,0.25)'}`,
+                    borderRadius: 4,
+                    padding: '0.55rem 0.75rem',
+                    marginBottom: '1rem',
+                    fontSize: '0.82rem',
+                    color: msg.type === 'success' ? '#008000' : '#c0392b',
+                  }}
+                >
+                  {msg.text}
+                </div>
+              )}
+
+              <div className="detail-form-grid">
+                <div className="form-group">
+                  <label>Company Name<span className="required-star">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="Enter Company Name"
+                    value={form.company_name}
+                    onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Contact Person Name<span className="required-star">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="Enter Contact Person Name"
+                    value={form.contact_person_name}
+                    onChange={e => setForm(p => ({ ...p, contact_person_name: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Mobile<span className="required-star">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="Enter Mobile"
+                    value={form.mobile}
+                    onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Email<span className="required-star">*</span></label>
+                  <input
+                    type="email"
+                    placeholder="Enter Email"
+                    value={form.email}
+                    onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>
+                    Password{!form.id && <span className="required-star">*</span>}
+                    {form.id && (
+                      <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                        {' '}(leave blank to keep current)
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder={form.id ? 'Leave blank to keep current' : 'Enter Password'}
+                    value={form.password}
+                    onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                    autoComplete="new-password"
+                  />
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
+                    (Enter atleast 6 characters. Only @ # are allowed as special character)
                   </div>
                 </div>
-
-                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text)' }}>Location Info</h3>
-                <div className="form-group" style={{ marginBottom: '1rem' }}>
-                  <label>Address</label>
-                  <textarea rows={2} value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-                  <div className="form-group"><label>Country (ID)</label><input type="number" value={form.country_id} onChange={e => setForm(p => ({ ...p, country_id: e.target.value }))} placeholder="e.g. 1" /></div>
-                  <div className="form-group"><label>State (ID)</label><input type="number" value={form.state_id} onChange={e => setForm(p => ({ ...p, state_id: e.target.value }))} /></div>
-                  <div className="form-group"><label>City (ID)</label><input type="number" value={form.city_id} onChange={e => setForm(p => ({ ...p, city_id: e.target.value }))} /></div>
-                  <div className="form-group"><label>District (ID)</label><input type="number" value={form.district_id} onChange={e => setForm(p => ({ ...p, district_id: e.target.value }))} /></div>
-                  <div className="form-group"><label>Region (ID)</label><input type="number" value={form.region_id} onChange={e => setForm(p => ({ ...p, region_id: e.target.value }))} /></div>
-                  <div className="form-group"><label>Pincode</label><input type="text" value={form.pincode} onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))} /></div>
+                <div className="form-group">
+                  <label>Address<span className="required-star">*</span></label>
+                  <input
+                    type="text"
+                    placeholder="Enter Address"
+                    value={form.address}
+                    onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
+                  />
                 </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                  <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳' : '💾 Save'}</button>
-                  <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
+                <div className="form-group">
+                  <label>Country<span className="required-star">*</span></label>
+                  <select
+                    value={form.country_id}
+                    onChange={e => setForm(p => ({ ...p, country_id: e.target.value, state_id: '', city_id: '' }))}
+                  >
+                    <option value="">Select Country</option>
+                    {countries.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                 </div>
+                <div className="form-group">
+                  <label>State<span className="required-star">*</span></label>
+                  <select
+                    value={form.state_id}
+                    onChange={e => setForm(p => ({ ...p, state_id: e.target.value, city_id: '' }))}
+                    disabled={!form.country_id}
+                  >
+                    <option value="">Select State</option>
+                    {filteredStates.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>City<span className="required-star">*</span></label>
+                  <select
+                    value={form.city_id}
+                    onChange={e => setForm(p => ({ ...p, city_id: e.target.value }))}
+                    disabled={!form.state_id}
+                  >
+                    <option value="">Select City</option>
+                    {filteredCities.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Pincode</label>
+                  <input
+                    type="text"
+                    placeholder="Enter Pincode"
+                    value={form.pincode}
+                    onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button type="button" className="btn btn-reset" onClick={resetForm}>
+                  Reset Data
+                </button>
               </div>
             </div>
           </div>
-        )}
-
-        <div className="card">
-          <div className="card-body" style={{ padding: 0 }}>
-            {loading ? <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Company Name</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Contact</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Email</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Mobile</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Status</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clients.map((c) => (
-                    <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{c.company_name}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{c.contact_person_name}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{c.email}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{c.mobile || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}><span className={`badge ${c.status ? 'badge-success' : 'badge-danger'}`}>{c.status ? 'Active' : 'Inactive'}</span></td>
-                      <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} onClick={() => { setForm({ ...emptyClient, ...c as any, password: '' }); setShowModal(true); }}>✏️ Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} onClick={() => toggleStatus(c)}>⚡ {c.status ? 'Disable' : 'Enable'}</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => remove(c.id)}>🗑 Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {clients.length === 0 && (
-                    <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No Corporate Clients found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="page-content" style={{ paddingTop: 0 }}>
+      <TopNav title="Manage Corporate Client" />
+      <div style={{ padding: '1.25rem 1.5rem' }}>
+        <ListingTable
+          title="List of Corporate Clients"
+          columns={columns}
+          rows={clients}
+          loading={loading}
+          emptyText="No Corporate Clients found."
+          headerActions={<ListingHeaderActions onAdd={openAdd} onRefresh={loadData} />}
+          rowActions={(c) => (
+            <ActionIcons
+              onEdit={() => openEdit(c)}
+              onToggleStatus={() => toggleStatus(c)}
+              onDelete={() => remove(c.id)}
+              statusActive={!!c.status}
+            />
+          )}
+        />
       </div>
     </div>
   );

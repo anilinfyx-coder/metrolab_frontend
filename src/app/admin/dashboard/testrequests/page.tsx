@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -61,14 +62,11 @@ export default function ManageRequestsPage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Manage Requests</h1>
-        <div className="topnav-actions">
+      <TopNav title="Manage Requests">
           <input id="req-search" type="text" placeholder="Search requests..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 260 }} />
           <button className="btn btn-ghost" onClick={loadData} style={{ fontSize: '0.875rem' }}>🔄 Refresh</button>
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>

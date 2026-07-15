@@ -1,5 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -23,6 +25,7 @@ const emptyPatient: Partial<Patient> = {
 };
 
 export default function PatientsPage() {
+  const confirmDialog = useConfirm();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -72,7 +75,13 @@ export default function PatientsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this patient?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Patient, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API_BASE}/api/Patient/${id}`, { method: 'DELETE', headers });
     fetchPatients();
   };
@@ -81,12 +90,9 @@ export default function PatientsPage() {
 
   return (
     <>
-      <div className="topnav">
-        <h1 className="topnav-title">Patients</h1>
-        <div className="topnav-actions">
+      <TopNav title="Patients">
           <button id="add-patient-btn" className="btn btn-primary" onClick={openAdd}>➕ Add Patient</button>
-        </div>
-      </div>
+        </TopNav>
 
       <div className="page-content">
         <div className="page-header">

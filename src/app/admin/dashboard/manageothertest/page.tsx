@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -76,14 +77,11 @@ export default function TestsReportsPage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Tests Reports</h1>
-        <div className="topnav-actions">
+      <TopNav title="Tests Reports">
           <input id="report-search" type="text" placeholder="Search reports..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 260 }} />
           <button className="btn btn-ghost" onClick={loadData} style={{ fontSize: '0.875rem' }}>🔄 Refresh</button>
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         {msg && (
           <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>

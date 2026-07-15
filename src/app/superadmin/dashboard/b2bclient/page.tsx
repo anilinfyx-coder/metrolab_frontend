@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -44,6 +46,7 @@ function MsgBanner({ msg }: { msg: { type: 'success' | 'error'; text: string } |
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function B2BClientsPage() {
+  const confirmDialog = useConfirm();
   const [clients, setClients] = useState<B2BClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<View>('list');
@@ -110,7 +113,13 @@ export default function B2BClientsPage() {
   };
 
   const deleteClient = async (id: number) => {
-    if (!confirm('You are trying to delete B2B Lab. This cannot be restored once deleted. Confirm?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete B2B Lab, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/B2bClients/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     loadClients();
   };
@@ -154,7 +163,13 @@ export default function B2BClientsPage() {
   };
 
   const deleteSub = async (id: number) => {
-    if (!confirm('You are trying to delete Lab Subscription Details. This cannot be restored once deleted. Confirm?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Lab Subscription Details, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/B2bClientSubscription/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     if (selectedClient) loadSubscriptions(selectedClient.id);
   };
@@ -209,12 +224,9 @@ export default function B2BClientsPage() {
   if (view === 'form') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">B2B Lab Details</h1>
-          <div className="topnav-actions">
-            <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
-          </div>
-        </div>
+        <TopNav title="B2B Lab Details">
+          <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem' }}>
           <MsgBanner msg={msg} />
           <div className="card">
@@ -265,12 +277,9 @@ export default function B2BClientsPage() {
   if (view === 'subscription') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Subscriptions — {selectedClient?.company_name}</h1>
-          <div className="topnav-actions">
-            <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
-          </div>
-        </div>
+        <TopNav title={`Subscriptions — ${selectedClient?.company_name || ''}`}>
+          <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
           {/* Form card */}
           <div className="card">
@@ -339,14 +348,11 @@ export default function B2BClientsPage() {
   if (view === 'labtestaccess') {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Lab Test Access — {selectedClient?.company_name}</h1>
-          <div className="topnav-actions">
-            <button className="btn btn-primary" onClick={saveLabTestAccess}>💾 Save</button>
+        <TopNav title={`Lab Test Access — ${selectedClient?.company_name || ''}`}>
+          <button className="btn btn-primary" onClick={saveLabTestAccess}>💾 Save</button>
             <button className="btn btn-ghost" onClick={() => { if (selectedClient) openLabTestAccess(selectedClient); }}>🔄 Refresh</button>
             <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
-          </div>
-        </div>
+        </TopNav>
         <div style={{ padding: '1.5rem' }}>
           <MsgBanner msg={msg} />
           <div className="card">
@@ -392,15 +398,12 @@ export default function B2BClientsPage() {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">B2B Labs</h1>
-        <div className="topnav-actions">
+      <TopNav title="B2B Labs">
           <input type="text" placeholder="Search B2B labs..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 240 }} />
           <button className="btn btn-ghost" onClick={loadClients}>🔄 Refresh</button>
           <button id="add-b2b-btn" className="btn btn-primary" onClick={openAdd}>➕ Add B2B Lab</button>
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>

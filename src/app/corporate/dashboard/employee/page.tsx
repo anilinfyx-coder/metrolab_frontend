@@ -1,5 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
+import TopNav from '../../../components/TopNav';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
@@ -26,6 +28,7 @@ const emptyForm = {
 };
 
 export default function EmployeePage() {
+  const confirmDialog = useConfirm();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<Record<string, string | boolean>>({ ...emptyForm });
@@ -95,7 +98,13 @@ export default function EmployeePage() {
   };
 
   const remove = async (id: number) => {
-    if (!confirm('Delete this Employee?')) return;
+    const ok = await confirmDialog({
+      title: 'You are trying to delete Employee, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
     await fetch(`${API}/api/Employees/${id}`, { method: 'DELETE', headers: { token: getToken() } });
     loadEmployees();
   };
@@ -123,10 +132,9 @@ export default function EmployeePage() {
   if (showForm) {
     return (
       <div className="page-content">
-        <div className="topnav">
-          <h1 className="topnav-title">Employee Details</h1>
-          <div className="topnav-actions"><button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕ Close</button></div>
-        </div>
+        <TopNav title="Employee Details">
+          <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕ Close</button>
+        </TopNav>
         <div style={{ padding: '1.5rem' }}>
           {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
           <div className="card">
@@ -212,14 +220,11 @@ export default function EmployeePage() {
 
   return (
     <div className="page-content">
-      <div className="topnav">
-        <h1 className="topnav-title">Employees</h1>
-        <div className="topnav-actions">
+      <TopNav title="Employees">
           <input type="text" placeholder="Search employees..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 220 }} />
           <button className="btn btn-primary" onClick={openAdd}>➕ Add Employee</button>
-        </div>
-      </div>
+        </TopNav>
       <div style={{ padding: '1.5rem' }}>
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>
