@@ -855,6 +855,21 @@ body.sidebar-collapsed .sidebar-link .icon {
 }
 .btn-success:hover { background: rgba(39,174,96,0.2); }
 
+.btn-info {
+  background: #17a2b8;
+  color: white;
+  border-color: #17a2b8;
+}
+.btn-info:hover {
+  background: #138496;
+  border-color: #117a8b;
+}
+
+.btn-block {
+  display: block;
+  width: 100%;
+}
+
 .btn-sm {
   padding: 0.3rem 0.65rem;
   font-size: 0.78rem;
