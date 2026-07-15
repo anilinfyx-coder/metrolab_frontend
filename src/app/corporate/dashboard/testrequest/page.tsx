@@ -38,10 +38,21 @@ export default function TestRequestsPage() {
       fetch(`${API}/api/TestRequest/getTestRequestList`, { method: 'POST', headers: { token: getToken() } }),
       fetch(`${API}/api/Employees`, { headers: { token: getToken() } })
     ]);
-    const [rD, eD] = await Promise.all([rRes.json(), eRes.json()]);
-    
-    if (eD.response_code === '200') setEmployees(eD.obj || []);
-    if (rD.response_code === '200') setRequests(rD.obj || []);
+    const parseJson = async (res: Response, name: string) => {
+      try {
+        const text = await res.text();
+        return JSON.parse(text);
+      } catch (err) {
+        console.error(`Error parsing JSON for ${name} from URL ${res.url}. Status: ${res.status}. Body:`, err);
+        return { response_code: '500', obj: [] };
+      }
+    };
+
+    const trD = await parseJson(rRes, 'TestRequest');
+    const empD = await parseJson(eRes, 'Employees');
+
+    if (trD.response_code === '200') setRequests(trD.obj || []);
+    if (empD.response_code === '200') setEmployees(empD.obj || []);
     
     setLoading(false);
   };

@@ -14,7 +14,7 @@ function useApi(endpoint: string) {
     })
       .then(r => r.json())
       .then(d => { if (d.response_code === '200') setData(d.obj); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, [endpoint]);
   return { data, loading };
@@ -28,9 +28,9 @@ export default function DashboardPage() {
 
   const stats = [
     { label: 'Total Patients', value: patients.length, icon: '🧑‍⚕️', color: 'blue' },
-    { label: 'Lab Tests',      value: labTests.length,  icon: '🔬',  color: 'purple' },
-    { label: 'B2B Clients',    value: b2bClients.length, icon: '🏢', color: 'green' },
-    { label: 'Admin Users',    value: adminUsers.length, icon: '🔑', color: 'orange' },
+    { label: 'Lab Tests', value: labTests.length, icon: '🔬', color: 'purple' },
+    { label: 'B2B Clients', value: b2bClients.length, icon: '🏢', color: 'green' },
+    { label: 'Admin Users', value: adminUsers.length, icon: '🔑', color: 'orange' },
   ];
 
   const loading = l1 || l2 || l3 || l4;

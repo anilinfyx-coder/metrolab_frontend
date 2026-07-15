@@ -10,6 +10,7 @@ const superAdminNavItems: NavItem[] = [
   { href: '/specimentype', label: 'Specimen Type', icon: '🧪', section: 'Master Configurations' },
   { href: '/labtestcategory', label: 'Lab Test Category', icon: '🔬', section: 'Master Configurations' },
   { href: '/b2bclient', label: 'B2B Labs', icon: '🏢', section: 'Master Configurations' },
+  { href: '/profile', label: 'My Profile', icon: '👤', section: 'Account' },
 ];
 
 export default function SuperAdminDashboardLayout({ children }: { children: React.ReactNode }) {
