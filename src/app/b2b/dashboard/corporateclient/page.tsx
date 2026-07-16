@@ -116,8 +116,15 @@ export default function CorporateClientPage() {
     [cities, form.state_id]
   );
 
+  const generatePassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#";
+    let pass = "";
+    for (let i = 0; i < 10; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    return pass;
+  };
+
   const openAdd = () => {
-    setForm({ ...emptyClient, id: null });
+    setForm({ ...emptyClient, id: null, password: generatePassword() });
     setMsg(null);
     setView('form');
   };
@@ -308,7 +315,9 @@ export default function CorporateClientPage() {
                     type="password"
                     placeholder={form.id ? 'Leave blank to keep current' : 'Enter Password'}
                     value={form.password}
-                    onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                    onChange={e => !!form.id && setForm(p => ({ ...p, password: e.target.value }))}
+                    readOnly={!form.id}
+                    style={!form.id ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {}}
                     autoComplete="new-password"
                   />
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>

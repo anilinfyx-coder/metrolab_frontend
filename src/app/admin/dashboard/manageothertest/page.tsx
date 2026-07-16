@@ -385,7 +385,7 @@ export default function TestsReportsPage() {
                     <h4 style={{ marginTop: 0, marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Report Questions</h4>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
                       {editingDetail.testReportQuestionList.map((q, idx) => (
-                        <div key={q.report_question_id} className="form-group">
+                        <div key={q.report_questions_id} className="form-group">
                           <label>{q.question_text}</label>
                           {q.description && <small style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>{q.description}</small>}
 
