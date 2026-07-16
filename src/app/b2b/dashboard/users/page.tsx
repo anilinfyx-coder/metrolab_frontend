@@ -18,12 +18,12 @@ interface B2BUser {
   user_id?: number;
 }
 
-const emptyForm = { name: '', email: '', mobile: '', password: '', role_id: '2', id: null as number | null };
+const emptyForm = { name: '', email: '', mobile: '', password: '', role_id: '6', id: null as number | null };
 
 function roleLabel(roleId: number | string) {
   const id = Number(roleId);
-  if (id === 1) return 'Admin';
-  if (id === 2) return 'Staff';
+  if (id === 6) return 'Admin User';
+  if (id === 7) return 'Admin User Staff';
   return 'User';
 }
 
@@ -272,9 +272,8 @@ export default function B2BUsersPage() {
                   value={form.role_id}
                   onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}
                 >
-                  <option value="1">Admin</option>
-                  <option value="2">Staff</option>
-                  <option value="3">User</option>
+                  <option value="6">Admin User</option>
+                  <option value="7">Admin User Staff</option>
                 </select>
               </div>
 
