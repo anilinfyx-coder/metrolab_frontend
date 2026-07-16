@@ -88,9 +88,16 @@ export default function B2BClientsPage() {
   useEffect(() => { loadClients(); }, []);
 
   // ── B2B Client CRUD ──────────────────────────────────────────────────────
+  const generatePassword = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$&*";
+    let pass = "";
+    for (let i = 0; i < 10; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    return pass;
+  };
+
   const openAdd = () => {
     setEditingId(null);
-    setForm({ ...emptyClient });
+    setForm({ ...emptyClient, password: generatePassword() });
     setMsg(null);
     setView('form');
   };
@@ -304,10 +311,10 @@ export default function B2BClientsPage() {
     c.mobile?.includes(search)
   );
 
-  const inp = (key: string, label: string, type = 'text', required = false) => (
+  const inp = (key: string, label: string, type = 'text', required = false, readOnly = false) => (
     <div className="form-group" key={key}>
       <label>{label}{required && <span style={{ color: '#ef4444' }}> *</span>}</label>
-      <input type={type} value={form[key] || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} placeholder={`Enter ${label}`} />
+      <input type={type} value={form[key] || ''} onChange={e => !readOnly && setForm(p => ({ ...p, [key]: e.target.value }))} placeholder={`Enter ${label}`} readOnly={readOnly} style={readOnly ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {}} />
     </div>
   );
 
@@ -330,7 +337,7 @@ export default function B2BClientsPage() {
                 {inp('contact_person_name', 'Contact Person Name', 'text', true)}
                 {inp('mobile', 'Mobile', 'text', true)}
                 {inp('email', 'Login Email', 'email', true)}
-                {inp('password', 'Login Password', 'text', true)}
+                {inp('password', 'Login Password', 'password', true, true)}
                 {inp('address', 'Address', 'text', true)}
                 {inp('pincode', 'Pincode', 'text', true)}
                 {inp('public_email', 'Public Email', 'email', true)}

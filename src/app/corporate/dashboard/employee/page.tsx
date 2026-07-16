@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { Pencil, ToggleRight, ToggleLeft, Trash2, Save, RotateCcw, Plus, X } from 'lucide-react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 
@@ -65,6 +66,10 @@ export default function EmployeePage() {
   const save = async () => {
     if (!form.first_name || !form.last_name || !form.mobile) {
       setMsg({ type: 'error', text: 'First Name, Last Name, and Mobile are required.' }); return;
+    }
+    const mobileRegex = /^[0-9]{10}$/;
+    if (!mobileRegex.test(form.mobile as string)) {
+      setMsg({ type: 'error', text: 'Mobile number must be exactly 10 digits.' }); return;
     }
 
     setSaving(true); setMsg(null);
@@ -138,7 +143,7 @@ export default function EmployeePage() {
         <div style={{ padding: '1.5rem' }}>
           {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
           <div className="card">
-            <div className="card-header"><span className="card-title">{editingId ? '✏️ Edit Employee' : '➕ Add Employee'}</span></div>
+            <div className="card-header"><span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{editingId ? <><Pencil size={18}/> Edit Employee</> : <><Plus size={18}/> Add Employee</>}</span></div>
             <div className="card-body">
               {/* Row 1 */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
@@ -207,9 +212,13 @@ export default function EmployeePage() {
                 <div className="form-group"><label>Department</label>{inp('department', 'Department')}</div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳ Saving...' : '💾 Save'}</button>
-                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyForm }); setMsg(null); }}>🔄 Reset Data</button>
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                <button className="btn" onClick={save} disabled={saving} style={{ background: '#17a2b8', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.5rem' }}>
+                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button className="btn" onClick={() => { setForm({ ...emptyForm }); setMsg(null); }} style={{ background: '#595959', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.5rem' }}>
+                  <RotateCcw size={16} /> Reset Data
+                </button>
               </div>
             </div>
           </div>
@@ -223,7 +232,7 @@ export default function EmployeePage() {
       <TopNav title="Employees">
           <input type="text" placeholder="Search employees..." value={search} onChange={e => setSearch(e.target.value)}
             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 220 }} />
-          <button className="btn btn-primary" onClick={openAdd}>➕ Add Employee</button>
+          <button className="btn" onClick={openAdd} style={{ background: '#17a2b8', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Plus size={16} /> Add Employee</button>
         </TopNav>
       <div style={{ padding: '1.5rem' }}>
         <div className="card">
@@ -250,9 +259,13 @@ export default function EmployeePage() {
                         <td style={{ padding: '0.75rem 1rem' }}>{e.mobile}</td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <div style={{ display: 'flex', gap: '0.35rem' }}>
-                            <button className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }} onClick={() => openEdit(e)}>✏️</button>
-                            <button className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', color: e.status ? '#10b981' : '#9ca3af' }} onClick={() => toggleStatus(e)}>{e.status ? '🟢' : '🔴'}</button>
-                            <button className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', color: '#ef4444' }} onClick={() => remove(e.id)}>🗑</button>
+                            <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => openEdit(e)} title="Edit Employee"><Pencil size={14} /></button>
+                            {e.status ? (
+                              <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: '#0a6a31', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => toggleStatus(e)} title="Disable Employee"><ToggleRight size={14} /></button>
+                            ) : (
+                              <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: 'gray', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => toggleStatus(e)} title="Enable Employee"><ToggleLeft size={14} /></button>
+                            )}
+                            <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: '#f00e0e', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => remove(e.id)} title="Delete Employee"><Trash2 size={14} /></button>
                           </div>
                         </td>
                       </tr>
