@@ -21,11 +21,21 @@ interface TestReport {
 }
 
 interface TestReportQuestion {
-  report_question_id: number;
+  report_questions_id: number;
   question_text: string;
   description: string;
   answer_type: number; // 1 = text, 2 = select/radio
   answer_option: string; // comma separated options
+  value: string;
+}
+
+interface TestReportParameter {
+  report_request_parameters_id: number;
+  reportRequestParameters: string;
+  description: string;
+  screeningCutoff: string;
+  confirmationCutoff: string;
+  unitText: string;
   value: string;
 }
 
@@ -38,6 +48,21 @@ interface FullReportDetail extends TestReport {
   test_result: number | null;
   received_timestamp: string | null;
   reported_timestamp: string | null;
+  fasting: string | null;
+  requisition_no: string | null;
+  device_identifier: string | null;
+  date_administered: string | null;
+  applied_to_arm: string | null;
+  lot: string | null;
+  expiry_date: string | null;
+  date_read: string | null;
+  mm_indurations: string | null;
+  follow_up: string | null;
+  reference_range_note: string | null;
+  clinical_significance_note: string | null;
+  result_interpretation_note: string | null;
+  final_result_disposition: string | null;
+  
   labTest: {
     name: string;
     show_collected_date: boolean;
@@ -53,8 +78,22 @@ interface FullReportDetail extends TestReport {
     show_regulation: boolean;
     show_final_result: boolean;
     show_report_status: boolean;
+    show_fasting: boolean;
+    show_requisition_no: boolean;
+    show_device_identifier: boolean;
+    show_date_administered: boolean;
+    show_applied_to: boolean;
+    show_lot: boolean;
+    show_expire_date: boolean;
+    show_date_read: boolean;
+    show_mm_indurations: boolean;
+    show_follow_up: boolean;
+    show_test_remark: boolean;
+    show_final_result_disposition: boolean;
+    show_final_remark: boolean;
   };
   testReportQuestionList: TestReportQuestion[];
+  testResultParameterList: TestReportParameter[];
 }
 
 export default function TestsReportsPage() {
@@ -68,6 +107,7 @@ export default function TestsReportsPage() {
   const [editingDetail, setEditingDetail] = useState<FullReportDetail | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [drugTestAccept, setDrugTestAccept] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadData = async () => {
@@ -139,6 +179,10 @@ export default function TestsReportsPage() {
 
   const saveEdit = async () => {
     if (!editingDetail) return;
+    if (!drugTestAccept) {
+      setMsg({ type: 'error', text: 'You must confirm the drug test acceptance before saving.' });
+      return;
+    }
     setSaving(true); setMsg(null);
     try {
       // Re-format dates to ISO strings before sending if needed, or send as is (pg parses them well)
@@ -269,72 +313,258 @@ export default function TestsReportsPage() {
                   )}
                 </div>
 
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                  {editingDetail.labTest.show_report_status && (
+                    <div className="form-group">
+                      <label>Report Status</label>
+                      <input type="text" value={editingDetail.report_status || ''} onChange={e => setEditingDetail({ ...editingDetail, report_status: e.target.value })} placeholder="Enter Report Status" />
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_fasting && (
+                    <div className="form-group">
+                      <label>Fasting</label>
+                      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                        <label><input type="radio" name="fasting" value="1" checked={editingDetail.fasting === '1'} onChange={e => setEditingDetail({ ...editingDetail, fasting: e.target.value })} /> Yes</label>
+                        <label><input type="radio" name="fasting" value="2" checked={editingDetail.fasting === '2'} onChange={e => setEditingDetail({ ...editingDetail, fasting: e.target.value })} /> No</label>
+                      </div>
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_requisition_no && (
+                    <div className="form-group">
+                      <label>Requisition No</label>
+                      <input type="text" value={editingDetail.requisition_no || ''} onChange={e => setEditingDetail({ ...editingDetail, requisition_no: e.target.value })} placeholder="Enter Requisition No" />
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_device_identifier && (
+                    <div className="form-group">
+                      <label>Device Identifier</label>
+                      <input type="text" value={editingDetail.device_identifier || ''} onChange={e => setEditingDetail({ ...editingDetail, device_identifier: e.target.value })} placeholder="Enter Device Identifier" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Parameters List */}
+                {editingDetail.testResultParameterList && editingDetail.testResultParameterList.length > 0 && (
+                  <div style={{ marginBottom: '1.5rem', background: 'var(--bg-app)', padding: '1rem', borderRadius: '8px', overflowX: 'auto' }}>
+                    <h4 style={{ marginTop: 0, marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Parameters</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '0.5rem' }}>Parameter Name</th>
+                          <th style={{ textAlign: 'left', padding: '0.5rem' }}>Result</th>
+                          {editingDetail.testResultParameterList[0].screeningCutoff !== 'Null' && <th style={{ textAlign: 'left', padding: '0.5rem' }}>Screening Cut Off</th>}
+                          {editingDetail.testResultParameterList[0].confirmationCutoff !== 'Null' && <th style={{ textAlign: 'left', padding: '0.5rem' }}>Confirmation Cut Off</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {editingDetail.testResultParameterList.map((p, idx) => (
+                          <tr key={p.report_request_parameters_id}>
+                            <td style={{ padding: '0.5rem' }}>
+                              <div style={{ fontWeight: 600 }}>{p.reportRequestParameters}</div>
+                              <small style={{ color: 'var(--text-muted)' }}>{p.description}</small>
+                            </td>
+                            <td style={{ padding: '0.5rem' }}>
+                              <input type="text" value={p.value || ''} onChange={e => {
+                                const newP = [...editingDetail.testResultParameterList];
+                                newP[idx] = { ...newP[idx], value: e.target.value };
+                                setEditingDetail({ ...editingDetail, testResultParameterList: newP });
+                              }} style={{ width: '100%' }} />
+                            </td>
+                            {p.screeningCutoff !== 'Null' && <td style={{ padding: '0.5rem' }}>{p.screeningCutoff} {p.unitText}</td>}
+                            {p.confirmationCutoff !== 'Null' && <td style={{ padding: '0.5rem' }}>{p.confirmationCutoff} {p.unitText}</td>}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
                 {/* Dynamic Questions */}
                 {editingDetail.testReportQuestionList && editingDetail.testReportQuestionList.length > 0 && (
                   <div style={{ marginBottom: '1.5rem', background: 'var(--bg-app)', padding: '1rem', borderRadius: '8px' }}>
                     <h4 style={{ marginTop: 0, marginBottom: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Report Questions</h4>
-                    {editingDetail.testReportQuestionList.map((q, idx) => (
-                      <div key={q.report_question_id} className="form-group" style={{ marginBottom: '1rem' }}>
-                        <label>{q.question_text}</label>
-                        {q.description && <small style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>{q.description}</small>}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+                      {editingDetail.testReportQuestionList.map((q, idx) => (
+                        <div key={q.report_question_id} className="form-group">
+                          <label>{q.question_text}</label>
+                          {q.description && <small style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>{q.description}</small>}
 
-                        {q.answer_type === 1 && ( // Text Input
-                          <input type="text" value={q.value || ''} onChange={e => {
-                            const newQs = [...editingDetail.testReportQuestionList];
-                            newQs[idx] = { ...newQs[idx], value: e.target.value };
-                            setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
-                          }} />
-                        )}
-                        {q.answer_type === 2 && ( // Dropdown / Select
-                          <select value={q.value || ''} onChange={e => {
-                            const newQs = [...editingDetail.testReportQuestionList];
-                            newQs[idx] = { ...newQs[idx], value: e.target.value };
-                            setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
-                          }}>
-                            <option value="">Select Option</option>
-                            {q.answer_option?.split(',').map(opt => opt.trim()).map(opt => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                            {/* Fallback to Yes/No if empty options but answer_type is 2 */}
-                            {(!q.answer_option || q.answer_option.trim() === '') && (
-                              <>
-                                <option value="Yes">Yes</option>
-                                <option value="No">No</option>
-                              </>
-                            )}
-                          </select>
-                        )}
-                      </div>
-                    ))}
+                          {q.answer_type === 1 && ( // Yes/No Radio
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                              <label><input type="radio" value="1" checked={q.value === '1'} onChange={e => {
+                                const newQs = [...editingDetail.testReportQuestionList];
+                                newQs[idx] = { ...newQs[idx], value: e.target.value };
+                                setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
+                              }} /> Yes</label>
+                              <label><input type="radio" value="0" checked={q.value === '0'} onChange={e => {
+                                const newQs = [...editingDetail.testReportQuestionList];
+                                newQs[idx] = { ...newQs[idx], value: e.target.value };
+                                setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
+                              }} /> No</label>
+                            </div>
+                          )}
+                          {q.answer_type === 2 && ( // Checkbox (Done)
+                            <div style={{ marginTop: '0.5rem' }}>
+                              <label><input type="checkbox" checked={q.value === 'true'} onChange={e => {
+                                const newQs = [...editingDetail.testReportQuestionList];
+                                newQs[idx] = { ...newQs[idx], value: e.target.checked.toString() };
+                                setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
+                              }} /> Done</label>
+                            </div>
+                          )}
+                          {q.answer_type === 3 && ( // Numeric
+                            <input type="number" value={q.value || ''} placeholder="Enter Numeric Value" onChange={e => {
+                              const newQs = [...editingDetail.testReportQuestionList];
+                              newQs[idx] = { ...newQs[idx], value: e.target.value };
+                              setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
+                            }} />
+                          )}
+                          {q.answer_type === 4 && ( // Alphanumeric
+                            <input type="text" value={q.value || ''} placeholder="Enter Alphanumeric Value" onChange={e => {
+                              const newQs = [...editingDetail.testReportQuestionList];
+                              newQs[idx] = { ...newQs[idx], value: e.target.value };
+                              setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
+                            }} />
+                          )}
+                          {q.answer_type === 5 && ( // Dropdown / Select
+                            <select value={q.value || ''} onChange={e => {
+                              const newQs = [...editingDetail.testReportQuestionList];
+                              newQs[idx] = { ...newQs[idx], value: e.target.value };
+                              setEditingDetail({ ...editingDetail, testReportQuestionList: newQs });
+                            }}>
+                              <option value="">Select Option</option>
+                              {q.answer_option?.split(',').map(opt => opt.trim()).filter(Boolean).map(opt => (
+                                <option key={opt} value={opt}>{opt}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Final Result Section */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  {editingDetail.labTest.show_final_result && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                  {editingDetail.labTest.show_date_administered && (
                     <div className="form-group">
-                      <label>Final Result</label>
-                      <input type="text" value={editingDetail.final_result || ''} onChange={e => setEditingDetail({ ...editingDetail, final_result: e.target.value })} placeholder="Enter Final Result" />
+                      <label>Date Administered</label>
+                      <input type="date" value={editingDetail.date_administered || ''} onChange={e => setEditingDetail({ ...editingDetail, date_administered: e.target.value })} />
                     </div>
                   )}
-                  {editingDetail.labTest.show_report_status && (
+                  {editingDetail.labTest.show_applied_to && (
                     <div className="form-group">
-                      <label>Report Status</label>
-                      <select value={editingDetail.report_status || ''} onChange={e => setEditingDetail({ ...editingDetail, report_status: e.target.value })}>
-                        <option value="">Select Status</option>
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
+                      <label>Applied To</label>
+                      <select value={editingDetail.applied_to_arm || '0'} onChange={e => setEditingDetail({ ...editingDetail, applied_to_arm: e.target.value })}>
+                        <option value="0">Right Arm</option>
+                        <option value="1">Left Arm</option>
+                      </select>
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_lot && (
+                    <div className="form-group">
+                      <label>Lot</label>
+                      <input type="text" value={editingDetail.lot || ''} onChange={e => setEditingDetail({ ...editingDetail, lot: e.target.value })} placeholder="Enter Lot" />
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_expire_date && (
+                    <div className="form-group">
+                      <label>Exp. Date</label>
+                      <input type="date" value={editingDetail.expiry_date || ''} onChange={e => setEditingDetail({ ...editingDetail, expiry_date: e.target.value })} />
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_date_read && (
+                    <div className="form-group">
+                      <label>Date Read</label>
+                      <input type="date" value={editingDetail.date_read || ''} onChange={e => setEditingDetail({ ...editingDetail, date_read: e.target.value })} />
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_mm_indurations && (
+                    <div className="form-group">
+                      <label>mm Indurations</label>
+                      <input type="text" value={editingDetail.mm_indurations || ''} onChange={e => setEditingDetail({ ...editingDetail, mm_indurations: e.target.value })} placeholder="Quantity in mm" disabled />
+                    </div>
+                  )}
+                  {editingDetail.labTest.show_follow_up && (
+                    <div className="form-group">
+                      <label>Follow Up</label>
+                      <select value={editingDetail.follow_up || 'None'} onChange={e => setEditingDetail({ ...editingDetail, follow_up: e.target.value })} disabled>
+                        <option value="None">None</option>
+                        <option value="Needed repeat test">Needed repeat test</option>
+                        <option value="Chest x-ray">Chest x-ray</option>
                       </select>
                     </div>
                   )}
                 </div>
 
+                {/* Final Result Section */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                  {editingDetail.labTest.show_final_result && (
+                    <div className="form-group">
+                      <label>Final Result</label>
+                      <select value={editingDetail.final_result || '1'} onChange={e => setEditingDetail({ ...editingDetail, final_result: e.target.value })}>
+                        <option value="1">Negative</option>
+                        <option value="2">Positive</option>
+                        <option value="3">Test Cancelled</option>
+                        <option value="4">Refusal to test because Adulterated</option>
+                        <option value="5">Refusal to test because Substituted</option>
+                        <option value="6">Dilute</option>
+                      </select>
+                    </div>
+                  )}
+                  
+                  {editingDetail.labTest.show_test_remark && (
+                    <div className="form-group">
+                      <label>Test Remark</label>
+                      <textarea rows={4} value={editingDetail.test_remark || ''} onChange={e => setEditingDetail({ ...editingDetail, test_remark: e.target.value })} placeholder="Enter Test Remark" style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid var(--border)' }}></textarea>
+                    </div>
+                  )}
+
+                  {editingDetail.lab_test_id === 8 && (
+                    <>
+                      <div className="form-group">
+                        <label>Reference Range Note</label>
+                        <textarea rows={4} value={editingDetail.reference_range_note || ''} onChange={e => setEditingDetail({ ...editingDetail, reference_range_note: e.target.value })} placeholder="Add Note" style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid var(--border)' }}></textarea>
+                      </div>
+                      <div className="form-group">
+                        <label>Clinical Significance:</label>
+                        <textarea rows={4} value={editingDetail.clinical_significance_note || ''} onChange={e => setEditingDetail({ ...editingDetail, clinical_significance_note: e.target.value })} placeholder="Add Clinical Significance:" style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid var(--border)' }}></textarea>
+                      </div>
+                      <div className="form-group">
+                        <label>Result Interpretation:</label>
+                        <textarea rows={4} value={editingDetail.result_interpretation_note || ''} onChange={e => setEditingDetail({ ...editingDetail, result_interpretation_note: e.target.value })} placeholder="Add Result Interpretation:" style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid var(--border)' }}></textarea>
+                      </div>
+                    </>
+                  )}
+
+                  {editingDetail.labTest.show_final_result_disposition && (
+                    <div className="form-group">
+                      <label>Final Result Disposition</label>
+                      <select value={editingDetail.final_result_disposition || '1'} onChange={e => setEditingDetail({ ...editingDetail, final_result_disposition: e.target.value })}>
+                        <option value="1">Negative</option>
+                        <option value="2">Positive</option>
+                        <option value="3">Test Cancelled</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {editingDetail.labTest.show_final_remark && (
+                    <div className="form-group">
+                      <label>Final Remark</label>
+                      <textarea rows={4} value={editingDetail.final_remark || ''} onChange={e => setEditingDetail({ ...editingDetail, final_remark: e.target.value })} placeholder="Enter Final Remark" style={{ width: '100%', padding: '0.75rem', borderRadius: 8, border: '1px solid var(--border)' }}></textarea>
+                    </div>
+                  )}
+                </div>
+
               </div>
-              <div className="card-footer" style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', background: 'var(--bg-app)' }}>
-                <button className="btn btn-ghost" onClick={() => setEditingDetail(null)}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveEdit} disabled={saving}>{saving ? '⏳ Saving...' : '💾 Save Changes'}</button>
+              <div className="card-footer" style={{ display: 'flex', gap: '1rem', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-app)', padding: '1rem 1.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <input type="checkbox" id="drugTestAccept" checked={drugTestAccept} onChange={e => setDrugTestAccept(e.target.checked)} />
+                  <label htmlFor="drugTestAccept" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>I understand that providing false information...</label>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <button className="btn btn-ghost" onClick={() => setEditingDetail(null)}>Cancel</button>
+                  <button className="btn btn-primary" onClick={saveEdit} disabled={saving}>{saving ? '⏳ Saving...' : '💾 Save Changes'}</button>
+                </div>
               </div>
             </div>
           </div>
