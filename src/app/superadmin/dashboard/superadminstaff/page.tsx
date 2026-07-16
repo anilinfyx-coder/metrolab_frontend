@@ -101,12 +101,19 @@ export default function SuperAdminStaffPage() {
               <div className="card-header"><span className="card-title">{editingId ? '✏️ Edit' : '➕ Add'} Super Admin Staff</span></div>
               <div className="card-body">
                 {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.85rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
-                {[{ id: 'sf-name', label: 'Full Name', key: 'name' }, { id: 'sf-email', label: 'Email', key: 'email' }, { id: 'sf-mobile', label: 'Mobile', key: 'mobile' }, { id: 'sf-password', label: 'Password', key: 'password' }, { id: 'sf-role', label: 'Role ID', key: 'role_id' }].map(f => (
+                {[{ id: 'sf-name', label: 'Full Name', key: 'name' }, { id: 'sf-email', label: 'Email', key: 'email' }, { id: 'sf-mobile', label: 'Mobile', key: 'mobile' }, { id: 'sf-password', label: 'Password', key: 'password' }].map(f => (
                   <div key={f.key} className="form-group">
                     <label htmlFor={f.id}>{f.label}</label>
                     <input id={f.id} type={f.key === 'password' ? 'password' : 'text'} value={(form as Record<string, string>)[f.key] || ''} onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))} placeholder={f.key === 'password' && editingId ? 'Leave blank to keep unchanged' : ''} />
                   </div>
                 ))}
+                <div className="form-group">
+                  <label htmlFor="sf-role">Role <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select id="sf-role" value={(form as Record<string, string>).role_id || '2'} onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}>
+                    <option value="2">Super Admin User</option>
+                    <option value="3">Super Admin User Staff</option>
+                  </select>
+                </div>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
                   <button id="save-staff-btn" className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳' : '💾 Save'}</button>
                   <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
@@ -138,7 +145,7 @@ export default function SuperAdminStaffPage() {
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{s.name}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{s.email}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{s.mobile}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{s.role_id}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{s.role_id === 2 ? 'Super Admin User' : s.role_id === 3 ? 'Super Admin User Staff' : `Role ${s.role_id}`}</td>
                       <td style={{ padding: '0.75rem 1rem' }}><span className={`badge ${s.status ? 'badge-success' : 'badge-danger'}`}>{s.status ? 'Active' : 'Inactive'}</span></td>
                       <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem' }}>
                         <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => openEdit(s)}>✏️ Edit</button>

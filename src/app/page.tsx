@@ -1,6 +1,7 @@
 'use client';
 import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function UnifiedLoginPage() {
   const router = useRouter();
@@ -172,6 +173,14 @@ export default function UnifiedLoginPage() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid #e6e9ed' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+            <Link href="/forgot-password" style={{ color: '#18BADD', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 500 }}>
+              Forgot your password?
+            </Link>
+            <Link href="/corporate-registration" style={{ color: '#2c3e50', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 500 }}>
+              Don't have a corporate account? <span style={{ color: '#18BADD' }}>Register here</span>
+            </Link>
+          </div>
           <span style={{ fontSize: '0.72rem', color: '#aab4be' }}>Metrolab — Precision is our Home Mark</span>
         </div>
       </div>

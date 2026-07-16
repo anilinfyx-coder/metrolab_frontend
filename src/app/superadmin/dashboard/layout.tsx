@@ -9,6 +9,8 @@ const superAdminNavItems: NavItem[] = [
   { href: '/documenttype', label: 'Document Type', icon: '📄', section: 'Master Configurations' },
   { href: '/specimentype', label: 'Specimen Type', icon: '🧪', section: 'Master Configurations' },
   { href: '/labtestcategory', label: 'Lab Test Category', icon: '🔬', section: 'Master Configurations' },
+  // { href: '/testreportquestions', label: 'Test Report Questions', icon: '❓', section: 'Master Configurations' },
+  // { href: '/testresultparameter', label: 'Test Result Parameters', icon: '📊', section: 'Master Configurations' },
   { href: '/b2bclient', label: 'B2B Labs', icon: '🏢', section: 'Master Configurations' },
   { href: '/profile', label: 'My Profile', icon: '👤', section: 'Account' },
 ];

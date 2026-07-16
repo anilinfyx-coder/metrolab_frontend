@@ -88,10 +88,13 @@ export default function LabTestCategoryPage() {
 
   useEffect(() => { loadTests(); }, []);
 
-  const openAdd = () => { setEditingId(null); setForm({ ...emptyForm }); setMsg(null); setView('form'); };
+  const [isReadOnly, setIsReadOnly] = useState(false);
+  
+  const openAdd = () => { setEditingId(null); setForm({ ...emptyForm }); setMsg(null); setIsReadOnly(false); setView('form'); };
   const openEdit = (t: LabTest) => {
     setEditingId(t.id);
     setForm({ ...emptyForm, ...t as unknown as Record<string, string | boolean> });
+    setIsReadOnly(!!t.default_view);
     setMsg(null); setView('form');
   };
   const save = async () => {
@@ -253,25 +256,25 @@ export default function LabTestCategoryPage() {
         <div style={{ padding: '1.5rem' }}>
           {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
           <div className="card">
-            <div className="card-header"><span className="card-title">{editingId ? '✏️ Edit Lab Test Type' : '➕ Add Lab Test Type'}</span></div>
+            <div className="card-header"><span className="card-title">{isReadOnly ? '👁 View Lab Test Type' : editingId ? '✏️ Edit Lab Test Type' : '➕ Add Lab Test Type'}</span></div>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div className="form-group" style={{ gridColumn: 'span 3' }}>
                   <label>Name <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" placeholder="Enter Name" value={form.name as string} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                  <input type="text" placeholder="Enter Name" disabled={isReadOnly} value={form.name as string} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 3' }}>
                   <label>Description</label>
-                  <textarea rows={3} placeholder="Enter Description" value={form.description as string} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                  <textarea rows={3} placeholder="Enter Description" disabled={isReadOnly} value={form.description as string} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
                     style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }} />
                 </div>
                 <div className="form-group">
                   <label>Cost ($)</label>
-                  <input type="number" placeholder="Enter Cost" value={form.cost as string} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
+                  <input type="number" placeholder="Enter Cost" disabled={isReadOnly} value={form.cost as string} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
                 </div>
                 <div className="form-group">
                   <label>CPT Code</label>
-                  <input type="text" placeholder="Enter CPT Code" value={form.cpt_code as string} onChange={e => setForm(p => ({ ...p, cpt_code: e.target.value }))} />
+                  <input type="text" placeholder="Enter CPT Code" disabled={isReadOnly} value={form.cpt_code as string} onChange={e => setForm(p => ({ ...p, cpt_code: e.target.value }))} />
                 </div>
               </div>
 
@@ -279,19 +282,21 @@ export default function LabTestCategoryPage() {
                 <label style={{ fontWeight: 600, display: 'block', marginBottom: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
                   Report Display Options
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                  {CHECKBOX_FIELDS.map(([key, label]) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem', padding: '0.4rem 0.6rem', borderRadius: 6, border: `1px solid ${form[key] ? 'var(--primary)' : 'var(--border)'}`, background: form[key] ? 'rgba(99,102,241,0.08)' : 'transparent', transition: 'all 0.15s' }}>
-                      <input type="checkbox" checked={!!form[key]} onChange={e => setForm(p => ({ ...p, [key]: e.target.checked }))} />
-                      {label} <span style={{ color: '#ef4444' }}>*</span>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.75rem' }}>
+                  {CHECKBOX_FIELDS.map(([k, l]) => (
+                    <label key={k} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem', cursor: isReadOnly ? 'default' : 'pointer' }}>
+                      <input type="checkbox" checked={!!form[k]} disabled={isReadOnly}
+                        onChange={e => setForm(p => ({ ...p, [k]: e.target.checked }))}
+                        style={{ width: 16, height: 16, cursor: isReadOnly ? 'default' : 'pointer', accentColor: '#6366f1' }} />
+                      {l}
                     </label>
                   ))}
                 </div>
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳ Saving...' : '💾 Save'}</button>
-                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyForm }); setMsg(null); }}>🔄 Reset Data</button>
+                {!isReadOnly && <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳ Saving...' : '💾 Save'}</button>}
+                {!isReadOnly && <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyForm }); setMsg(null); }}>🔄 Reset Data</button>}
               </div>
             </div>
           </div>
