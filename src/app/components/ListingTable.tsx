@@ -20,10 +20,13 @@ type ListingTableProps<T extends { id: number | string }> = {
   loading?: boolean;
   emptyText?: string;
   headerActions?: ReactNode;
+  /** When true, shows "Total: N" on the right of the card header (filtered count). */
+  showTotal?: boolean;
   rowActions?: (row: T) => ReactNode;
   actionsLabel?: string;
   actionsWidth?: number;
   defaultPageSize?: number;
+  className?: string;
 };
 
 function getCellText<T>(row: T, col: ListingColumn<T>): string {
@@ -40,62 +43,170 @@ export function ActionIcons({
   onToggleStatus,
   onDelete,
   onView,
+  onDownload,
+  onLock,
+  onMail,
   statusActive,
+  locked,
   editTitle = 'Edit',
   statusTitle,
   deleteTitle = 'Delete',
   viewTitle = 'View Form',
+  downloadTitle = 'Download',
+  lockTitle,
+  mailTitle = 'Email Report',
+  deleteFirst = false,
+  editVariant = 'filled',
+  editDisabled = false,
 }: {
   onEdit?: () => void;
   onToggleStatus?: () => void;
   onDelete?: () => void;
   onView?: () => void;
+  onDownload?: () => void;
+  onLock?: () => void;
+  onMail?: () => void;
   statusActive?: boolean;
+  locked?: boolean;
   editTitle?: string;
   statusTitle?: string;
   deleteTitle?: string;
   viewTitle?: string;
+  downloadTitle?: string;
+  lockTitle?: string;
+  mailTitle?: string;
+  /** When true, render Delete before Edit (screenshot Waiting List order). */
+  deleteFirst?: boolean;
+  editVariant?: 'filled' | 'outline';
+  editDisabled?: boolean;
 }) {
+  const editBtn = onEdit ? (
+    <button
+      type="button"
+      className={`action-btn ${editVariant === 'outline' ? 'action-btn-edit-outline' : 'action-btn-edit'}`}
+      title={editTitle}
+      onClick={onEdit}
+      disabled={editDisabled}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
+      </svg>
+    </button>
+  ) : null;
+
+  const deleteBtn = onDelete ? (
+    <button type="button" className="action-btn action-btn-delete" title={deleteTitle} onClick={onDelete}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+      </svg>
+    </button>
+  ) : null;
+
+  const statusBtn = onToggleStatus ? (
+    <button
+      type="button"
+      className={`action-btn action-btn-status${statusActive ? '' : ' inactive'}`}
+      title={statusTitle || (statusActive ? 'Active — click to disable' : 'Inactive — click to enable')}
+      onClick={onToggleStatus}
+    >
+      {statusActive ? (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
+        </svg>
+      ) : (
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zM7 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
+        </svg>
+      )}
+    </button>
+  ) : null;
+
+  const downloadBtn = onDownload ? (
+    <button type="button" className="action-btn action-btn-download" title={downloadTitle} onClick={onDownload}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+      </svg>
+    </button>
+  ) : null;
+
+  const lockBtn = onLock ? (
+    <button
+      type="button"
+      className={`action-btn action-btn-lock${locked ? ' locked' : ''}`}
+      title={lockTitle || (locked ? 'Unlock' : 'Lock')}
+      onClick={onLock}
+    >
+      {locked ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10z" />
+        </svg>
+      )}
+    </button>
+  ) : null;
+
+  const mailBtn = onMail ? (
+    <button type="button" className="action-btn action-btn-mail" title={mailTitle} onClick={onMail}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" />
+      </svg>
+    </button>
+  ) : null;
+
+  const viewEyeBtn = onView ? (
+    <button type="button" className="action-btn action-btn-view-eye" title={viewTitle} onClick={onView}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    </button>
+  ) : null;
+
+  const viewDocBtn = onView ? (
+    <button type="button" className="action-btn action-btn-view" title={viewTitle} onClick={onView}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
+      </svg>
+    </button>
+  ) : null;
+
+  // Manage Requests: Download + View (eye) + Delete
+  const isRequestActions = !!(onDownload && onView && onDelete && !onLock && !onMail && !onEdit);
+  // Test Reports: Download + Edit + Lock + Mail
+  const hasReportActions = !!(onDownload || onLock || onMail) && !isRequestActions;
+
   return (
     <div className="listing-actions">
-      {onView && (
-        <button type="button" className="action-btn action-btn-view" title={viewTitle} onClick={onView}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
-          </svg>
-        </button>
-      )}
-      {onEdit && (
-        <button type="button" className="action-btn action-btn-edit" title={editTitle} onClick={onEdit}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
-          </svg>
-        </button>
-      )}
-      {onToggleStatus && (
-        <button
-          type="button"
-          className={`action-btn action-btn-status${statusActive ? '' : ' inactive'}`}
-          title={statusTitle || (statusActive ? 'Active — click to disable' : 'Inactive — click to enable')}
-          onClick={onToggleStatus}
-        >
-          {statusActive ? (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-            </svg>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zM7 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-            </svg>
-          )}
-        </button>
-      )}
-      {onDelete && (
-        <button type="button" className="action-btn action-btn-delete" title={deleteTitle} onClick={onDelete}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-          </svg>
-        </button>
+      {isRequestActions ? (
+        <>
+          {downloadBtn}
+          {viewEyeBtn}
+          {deleteBtn}
+        </>
+      ) : hasReportActions ? (
+        <>
+          {downloadBtn}
+          {editBtn}
+          {lockBtn}
+          {mailBtn}
+        </>
+      ) : deleteFirst ? (
+        <>
+          {onView && viewDocBtn}
+          {deleteBtn}
+          {editBtn}
+          {statusBtn}
+        </>
+      ) : (
+        <>
+          {onView && viewDocBtn}
+          {editBtn}
+          {statusBtn}
+          {deleteBtn}
+        </>
       )}
     </div>
   );
@@ -136,10 +247,12 @@ export default function ListingTable<T extends { id: number | string }>({
   loading = false,
   emptyText = 'No records found.',
   headerActions,
+  showTotal = false,
   rowActions,
   actionsLabel = 'Actions',
   actionsWidth = 130,
   defaultPageSize = 10,
+  className = '',
 }: ListingTableProps<T>) {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<string | null>(
@@ -189,10 +302,13 @@ export default function ListingTable<T extends { id: number | string }>({
   const colSpan = columns.length + (rowActions ? 1 : 0);
 
   return (
-    <div className="card listing-card">
+    <div className={`card listing-card${className ? ` ${className}` : ''}`}>
       <div className="listing-card-header">
         <h2 className="listing-card-title">{title}</h2>
-        {headerActions}
+        <div className="listing-card-header-right">
+          {showTotal && <span className="listing-total">Total: {total}</span>}
+          {headerActions}
+        </div>
       </div>
 
       <div className="card-body" style={{ padding: 0 }}>
@@ -201,7 +317,7 @@ export default function ListingTable<T extends { id: number | string }>({
         ) : (
           <>
             <div className="table-wrap">
-              <table className="listing-table">
+              <table className="listing-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
                     {columns.map(col => (
@@ -229,7 +345,7 @@ export default function ListingTable<T extends { id: number | string }>({
                   </tr>
                   <tr className="table-filter-row">
                     {columns.map(col => (
-                      <td key={col.key}>
+                      <td key={col.key} style={{ width: col.width }}>
                         {col.filterable !== false ? (
                           <input
                             value={filters[col.key] || ''}
@@ -241,18 +357,25 @@ export default function ListingTable<T extends { id: number | string }>({
                         ) : null}
                       </td>
                     ))}
-                    {rowActions && <td />}
+                    {rowActions && <td style={{ width: actionsWidth }} />}
                   </tr>
                 </thead>
                 <tbody>
                   {pageItems.map(row => (
                     <tr key={row.id}>
                       {columns.map(col => (
-                        <td key={col.key} style={{ textAlign: col.align || 'left' }}>
+                        <td
+                          key={col.key}
+                          style={{
+                            width: col.width,
+                            textAlign: col.align || 'left',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {col.render ? col.render(row) : (getCellText(row, col) || '—')}
                         </td>
                       ))}
-                      {rowActions && <td>{rowActions(row)}</td>}
+                      {rowActions && <td style={{ width: actionsWidth }}>{rowActions(row)}</td>}
                     </tr>
                   ))}
                   {pageItems.length === 0 && (
