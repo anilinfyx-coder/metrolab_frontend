@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import ApplyTestForm from './ApplyTestForm';
+import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -17,20 +18,77 @@ interface WaitingEntry {
   requisition_no: string;
   creation_timestamp: string;
   status: boolean;
+  tests?: string;
+  test_count?: number;
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+const columns: ListingColumn<WaitingEntry>[] = [
+  {
+    key: 'creation_timestamp',
+    label: 'Date Time',
+    sortable: false,
+    filterable: false,
+    width: 160,
+    getValue: (row) => formatDateTime(row.creation_timestamp),
+  },
+  {
+    key: 'patient_uid',
+    label: 'Patient/Donor UID',
+    sortable: true,
+    filterable: true,
+    width: 140,
+    getValue: (row) => row.patient_uid || '',
+  },
+  {
+    key: 'patient_name',
+    label: 'Name',
+    sortable: true,
+    filterable: true,
+    width: 130,
+    getValue: (row) => row.patient_name || (row.patient_id ? `Patient #${row.patient_id}` : ''),
+  },
+  {
+    key: 'tests',
+    label: 'Tests',
+    sortable: false,
+    filterable: false,
+    width: '48%',
+    getValue: (row) => {
+      const t = (row.tests || '').trim();
+      if (!t) return '';
+      return t.endsWith('.') ? t : `${t}.`;
+    },
+  },
+  {
+    key: 'test_count',
+    label: 'Test Count',
+    sortable: false,
+    filterable: false,
+    width: 100,
+    align: 'center',
+    getValue: (row) => row.test_count ?? 0,
+  },
+];
+
 export default function WaitingListPage() {
+  const router = useRouter();
   const confirmDialog = useConfirm();
   const [entries, setEntries] = useState<WaitingEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
 
   const loadData = () => {
     setLoading(true);
     fetch(`${API}/api/WaitingList`, { headers: { token: getToken() } })
       .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setEntries(d.obj); })
+      .then(d => { if (d.response_code === '200') setEntries(d.obj || []); })
       .finally(() => setLoading(false));
   };
 
@@ -48,92 +106,32 @@ export default function WaitingListPage() {
     loadData();
   };
 
-  const filtered = entries.filter(e =>
-    !search ||
-    e.patient_name?.toLowerCase().includes(search.toLowerCase()) ||
-    e.patient_mobile?.includes(search) ||
-    e.requisition_no?.includes(search)
-  );
-
   return (
-    <div className="page-content">
-      <TopNav title="Waiting List">
-          <input id="wl-search" type="text" placeholder="Search by name, mobile, requisition..." value={search} onChange={e => setSearch(e.target.value)}
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 280 }} />
-          <button className="btn btn-ghost" onClick={loadData} style={{ fontSize: '0.875rem' }}>🔄 Refresh</button>
-        </TopNav>
+    <div className="page-content" style={{ paddingTop: 0 }}>
+      <TopNav title="Waiting List" />
 
-      <div style={{ padding: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-          {[
-            { label: 'Total Waiting', value: entries.length, color: 'blue' },
-            { label: 'Active', value: entries.filter(e => e.status).length, color: 'green' },
-          ].map(s => (
-            <div key={s.label} className="stat-card" style={{ flex: '1 1 160px', padding: '1rem', gap: '0.75rem' }}>
-              <div className={`stat-icon ${s.color}`}>📋</div>
-              <div>
-                <div className="stat-value">{s.value}</div>
-                <div className="stat-label">{s.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="card">
-          <div className="card-body" style={{ padding: 0 }}>
-            {loading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading waiting list...</div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                {entries.length === 0 ? 'Waiting list is empty. Add patients from Patient Demographic.' : 'No results match your search.'}
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['#', 'Patient', 'Mobile', 'Reason for Test', 'Requisition No.', 'Date', 'Status', 'Action'].map(h => (
-                      <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((e, i) => (
-                    <tr key={e.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
-                      onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-card-hover)')}
-                      onMouseLeave={ev => (ev.currentTarget.style.background = '')}>
-                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{i + 1}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{e.patient_name || `Patient #${e.patient_id}`}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{e.patient_mobile || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.reason_for_test || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{e.requisition_no || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>{new Date(e.creation_timestamp).toLocaleDateString()}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <span className={`badge ${e.status ? 'badge-success' : 'badge-danger'}`}>
-                          {e.status ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <div style={{ display: 'flex', gap: '0.5rem' }}>
-                          <button className="btn btn-sm" onClick={() => setSelectedEntryId(e.id)} style={{ border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text)' }}>📝 Apply Test</button>
-                          <button className="btn btn-sm" style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2' }} onClick={() => remove(e.id)}>🗑️</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {selectedEntryId && (
-        <ApplyTestForm 
-          waitingListId={selectedEntryId} 
-          onClose={() => setSelectedEntryId(null)} 
-          onSuccess={() => { setSelectedEntryId(null); loadData(); }}
+      <div style={{ padding: '1.25rem 1.5rem' }}>
+        <ListingTable
+          className="waiting-list-table"
+          title="List of Patients/Donor"
+          columns={columns}
+          rows={entries}
+          loading={loading}
+          showTotal
+          emptyText="Waiting list is empty. Add patients from Patient Demographic."
+          actionsLabel="Actions"
+          actionsWidth={100}
+          rowActions={(e) => (
+            <ActionIcons
+              deleteFirst
+              editVariant="outline"
+              editTitle="Edit / Apply Test"
+              onDelete={() => remove(e.id)}
+              onEdit={() => router.push(`/admin/dashboard/labtest/${e.id}`)}
+            />
+          )}
         />
-      )}
+      </div>
     </div>
   );
 }
