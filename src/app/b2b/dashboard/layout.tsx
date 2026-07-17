@@ -8,6 +8,7 @@ const b2bNavItems: NavItem[] = [
   { href: '/admindashboard', label: 'Admin Dashboard', icon: '🖥️', section: 'Lab Admin' },
   { href: '/users', label: 'Manage Staff Users', icon: '👥', section: 'Lab Admin' },
   { href: '/assigntestcategory', label: 'Assigned Test Category', icon: '📋', section: 'Lab Admin' },
+  { href: '/manageparameters', label: 'Manage Parameters', icon: '⚙️', section: 'Lab Admin' },
   { href: '/corporateclient', label: 'Corporate Client', icon: '🏢', section: 'Lab Admin' },
 ];
 

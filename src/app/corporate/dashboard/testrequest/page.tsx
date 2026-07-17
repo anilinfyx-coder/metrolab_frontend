@@ -6,6 +6,10 @@ import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
+function getStoredUser() {
+  if (typeof window === 'undefined') return null;
+  try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
+}
 
 export default function TestRequestsPage() {
   const confirmDialog = useConfirm();
@@ -15,6 +19,7 @@ export default function TestRequestsPage() {
   const [viewMode, setViewMode] = useState<'LIST' | 'GENERATE' | 'VIEW'>('LIST');
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [selectedRequestEmployees, setSelectedRequestEmployees] = useState<any[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
 
   // Form State
   const [form, setForm] = useState({
@@ -37,9 +42,11 @@ export default function TestRequestsPage() {
 
   const loadData = async () => {
     setLoading(true);
+    const user = getStoredUser();
+    const query = user?.id ? `?corporate_client_id=${user.id}` : '';
     const [rRes, eRes] = await Promise.all([
       fetch(`${API}/api/TestRequest/getTestRequestList`, { method: 'POST', headers: { token: getToken() } }),
-      fetch(`${API}/api/Employees`, { headers: { token: getToken() } })
+      fetch(`${API}/api/Employees${query}`, { headers: { token: getToken() } })
     ]);
     const parseJson = async (res: Response, name: string) => {
       try {
@@ -159,22 +166,47 @@ export default function TestRequestsPage() {
   };
 
   const viewRequest = async (r: any) => {
-    setSelectedRequest(r);
-    // Fetch employees tied to this specific request
-    const res = await fetch(`${API}/api/TestRequest/getTestRequestEmployees`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ test_request_id: r.id })
-    });
-    const d = await res.json();
-    if (d.response_code === '200') {
-      setSelectedRequestEmployees(d.obj || []);
-    } else {
-      // fallback: use the already-loaded employees list
-      setSelectedRequestEmployees(employees);
-    }
+    setSelectedRequest(r); // set basic info immediately so page shows
+    setSelectedRequestEmployees([]);
+    setViewLoading(true);
     setViewMode('VIEW');
+    // Fetch full details including all summary fields + employees from GET /:id
+    try {
+      const res = await fetch(`${API}/api/TestRequest/${r.id}`, {
+        headers: { token: getToken() }
+      });
+      const d = await res.json();
+      if (d.response_code === '200') {
+        const detail = d.obj;
+        // Merge full detail into selectedRequest (camelCase names used by view)
+        setSelectedRequest({
+          id: detail.id,
+          title: detail.title,
+          reasonForTest: detail.reason_for_test,
+          testType: detail.test_type,
+          year: detail.year,
+          frequency: detail.frequency,
+          quarter: detail.quarter,
+          selectionType: detail.selection_type,
+          drugCount: detail.drug_count,
+          alcoholCount: detail.alcohol_count,
+          alternateCount: detail.alternate_count,
+          totalCount: detail.total_count,
+          totalSelectedCount: detail.total_selected_count,
+          corporateClientCompany: detail.corporateClientCompany,
+          b2bClientCompany: detail.b2bClientCompany,
+          creationTimestamp: detail.creationTimestamp,
+          allSubmitStatus: detail.status,
+        });
+        setSelectedRequestEmployees(detail.employees || []);
+      }
+    } catch (e) {
+      console.error('Failed to fetch test request detail', e);
+    } finally {
+      setViewLoading(false);
+    }
   };
+
 
   const emailReport = async (testRequestId: number, employeeId: number) => {
     try {
@@ -193,6 +225,7 @@ export default function TestRequestsPage() {
       alert("Error: " + e.message);
     }
   };
+
 
   return (
     <div className="page-content">
@@ -337,7 +370,7 @@ export default function TestRequestsPage() {
                 </div>
               </div>
 
-              {/* Drug / Alcohol / Alternate checkboxes — isolated from global form-control CSS */}
+              {/* Drug / Alcohol / Alternate checkboxes â€” isolated from global form-control CSS */}
               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '0', marginBottom: '0.5rem' }}>
 
                 {/* Drug */}
@@ -531,14 +564,21 @@ export default function TestRequestsPage() {
                 <span style={{ fontSize: '1rem', fontWeight: 500 }}>{selectedRequest.alternateCount}</span>
               </div>
               <div>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Total Count: </span>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Pool Employees: </span>
                 <span style={{ fontSize: '1rem', fontWeight: 500 }}>{selectedRequest.totalCount}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Selected Employees: </span>
+                <span style={{ fontSize: '1rem', fontWeight: 500 }}>{selectedRequest.totalSelectedCount}</span>
               </div>
             </div>
 
             <hr style={{ borderColor: 'var(--border)', margin: '1rem 0 1.5rem' }} />
 
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 }}>Employees List</h3>
+            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 }}>Employees List ({selectedRequestEmployees.length} total)</h3>
+            {viewLoading ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>â³ Loading employees...</div>
+            ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
@@ -568,7 +608,7 @@ export default function TestRequestsPage() {
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
                                 <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><FileDown size={12} /></button>
-                                <button title="Email" onClick={() => emailReport(selectedRequest.id, emp.id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
+                                <button title="Email" onClick={() => emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
                               </div>
                             )}
                           </div>
@@ -585,7 +625,7 @@ export default function TestRequestsPage() {
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
                                 <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><FileDown size={12} /></button>
-                                <button title="Email" onClick={() => emailReport(selectedRequest.id, emp.id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
+                                <button title="Email" onClick={() => emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
                               </div>
                             )}
                           </div>
@@ -601,6 +641,7 @@ export default function TestRequestsPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </div>
         </>
       )}
