@@ -4,7 +4,11 @@ import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
+function getStoredUser() {
+  if (typeof window === 'undefined') return null;
+  try { return JSON.parse(localStorage.getItem('b2b_user') || '{}'); } catch { return {}; }
+}
 
 interface TestResultParameter {
   id: number;
@@ -16,8 +20,9 @@ interface TestResultParameter {
   unit_text: string;
   description: string;
   is_mandatory: boolean;
-  type_data_id: number;
   status: boolean;
+  lab_test_id: number;
+  b2b_client_id: number | null;
 }
 interface DocType { id: number; name: string; }
 
@@ -32,13 +37,14 @@ const INPUT_TYPES = [
 const emptyForm = {
   name: '', placeholder: '', label: '', input_type: '1',
   validate_regex: '', unit_text: '',
-  description: '', is_mandatory: false, type_data_id: '',
+  description: '', is_mandatory: false, lab_test_id: '',
 };
 
 export default function TestResultParameterPage() {
   const confirmDialog = useConfirm();
   const [params, setParams] = useState<TestResultParameter[]>([]);
   const [docTypes, setDocTypes] = useState<DocType[]>([]);
+  const [labTests, setLabTests] = useState<{id: number, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'form'>('list');
   const [form, setForm] = useState<Record<string, string | boolean>>({ ...emptyForm });
@@ -49,7 +55,9 @@ export default function TestResultParameterPage() {
 
   const loadData = () => {
     setLoading(true);
-    fetch(`${API}/api/ReportRequestParameters`, { headers: { token: getToken() } })
+    const user = getStoredUser();
+    const query = user?.id ? `?b2b_client_id=${user.id}` : '';
+    fetch(`${API}/api/ReportRequestParameters${query}`, { headers: { token: getToken() } })
       .then(r => r.json())
       .then(d => { if (d.response_code === '200') setParams(d.obj || []); })
       .catch(() => setParams([]))
@@ -62,16 +70,24 @@ export default function TestResultParameterPage() {
       .then(d => { if (d.response_code === '200') setDocTypes(d.obj || []); });
   };
 
-  useEffect(() => { loadData(); loadDocTypes(); }, []);
+  const loadLabTests = () => {
+    fetch(`${API}/api/LabTests`, { headers: { token: getToken() } })
+      .then(r => r.json())
+      .then(d => { if (d.response_code === '200') setLabTests(d.obj || []); });
+  };
+
+  useEffect(() => { loadData(); loadDocTypes(); loadLabTests(); }, []);
 
   const save = async () => {
     setSaving(true); setMsg(null);
     const method = editingId ? 'PUT' : 'POST';
     const url = `${API}/api/ReportRequestParameters${editingId ? `/${editingId}` : ''}`;
+    const user = getStoredUser();
     const payload = {
       ...form,
-      type_data_id: form.type_data_id || null,
+      lab_test_id: form.lab_test_id || null,
       is_mandatory: form.is_mandatory === true || form.is_mandatory === 'true',
+      b2b_client_id: user?.id,
     };
     const res = await fetch(url, {
       method,
@@ -116,7 +132,7 @@ export default function TestResultParameterPage() {
       input_type: String(p.input_type || '1'), validate_regex: p.validate_regex || '',
       unit_text: p.unit_text || '',
       description: p.description || '', is_mandatory: p.is_mandatory || false,
-      type_data_id: String(p.type_data_id || ''),
+      lab_test_id: String(p.lab_test_id || ''),
     });
     setMsg(null);
     setView('form');
@@ -124,6 +140,7 @@ export default function TestResultParameterPage() {
 
   const getInputTypeLabel = (val: string) => INPUT_TYPES.find(t => t.value === String(val))?.label || val;
   const getTypeName = (id: number) => docTypes.find(d => d.id === id)?.name || '—';
+  const getLabTestName = (id: number) => labTests.find(d => d.id === id)?.name || 'Global Parameter';
 
   const filtered = params.filter(p => !search || p.name?.toLowerCase().includes(search.toLowerCase()) || p.label?.toLowerCase().includes(search.toLowerCase()));
 
@@ -165,12 +182,12 @@ export default function TestResultParameterPage() {
 
                 {inp('validate_regex', 'Validation Regex')}
                 {inp('unit_text', 'Unit Text')}
-
+                
                 <div className="form-group">
-                  <label>Test Type</label>
-                  <select value={String(form.type_data_id || '')} onChange={e => setForm(p => ({ ...p, type_data_id: e.target.value }))}>
-                    <option value="">-- Select Test Type --</option>
-                    {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  <label>Lab Test</label>
+                  <select value={String(form.lab_test_id || '')} onChange={e => setForm(p => ({ ...p, lab_test_id: e.target.value }))}>
+                    <option value="">-- Select Lab Test --</option>
+                    {labTests.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
 
@@ -231,7 +248,7 @@ export default function TestResultParameterPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['#', 'Name', 'Label', 'Description', 'Input Type', 'Test Type', 'Status', 'Action'].map(h => (
+                    {['#', 'Name', 'Label', 'Description', 'Input Type', 'Lab Test', 'Status', 'Action'].map(h => (
                       <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
@@ -246,14 +263,20 @@ export default function TestResultParameterPage() {
                       <td style={{ padding: '0.75rem 1rem' }}>{p.label}</td>
                       <td style={{ padding: '0.75rem 1rem', maxWidth: 200 }}>{p.description}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{getInputTypeLabel(p.input_type)}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{getTypeName(p.type_data_id)}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{getLabTestName(p.lab_test_id)}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <span className={`badge ${p.status ? 'badge-success' : 'badge-danger'}`}>{p.status ? 'Active' : 'Inactive'}</span>
                       </td>
-                      <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => openEdit(p)}>✏️ Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => toggleStatus(p)}>⚡ {p.status ? 'Disable' : 'Enable'}</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem', color: '#ef4444' }} onClick={() => remove(p.id)}>🗑 Delete</button>
+                      <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                        {p.b2b_client_id == null ? (
+                          <span style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem', borderRadius: 12, background: 'rgba(99,102,241,0.15)', color: '#818cf8', fontWeight: 600 }}>🔒 Global (Read-only)</span>
+                        ) : (
+                          <>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => openEdit(p)}>✏️ Edit</button>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => toggleStatus(p)}>⚡ {p.status ? 'Disable' : 'Enable'}</button>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem', color: '#ef4444' }} onClick={() => remove(p.id)}>🗑 Delete</button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

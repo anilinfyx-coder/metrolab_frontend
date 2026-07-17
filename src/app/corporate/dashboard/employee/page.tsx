@@ -6,6 +6,10 @@ import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
+function getStoredUser() {
+  if (typeof window === 'undefined') return null;
+  try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
+}
 
 // US States for dropdown
 const US_STATES = [
@@ -41,8 +45,9 @@ export default function EmployeePage() {
 
   const loadEmployees = () => {
     setLoading(true);
-    // In a real app we'd filter by corporate client ID, but generic CRUD doesn't enforce it unless we pass it.
-    fetch(`${API}/api/Employees`, { headers: { token: getToken() } })
+    const user = getStoredUser();
+    const query = user?.id ? `?corporate_client_id=${user.id}` : '';
+    fetch(`${API}/api/Employees${query}`, { headers: { token: getToken() } })
       .then(r => r.json())
       .then(d => { if (d.response_code === '200') setEmployees(d.obj || []); })
       .finally(() => setLoading(false));
@@ -77,11 +82,13 @@ export default function EmployeePage() {
       ? `${form.dob_year}-${String(form.dob_month).padStart(2, '0')}-${String(form.dob_day).padStart(2, '0')}`
       : null;
 
+    const user = getStoredUser();
     const payload = {
       first_name: form.first_name, last_name: form.last_name, mobile: form.mobile, gender: parseInt(form.gender as string),
       dob: dobString, driving_license_state: form.driving_license_state, driving_license: form.driving_license,
       street1: form.street1, street2: form.street2, city: form.city, state: form.state, zipcode: form.zipcode,
-      email: form.email, ssn: form.ssn, department: form.department
+      email: form.email, ssn: form.ssn, department: form.department,
+      corporate_client_id: user?.id
     };
 
     const method = editingId ? 'PUT' : 'POST';
