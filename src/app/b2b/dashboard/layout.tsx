@@ -10,6 +10,7 @@ const b2bNavItems: NavItem[] = [
   { href: '/assigntestcategory', label: 'Assigned Test Category', icon: '📋', section: 'Lab Admin' },
   { href: '/manageparameters', label: 'Manage Parameters', icon: '⚙️', section: 'Lab Admin' },
   { href: '/corporateclient', label: 'Corporate Client', icon: '🏢', section: 'Lab Admin' },
+  { href: '/wallet', label: 'Wallet & Transactions', icon: '💰', section: 'Billing' },
 ];
 
 export default function B2bDashboardLayout({ children }: { children: React.ReactNode }) {
