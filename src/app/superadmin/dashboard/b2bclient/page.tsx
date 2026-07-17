@@ -29,7 +29,7 @@ const emptyClient = {
   tagline: '', primary_color_code: '', approval_note: '', password: '',
 };
 
-type View = 'list' | 'form' | 'subscription' | 'labtestaccess' | 'documents';
+type View = 'list' | 'form' | 'subscription' | 'labtestaccess' | 'documents' | 'wallet';
 
 // ─── Message Banner ───────────────────────────────────────────────────────────
 function MsgBanner({ msg }: { msg: { type: 'success' | 'error'; text: string } | null }) {
@@ -69,6 +69,12 @@ export default function B2BClientsPage() {
 
   // Lab Test Access
   const [labTests, setLabTests] = useState<LabTest[]>([]);
+
+  // Wallet
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [walletHistory, setWalletHistory] = useState<any[]>([]);
+  const [walletForm, setWalletForm] = useState({ amount: '', description: '' });
+  const [walletSaving, setWalletSaving] = useState(false);
 
   // File uploads for B2B Client
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -302,6 +308,45 @@ export default function B2BClientsPage() {
     });
     setMsg({ type: 'success', text: 'Lab Test Access saved successfully.' });
     setView('list');
+  };
+
+  // ── Wallet ────────────────────────────────────────────────────────────────
+  const openWallet = (c: B2BClient) => {
+    setSelectedClient(c);
+    setWalletBalance((c as any).wallet_balance || 0);
+    setWalletForm({ amount: '', description: '' });
+    fetch(`${API}/api/B2bClients/walletHistory/${c.id}`, { headers: { token: getToken() } })
+      .then(r => r.json())
+      .then(d => { if (d.response_code === '200') setWalletHistory(d.obj || []); });
+    setView('wallet');
+  };
+
+  const rechargeWallet = async () => {
+    if (!walletForm.amount || isNaN(Number(walletForm.amount)) || Number(walletForm.amount) <= 0) {
+      setMsg({ type: 'error', text: 'Please enter a valid positive amount.' }); return;
+    }
+    setWalletSaving(true); setMsg(null);
+    const res = await fetch(`${API}/api/B2bClients/rechargeWallet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', token: getToken() },
+      body: JSON.stringify({ b2b_client_id: selectedClient?.id, amount: Number(walletForm.amount), description: walletForm.description || 'Manual Recharge' })
+    });
+    const d = await res.json();
+    setWalletSaving(false);
+    if (d.response_code === '200') {
+      setMsg({ type: 'success', text: `Wallet recharged successfully. New Balance: $${d.obj.newBalance}` });
+      setWalletBalance(d.obj.newBalance);
+      setWalletForm({ amount: '', description: '' });
+      // Reload history
+      if (selectedClient) {
+        fetch(`${API}/api/B2bClients/walletHistory/${selectedClient.id}`, { headers: { token: getToken() } })
+          .then(r => r.json())
+          .then(d2 => { if (d2.response_code === '200') setWalletHistory(d2.obj || []); });
+      }
+      loadClients(); // refresh wallet_balance column in list
+    } else {
+      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Recharge failed.' });
+    }
   };
 
   const filtered = clients.filter(c =>
@@ -605,6 +650,102 @@ export default function B2BClientsPage() {
   }
 
   // ════════════════════════════════════════════════════════════════════════════
+  // View: WALLET
+  // ════════════════════════════════════════════════════════════════════════════
+  if (view === 'wallet') {
+    return (
+      <div className="page-content">
+        <TopNav title={`Wallet — ${selectedClient?.company_name}`}>
+          <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+        </TopNav>
+        <div style={{ padding: '1.5rem' }}>
+          <MsgBanner msg={msg} />
+
+          {/* Balance Banner */}
+          <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', border: 'none' }}>
+            <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.75)', marginBottom: '0.25rem' }}>Current Wallet Balance</div>
+                <div style={{ fontSize: '2.5rem', fontWeight: 700, color: '#fff' }}>${parseFloat(String(walletBalance || 0)).toFixed(2)}</div>
+                <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>{selectedClient?.company_name}</div>
+              </div>
+              <div style={{ fontSize: '3rem', opacity: 0.3 }}>💰</div>
+            </div>
+          </div>
+
+          {/* Recharge Form */}
+          <div className="card" style={{ marginBottom: '1.5rem' }}>
+            <div className="card-header"><span className="card-title">➕ Add Funds</span></div>
+            <div className="card-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'flex-end' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>Amount ($) <span style={{ color: '#ef4444' }}>*</span></label>
+                  <input type="number" min="0" step="0.01" value={walletForm.amount}
+                    onChange={e => setWalletForm(p => ({ ...p, amount: e.target.value }))}
+                    placeholder="e.g. 500.00" />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label>Description / Note</label>
+                  <input type="text" value={walletForm.description}
+                    onChange={e => setWalletForm(p => ({ ...p, description: e.target.value }))}
+                    placeholder="e.g. Payment received via bank transfer" />
+                </div>
+                <button className="btn btn-primary" onClick={rechargeWallet} disabled={walletSaving}
+                  style={{ whiteSpace: 'nowrap' }}>
+                  {walletSaving ? '⏳ Adding...' : '💳 Add Funds'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Transaction History */}
+          <div className="card">
+            <div className="card-header"><span className="card-title">📋 Transaction History</span></div>
+            <div className="card-body" style={{ padding: 0 }}>
+              {walletHistory.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No transactions yet.</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)', background: '#f8f9fc' }}>
+                      {['Date', 'Type', 'Amount', 'Balance After', 'Description'].map(h => (
+                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {walletHistory.map((t: any) => (
+                      <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                          {new Date(t.creation_timestamp).toLocaleString()}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem' }}>
+                          <span style={{
+                            padding: '0.2rem 0.6rem', borderRadius: 999, fontSize: '0.75rem', fontWeight: 600,
+                            background: t.transaction_type === 'CREDIT' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                            color: t.transaction_type === 'CREDIT' ? '#10b981' : '#ef4444'
+                          }}>
+                            {t.transaction_type === 'CREDIT' ? '▲ CREDIT' : '▼ DEBIT'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: t.transaction_type === 'CREDIT' ? '#10b981' : '#ef4444' }}>
+                          {t.transaction_type === 'CREDIT' ? '+' : '-'}${parseFloat(t.amount).toFixed(2)}
+                        </td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>${parseFloat(t.closing_balance).toFixed(2)}</td>
+                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{t.description || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
   // View: LIST (default)
   // ════════════════════════════════════════════════════════════════════════════
   return (
@@ -626,7 +767,7 @@ export default function B2BClientsPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Company Name', 'Mobile', 'Email', 'Configurations', 'Actions'].map(h => (
+                    {['Company Name', 'Mobile', 'Email', 'Wallet Balance', 'Configurations', 'Actions'].map(h => (
                       <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
@@ -640,6 +781,11 @@ export default function B2BClientsPage() {
                       <td style={{ padding: '0.75rem 1rem' }}>{c.mobile || '—'}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>{c.email}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
+                        <span style={{ fontWeight: 600, color: (c as any).wallet_balance > 0 ? '#10b981' : '#9ca3af' }}>
+                          ${parseFloat((c as any).wallet_balance || 0).toFixed(2)}
+                        </span>
+                      </td>
+                      <td style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                           <button title="Documents" className="btn btn-ghost"
                             style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(34,138,202,0.1)', color: '#228aca', border: '1px solid rgba(34,138,202,0.3)' }}
@@ -650,6 +796,9 @@ export default function B2BClientsPage() {
                           <button title="Lab Test Access" className="btn btn-ghost"
                             style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
                             onClick={() => openLabTestAccess(c)}>⚙️ Tests</button>
+                          <button title="Manage Wallet" className="btn btn-ghost"
+                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(99,102,241,0.12)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.3)' }}
+                            onClick={() => openWallet(c)}>💰 Wallet{(c as any).wallet_balance > 0 ? ` ($${parseFloat((c as any).wallet_balance).toFixed(2)})` : ''}</button>
                         </div>
                       </td>
                       <td style={{ padding: '0.75rem 1rem' }}>
