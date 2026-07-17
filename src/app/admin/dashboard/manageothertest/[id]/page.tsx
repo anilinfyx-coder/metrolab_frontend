@@ -241,6 +241,9 @@ export default function EditTestReportPage() {
       setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Save failed' });
     }
     setSaving(false);
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   if (!id || Number.isNaN(id)) {
@@ -286,7 +289,7 @@ export default function EditTestReportPage() {
                 </div>
               )}
 
-              <fieldset disabled={locked} className="report-edit-fieldset">
+              <fieldset disabled={locked || saving} className="report-edit-fieldset">
                 <div className="wl-form-row wl-form-row-2">
                   {show('show_regulation') && (
                     <div className="form-group">
@@ -647,15 +650,16 @@ export default function EditTestReportPage() {
               </fieldset>
 
               <div className="report-edit-footer">
-                <button type="button" className="btn btn-ghost" onClick={goBack}>
+                <button type="button" className="btn btn-ghost" onClick={goBack} disabled={saving}>
                   Close
                 </button>
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn btn-primary report-edit-save-btn"
                   onClick={save}
                   disabled={saving || locked}
                 >
+                  {saving && <span className="report-edit-spinner report-edit-spinner-btn" aria-hidden />}
                   {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>

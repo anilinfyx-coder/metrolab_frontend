@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import TopNav from '../../../../components/TopNav';
+import { useConfirm } from '../../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() {
@@ -20,7 +21,29 @@ type EmployeeRow = {
   is_selected_for_alcohol: boolean;
   is_selected_for_alternate: boolean;
   status: boolean;
+  waiting_list_id?: number | null;
+  transferred_to_waiting_list?: boolean;
+  is_cancelled?: boolean;
+  cancellation_reason?: string;
 };
+
+type AlternateEmployeeOption = {
+  id: number;
+  first_name: string;
+  last_name: string;
+  mobile: string;
+  department: string;
+  label: string;
+};
+
+const CANCELLATION_REASONS = [
+  'Random',
+  'Reasonable Susp.',
+  'Post-Accident',
+  'Return to Duty',
+  'Follow-up',
+  'Pre-employment',
+] as const;
 
 type TestRequestDetail = {
   id: number;
@@ -62,10 +85,24 @@ function yearFrequency(detail: TestRequestDetail) {
   return `${year}/${freq}${q}`.replace(/\s+/g, ' ').trim();
 }
 
+function employeeHasSelectedTest(e: EmployeeRow) {
+  return e.is_selected_for_drug || e.is_selected_for_alcohol || e.is_selected_for_alternate;
+}
+
+function canTransferEmployee(e: EmployeeRow, requestStatus: boolean | null | undefined) {
+  return (
+    e.status &&
+    employeeHasSelectedTest(e) &&
+    requestStatus !== false &&
+    !e.transferred_to_waiting_list
+  );
+}
+
 export default function TestRequestDetailPage() {
   const router = useRouter();
   const params = useParams();
   const id = Number(params?.id);
+  const confirmDialog = useConfirm();
 
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<TestRequestDetail | null>(null);
@@ -78,6 +115,13 @@ export default function TestRequestDetailPage() {
   });
   const [sortKey, setSortKey] = useState<'last_name' | 'first_name' | 'mobile' | 'department'>('last_name');
   const [sortAsc, setSortAsc] = useState(true);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelEmployee, setCancelEmployee] = useState<EmployeeRow | null>(null);
+  const [alternateEmployees, setAlternateEmployees] = useState<AlternateEmployeeOption[]>([]);
+  const [selectedAlternateId, setSelectedAlternateId] = useState('');
+  const [selectedReason, setSelectedReason] = useState('');
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   const goBack = () => router.push('/admin/dashboard/testrequests');
 
@@ -177,25 +221,148 @@ export default function TestRequestDetailPage() {
     }
   };
 
-  const setEmployeeStatus = async (rowId: number, status: boolean) => {
-    const res = await fetch(`${API}/api/TestRequest/changeTestRequestEmployeeStatus`, {
+  const closeCancelModal = () => {
+    setCancelModalOpen(false);
+    setCancelEmployee(null);
+    setAlternateEmployees([]);
+    setSelectedAlternateId('');
+    setSelectedReason('');
+    setCancelLoading(false);
+    setCancelSubmitting(false);
+  };
+
+  const openCancelModal = async (employee: EmployeeRow) => {
+    if (!detail) return;
+    if (!employee.status || employee.is_cancelled) {
+      setMsg({ type: 'error', text: 'Employee is already cancelled.' });
+      return;
+    }
+    if (!employeeHasSelectedTest(employee)) {
+      setMsg({ type: 'error', text: 'Employee is not allotted for any test.' });
+      return;
+    }
+
+    setCancelEmployee(employee);
+    setCancelModalOpen(true);
+    setCancelLoading(true);
+    setSelectedAlternateId('');
+    setSelectedReason('');
+
+    try {
+      const res = await fetch(`${API}/api/TestRequest/getAlternateEmployeesForReassign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken() },
+        body: JSON.stringify({ id: employee.id }),
+      });
+      const d = await res.json();
+      if (d.response_code === '200') {
+        const list = (d.obj || []) as AlternateEmployeeOption[];
+        setAlternateEmployees(list);
+        if (list.length === 0) {
+          setMsg({ type: 'error', text: 'No employee available in this corporate to assign' });
+          closeCancelModal();
+        }
+      } else {
+        setMsg({ type: 'error', text: String(d.obj || 'Failed to load alternate employees') });
+        closeCancelModal();
+      }
+    } catch (err: unknown) {
+      setMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to load alternate employees',
+      });
+      closeCancelModal();
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const submitCancellation = async () => {
+    if (!cancelEmployee) return;
+    if (!selectedAlternateId) {
+      setMsg({ type: 'error', text: 'Please select an alternate employee.' });
+      return;
+    }
+    if (!selectedReason) {
+      setMsg({ type: 'error', text: 'Please select a reason.' });
+      return;
+    }
+
+    setCancelSubmitting(true);
+    try {
+      const res = await fetch(`${API}/api/TestRequest/excludeAndReassignEmployee`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken() },
+        body: JSON.stringify({
+          id: cancelEmployee.id,
+          alternate_employee_id: Number(selectedAlternateId),
+          reason: selectedReason,
+        }),
+      });
+      const d = await res.json();
+      if (d.response_code === '200') {
+        setMsg({ type: 'success', text: String(d.obj?.message || 'Employee cancelled and reassigned.') });
+        closeCancelModal();
+        await loadDetail();
+      } else {
+        setMsg({
+          type: 'error',
+          text: String(d.obj || 'No employee available in this corporate to assign'),
+        });
+      }
+    } catch (err: unknown) {
+      setMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to cancel employee',
+      });
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
+  const transferEmployee = async (employee: EmployeeRow) => {
+    if (!detail || !canTransferEmployee(employee, detail.status)) return;
+
+    const ok = await confirmDialog({
+      title: 'Transfer employee to waiting list',
+      message: `Transfer ${employee.first_name} ${employee.last_name} to the waiting list?`,
+      cancelText: 'Cancel',
+      confirmText: 'Transfer',
+    });
+    if (!ok) return;
+
+    const res = await fetch(`${API}/api/TestRequest/transferEmployeeToWaitingList`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id: rowId, status }),
+      body: JSON.stringify({ id: employee.id }),
     });
     const d = await res.json();
     if (d.response_code === '200') {
+      const waitingListId = d.obj?.waiting_list_id;
+      const patientUid = d.obj?.patient_uid;
       setDetail((prev) => {
         if (!prev) return prev;
         return {
           ...prev,
           employees: prev.employees.map((e) =>
-            e.id === rowId ? { ...e, status } : e
+            e.id === employee.id
+              ? {
+                  ...e,
+                  transferred_to_waiting_list: true,
+                  waiting_list_id: waitingListId ?? e.waiting_list_id,
+                }
+              : e
           ),
         };
       });
+      setMsg({
+        type: 'success',
+        text: patientUid
+          ? `Employee transferred to waiting list (UID: ${patientUid}).`
+          : 'Employee transferred to waiting list.',
+      });
     } else {
-      setMsg({ type: 'error', text: String(d.obj || 'Failed to update employee') });
+      setMsg({ type: 'error', text: String(d.obj || 'Failed to transfer employee') });
     }
   };
 
@@ -362,7 +529,7 @@ export default function TestRequestDetailPage() {
                       </tr>
                     ) : (
                       filteredEmployees.map((e) => (
-                        <tr key={e.id} className={e.status ? '' : 'tr-emp-excluded'}>
+                        <tr key={e.id} className={e.is_cancelled ? 'tr-emp-excluded' : ''}>
                           <td>{e.last_name || '—'}</td>
                           <td>{e.first_name || '—'}</td>
                           <td>{formatMobile(e.mobile)}</td>
@@ -377,30 +544,37 @@ export default function TestRequestDetailPage() {
                             <input type="checkbox" checked={e.is_selected_for_alternate} disabled readOnly />
                           </td>
                           <td>
-                            <div className="listing-actions">
-                              <button
-                                type="button"
-                                className="action-btn action-btn-forward"
-                                title="Include / Restore employee"
-                                disabled={e.status}
-                                onClick={() => setEmployeeStatus(e.id, true)}
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                  <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                className="action-btn action-btn-block"
-                                title="Exclude employee"
-                                disabled={!e.status}
-                                onClick={() => setEmployeeStatus(e.id, false)}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31A7.902 7.902 0 0 1 12 20zm6.31-3.1L7.1 5.69A7.902 7.902 0 0 1 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z" />
-                                </svg>
-                              </button>
-                            </div>
+                            {e.transferred_to_waiting_list ? (
+                              <span className="tr-emp-processed">Processed</span>
+                            ) : e.is_cancelled ? (
+                              <span className="tr-emp-cancelled">Cancelled</span>
+                            ) : !employeeHasSelectedTest(e) ? (
+                              <span className="tr-emp-not-alloted">Not Alloted</span>
+                            ) : (
+                              <div className="listing-actions">
+                                <button
+                                  type="button"
+                                  className="action-btn action-btn-forward"
+                                  title="Transfer this employee to waiting list"
+                                  disabled={!canTransferEmployee(e, detail.status)}
+                                  onClick={() => transferEmployee(e)}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                                    <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn action-btn-block"
+                                  title="Exclude employee and reassign"
+                                  onClick={() => openCancelModal(e)}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31A7.902 7.902 0 0 1 12 20zm6.31-3.1L7.1 5.69A7.902 7.902 0 0 1 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -412,6 +586,77 @@ export default function TestRequestDetailPage() {
           </div>
         )}
       </div>
+
+      {cancelModalOpen && cancelEmployee && (
+        <div className="modal-overlay" role="presentation" onClick={closeCancelModal}>
+          <div
+            className="modal tr-cancel-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="tr-cancel-modal-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2 id="tr-cancel-modal-title">Cancellation Confirmation</h2>
+            </div>
+            <div className="modal-body">
+              <div className="tr-cancel-field">
+                <label htmlFor="tr-alternate-employee">Select Alternate Employee</label>
+                <select
+                  id="tr-alternate-employee"
+                  value={selectedAlternateId}
+                  onChange={(e) => setSelectedAlternateId(e.target.value)}
+                  disabled={cancelLoading || cancelSubmitting}
+                >
+                  <option value="">Select</option>
+                  {alternateEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.label || `${emp.first_name} ${emp.last_name}`.trim()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="tr-cancel-field">
+                <label htmlFor="tr-cancel-reason">Reason</label>
+                <select
+                  id="tr-cancel-reason"
+                  value={selectedReason}
+                  onChange={(e) => setSelectedReason(e.target.value)}
+                  disabled={cancelLoading || cancelSubmitting}
+                >
+                  <option value="">Select</option>
+                  {CANCELLATION_REASONS.map((reason) => (
+                    <option key={reason} value={reason}>
+                      {reason}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {cancelLoading && (
+                <p className="tr-cancel-loading">Loading alternate employees...</p>
+              )}
+            </div>
+            <div className="tr-cancel-footer">
+              <button
+                type="button"
+                className="tr-cancel-confirm-btn"
+                onClick={submitCancellation}
+                disabled={cancelLoading || cancelSubmitting}
+              >
+                {cancelSubmitting ? 'Confirming...' : 'Confirm'}
+              </button>
+              <button
+                type="button"
+                className="tr-cancel-dismiss-btn"
+                onClick={closeCancelModal}
+                disabled={cancelSubmitting}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

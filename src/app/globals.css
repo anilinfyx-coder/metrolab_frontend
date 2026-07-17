@@ -1687,6 +1687,100 @@ body.sidebar-collapsed .sidebar-link .icon {
   cursor: default;
 }
 
+.tr-emp-processed {
+  color: #2e7d32;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tr-emp-not-alloted {
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tr-emp-cancelled {
+  color: #c62828;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tr-cancel-modal {
+  max-width: 520px;
+}
+
+.tr-cancel-field {
+  margin-bottom: 1.25rem;
+}
+
+.tr-cancel-field label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.tr-cancel-field select {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #cfd4da;
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  font-size: 14px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.tr-cancel-loading {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tr-cancel-footer {
+  padding: 1rem 1.25rem 1.25rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #fff;
+}
+
+.tr-cancel-confirm-btn,
+.tr-cancel-dismiss-btn {
+  flex: 1;
+  min-height: 42px;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tr-cancel-confirm-btn {
+  background: #2f5183;
+}
+
+.tr-cancel-confirm-btn:hover:not(:disabled) {
+  background: #26436b;
+}
+
+.tr-cancel-dismiss-btn {
+  background: #d32f2f;
+}
+
+.tr-cancel-dismiss-btn:hover:not(:disabled) {
+  background: #b71c1c;
+}
+
+.tr-cancel-confirm-btn:disabled,
+.tr-cancel-dismiss-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 .tr-emp-empty {
   text-align: center;
   color: var(--text-muted);
@@ -1893,11 +1987,50 @@ body.sidebar-collapsed .sidebar-link .icon {
 
 .report-edit-footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid #e6eaee;
+}
+
+.report-edit-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 140px;
+}
+
+.report-edit-saving {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #2f5183;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.report-edit-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(47, 81, 131, 0.2);
+  border-top-color: #2f5183;
+  border-radius: 50%;
+  animation: report-edit-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+.report-edit-spinner-btn {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+@keyframes report-edit-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Waiting List detail — Patient/Donor Demographics card */
