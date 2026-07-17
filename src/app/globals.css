@@ -1370,6 +1370,15 @@ body.sidebar-collapsed .sidebar-link .icon {
   gap: 0.35rem;
 }
 
+.report-locked-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #c0392b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .test-reports-table .table-pagination {
   padding: 0.85rem 1.35rem;
   border-top: 1px solid #e0e4e8;
