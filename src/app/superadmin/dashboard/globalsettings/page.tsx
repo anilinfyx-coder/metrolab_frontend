@@ -5,42 +5,50 @@ import TopNav from '../../../components/TopNav';
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
 
+interface LabTest {
+  id: number;
+  name: string;
+}
+
 export default function GlobalSettingsPage() {
-  const [prices, setPrices] = useState({
-    drug_test_price: '',
-    alcohol_test_price: '',
-    alternate_test_price: '',
-  });
+  const [labTests, setLabTests] = useState<LabTest[]>([]);
+  const [prices, setPrices] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/GlobalSettings`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200') {
-          const s = d.obj;
-          setPrices({
-            drug_test_price: s.drug_test_price?.value || '',
-            alcohol_test_price: s.alcohol_test_price?.value || '',
-            alternate_test_price: s.alternate_test_price?.value || '',
-          });
-        }
-      })
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`${API}/api/GlobalSettings`, { headers: { token: getToken() } }).then(r => r.json()),
+      fetch(`${API}/api/LabTests`, { headers: { token: getToken() } }).then(r => r.json())
+    ])
+    .then(([settingsRes, testsRes]) => {
+      if (testsRes.response_code === '200') {
+        const tests = testsRes.obj || [];
+        setLabTests(tests);
+        
+        const s = settingsRes.response_code === '200' ? settingsRes.obj : {};
+        const newPrices: Record<string, string> = {};
+        
+        tests.forEach((t: LabTest) => {
+          const key = `lab_test_${t.id}_price`;
+          newPrices[key] = s[key]?.value || '';
+        });
+        
+        setPrices(newPrices);
+      }
+    })
+    .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
-    const parsed: Record<string, number> = {
-      drug_test_price: parseFloat(prices.drug_test_price),
-      alcohol_test_price: parseFloat(prices.alcohol_test_price),
-      alternate_test_price: parseFloat(prices.alternate_test_price),
-    };
-    for (const [k, v] of Object.entries(parsed)) {
-      if (isNaN(v) || v < 0) {
-        setMsg({ type: 'error', text: `Invalid value for ${k.replace(/_/g, ' ')}` }); return;
+    const parsed: Record<string, number> = {};
+    for (const [k, v] of Object.entries(prices)) {
+      const p = parseFloat(v);
+      if (isNaN(p) || p < 0) {
+        setMsg({ type: 'error', text: `Invalid value for one of the test prices` }); return;
       }
+      parsed[k] = p;
     }
     setSaving(true); setMsg(null);
     const res = await fetch(`${API}/api/GlobalSettings/updatePricing`, {
@@ -83,36 +91,43 @@ export default function GlobalSettingsPage() {
               <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading current prices...</div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                {[
-                  { key: 'drug_test_price', label: 'Drug Test Price', icon: '💊', color: '#ef4444' },
-                  { key: 'alcohol_test_price', label: 'Alcohol Test Price', icon: '🍺', color: '#f59e0b' },
-                  { key: 'alternate_test_price', label: 'Alternate Test Price', icon: '🔄', color: '#6366f1' },
-                ].map(({ key, label, icon, color }) => (
-                  <div key={key} className="card" style={{ border: `1px solid ${color}30`, padding: '1.25rem', margin: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                      <div style={{ fontSize: '1.5rem', width: 44, height: 44, borderRadius: 12, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{label}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per test deduction</div>
+                {labTests.map(test => {
+                  const key = `lab_test_${test.id}_price`;
+                  let icon = '🧪';
+                  let color = '#6366f1';
+                  const n = (test.name || '').toLowerCase();
+                  if (n.includes('drug')) { icon = '💊'; color = '#ef4444'; }
+                  else if (n.includes('alcohol')) { icon = '🍺'; color = '#f59e0b'; }
+                  else if (n.includes('covid')) { icon = '🦠'; color = '#10b981'; }
+                  else if (n.includes('blood')) { icon = '🩸'; color = '#e11d48'; }
+
+                  return (
+                    <div key={key} className="card" style={{ border: `1px solid ${color}30`, padding: '1.25rem', margin: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                        <div style={{ fontSize: '1.5rem', width: 44, height: 44, borderRadius: 12, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{test.name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per test deduction</div>
+                        </div>
+                      </div>
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: '0.8rem' }}>Price (USD)</label>
+                        <div style={{ position: 'relative' }}>
+                          <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 600 }}>$</span>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={prices[key] || ''}
+                            onChange={e => setPrices(p => ({ ...p, [key]: e.target.value }))}
+                            style={{ paddingLeft: '1.5rem' }}
+                            placeholder="0.00"
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div className="form-group" style={{ margin: 0 }}>
-                      <label style={{ fontSize: '0.8rem' }}>Price (USD)</label>
-                      <div style={{ position: 'relative' }}>
-                        <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 600 }}>$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={prices[key as keyof typeof prices]}
-                          onChange={e => setPrices(p => ({ ...p, [key]: e.target.value }))}
-                          style={{ paddingLeft: '1.5rem' }}
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -132,7 +147,7 @@ export default function GlobalSettingsPage() {
               <div>
                 <div style={{ fontWeight: 600, marginBottom: '0.25rem', fontSize: '0.9rem' }}>How Auto-Deduction Works</div>
                 <ul style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: 0, paddingLeft: '1.25rem', lineHeight: 1.8 }}>
-                  <li>When a B2B lab submits a test report, the system identifies the test type (Drug / Alcohol / Alternate).</li>
+                  <li>When a B2B lab submits a test report, the system identifies the test type.</li>
                   <li>It checks the B2B client&apos;s wallet balance. If balance is insufficient, the submission is blocked.</li>
                   <li>On successful submission, the test price is deducted and logged in the wallet ledger.</li>
                   <li>If <strong>$0.00</strong> is set, no deduction occurs for that test type.</li>
