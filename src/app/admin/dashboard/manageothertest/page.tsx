@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { useConfirm } from '../../../components/ConfirmModal';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -34,6 +35,7 @@ function formatDateTime(value?: string) {
 
 export default function TestsReportsPage() {
   const router = useRouter();
+  const confirmDialog = useConfirm();
   const [reports, setReports] = useState<TestReport[]>([]);
   const [labTests, setLabTests] = useState<{ id: number; name: string }[]>([]);
   const [selectedTestId, setSelectedTestId] = useState('');
@@ -116,6 +118,18 @@ export default function TestsReportsPage() {
 
   const toggleLock = async (report: TestReport) => {
     const newStatus = !report.status;
+
+    if (newStatus) {
+      const ok = await confirmDialog({
+        title: 'Lock this report?',
+        message:
+          'Once locked, this report cannot be edited and its action buttons will be hidden. Continue?',
+        cancelText: 'Cancel',
+        confirmText: 'Lock',
+      });
+      if (!ok) return;
+    }
+
     const res = await fetch(`${API}/api/LabTestCategoryReport/changeLabTestCategoryReportStatus`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', token: getToken() },
@@ -246,18 +260,26 @@ export default function TestsReportsPage() {
               ))}
             </select>
           }
-          rowActions={(r) => (
-            <ActionIcons
-              onDownload={() => downloadReport(r)}
-              onEdit={() => router.push(`/admin/dashboard/manageothertest/${r.id}`)}
-              editDisabled={!!r.status}
-              editTitle={r.status ? 'Cannot edit locked report' : 'Edit'}
-              onLock={() => toggleLock(r)}
-              locked={!!r.status}
-              lockTitle={r.status ? 'Unlock' : 'Lock'}
-              onMail={() => emailReport(r)}
-            />
-          )}
+          rowActions={(r) =>
+            r.status ? (
+              <span className="report-locked-label" title="This report is locked">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                  <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm3 8H9V6a3 3 0 0 1 6 0v3z" />
+                </svg>
+                Locked
+              </span>
+            ) : (
+              <ActionIcons
+                onDownload={() => downloadReport(r)}
+                onEdit={() => router.push(`/admin/dashboard/manageothertest/${r.id}`)}
+                editTitle="Edit"
+                onLock={() => toggleLock(r)}
+                locked={false}
+                lockTitle="Lock"
+                onMail={() => emailReport(r)}
+              />
+            )
+          }
         />
       </div>
     </div>
