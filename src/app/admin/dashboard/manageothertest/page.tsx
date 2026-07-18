@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { formatDateTime } from '../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -25,14 +26,6 @@ interface TestReport {
   status: boolean;
 }
 
-function formatDateTime(value?: string) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-}
-
 export default function TestsReportsPage() {
   const router = useRouter();
   const confirmDialog = useConfirm();
@@ -43,6 +36,7 @@ export default function TestsReportsPage() {
   const [testsLoading, setTestsLoading] = useState(true);
   const [drugTestAccept, setDrugTestAccept] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [emailing, setEmailing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,17 +161,51 @@ export default function TestsReportsPage() {
     }
   };
 
-  const emailReport = (report: TestReport) => {
+  const emailReport = async (report: TestReport) => {
+    if (emailing) return;
+
     const email = (report.patient_email || '').trim();
     if (!email) {
-      alert('No email address found for this patient.');
+      setMsg({ type: 'error', text: 'No email address found for this patient.' });
       return;
     }
-    const subject = encodeURIComponent(`Test Report ${report.uid || report.id}`);
-    const body = encodeURIComponent(
-      `Please find the lab test report for ${report.patient_name || 'patient'} (UID: ${report.uid || '—'}).`
-    );
-    window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+
+    const ok = await confirmDialog({
+      title: 'Send report by email?',
+      message: `Email the password-protected PDF report to ${email}? The patient will need their birthdate 4 digits (MMDD) to open the PDF.`,
+      cancelText: 'Cancel',
+      confirmText: 'Send Email',
+    });
+    if (!ok) return;
+
+    setEmailing(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`${API}/api/LabTestCategoryReport/emailLabTestCategoryReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken() },
+        body: JSON.stringify({ id: report.id }),
+      });
+      const data = await res.json();
+      if (data.response_code === '200') {
+        setMsg({
+          type: 'success',
+          text: `Report emailed successfully to ${data.obj?.email || email}.`,
+        });
+      } else {
+        setMsg({ type: 'error', text: String(data.obj || 'Failed to send email') });
+      }
+    } catch (err: unknown) {
+      setMsg({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to send email',
+      });
+    } finally {
+      setEmailing(false);
+      if (typeof window !== 'undefined') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
   };
 
   const columns: ListingColumn<TestReport>[] = [
@@ -216,7 +244,19 @@ export default function TestsReportsPage() {
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Test Reports" />
 
-      <div style={{ padding: '1.5rem 1.75rem' }}>
+      {emailing && (
+        <div className="test-reports-email-overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="test-reports-email-overlay-card">
+            <span className="test-reports-email-spinner" aria-hidden />
+            <div className="test-reports-email-overlay-title">Sending email...</div>
+            <div className="test-reports-email-overlay-text">
+              Please wait while we generate and send the report PDF.
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ padding: '1.5rem 1.75rem' }} className={emailing ? 'test-reports-page-busy' : undefined}>
         {msg && (
           <div
             style={{
@@ -253,6 +293,7 @@ export default function TestsReportsPage() {
               value={selectedTestId}
               onChange={e => onTestChange(e.target.value)}
               aria-label="Select lab test"
+              disabled={emailing}
             >
               <option value="">Select Test</option>
               {labTests.map(t => (

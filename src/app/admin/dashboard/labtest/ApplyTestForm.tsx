@@ -4,6 +4,17 @@ import { useState, useEffect } from 'react';
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
 
+function formatCutoff(value?: string | null, unit?: string | null) {
+  if (value === null || value === undefined || value === '' || value === 'Null' || value === 'null') {
+    return '—';
+  }
+  const unitText =
+    unit && unit !== 'Null' && unit !== 'null' && String(unit).trim()
+      ? ` ${unit}`
+      : '';
+  return `${value}${unitText}`;
+}
+
 export default function ApplyTestForm({
   waitingListId,
   onClose,
@@ -331,8 +342,8 @@ export default function ApplyTestForm({
                             <div className="wl-param-label">{p.label}</div>
                             {p.description && <div className="wl-param-desc">{p.description}</div>}
                           </td>
-                          <td>{p.screening_cutoff !== 'Null' ? `${p.screening_cutoff} ${p.unit_text}` : '-'}</td>
-                          <td>{p.confirmation_cutoff !== 'Null' ? `${p.confirmation_cutoff} ${p.unit_text}` : '-'}</td>
+                          <td>{formatCutoff(p.screening_cutoff, p.unit_text)}</td>
+                          <td>{formatCutoff(p.confirmation_cutoff, p.unit_text)}</td>
                           <td>
                             {p.input_type === 1 ? (
                               <input type="text" className="form-input" value={p.value} onChange={e => handleParamChange(i, e.target.value)} />

@@ -1,8 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Pencil, ToggleRight, ToggleLeft, Trash2, Save, RotateCcw, Plus, X } from 'lucide-react';
+import { Pencil, Save, RotateCcw, Plus } from 'lucide-react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
@@ -26,6 +27,13 @@ interface Employee {
   id: number; first_name: string; last_name: string; mobile: string; department: string; status: boolean;
 }
 
+const employeeColumns: ListingColumn<Employee>[] = [
+  { key: 'first_name', label: 'First Name', sortable: true, width: '20%' },
+  { key: 'last_name', label: 'Last Name', sortable: true, width: '20%' },
+  { key: 'department', label: 'Department', sortable: true, width: '22%' },
+  { key: 'mobile', label: 'Mobile', sortable: true, width: '20%' },
+];
+
 const emptyForm = {
   first_name: '', last_name: '', mobile: '', gender: '1', dob_month: '1', dob_day: '1', dob_year: '',
   driving_license_state: '', driving_license: '', street1: '', street2: '',
@@ -41,7 +49,6 @@ export default function EmployeePage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [search, setSearch] = useState('');
 
   const loadEmployees = () => {
     setLoading(true);
@@ -53,17 +60,24 @@ export default function EmployeePage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadEmployees(); }, []);
+  useEffect(() => {
+    void Promise.resolve().then(loadEmployees);
+  }, []);
 
   const openAdd = () => { setEditingId(null); setForm({ ...emptyForm }); setMsg(null); setShowForm(true); };
   
-  const openEdit = (e: any) => {
+  const openEdit = (e: Employee) => {
     setEditingId(e.id);
-    const dobParts = e.dob ? e.dob.split('T')[0].split('-') : ['', '1', '1'];
+    const employeeValues = Object.fromEntries(
+      Object.entries(e)
+        .filter(([key]) => key !== 'id' && key !== 'status')
+        .map(([key, value]) => [key, value == null ? '' : String(value)])
+    );
+    const dobParts = employeeValues.dob ? employeeValues.dob.split('T')[0].split('-') : ['', '1', '1'];
     setForm({
-      ...emptyForm, ...e,
+      ...emptyForm, ...employeeValues,
       dob_year: dobParts[0] || '', dob_month: String(parseInt(dobParts[1]) || 1), dob_day: String(parseInt(dobParts[2]) || 1),
-      gender: String(e.gender || '1')
+      gender: employeeValues.gender || '1'
     });
     setMsg(null); setShowForm(true);
   };
@@ -129,13 +143,6 @@ export default function EmployeePage() {
     loadEmployees();
   };
 
-  const filtered = employees.filter(e => 
-    !search || 
-    e.first_name?.toLowerCase().includes(search.toLowerCase()) || 
-    e.last_name?.toLowerCase().includes(search.toLowerCase()) ||
-    e.mobile?.includes(search)
-  );
-
   const inp = (key: string, ph: string, type = 'text', maxLength?: number) => (
     <input type={type} className="form-control" placeholder={ph} maxLength={maxLength}
       value={form[key] as string || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
@@ -144,13 +151,18 @@ export default function EmployeePage() {
   if (showForm) {
     return (
       <div className="page-content">
-        <TopNav title="Employee Details">
-          <button className="btn btn-ghost" onClick={() => setShowForm(false)}>✕ Close</button>
-        </TopNav>
+        <TopNav title="Employee Details" />
         <div style={{ padding: '1.5rem' }}>
           {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
           <div className="card">
-            <div className="card-header"><span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>{editingId ? <><Pencil size={18}/> Edit Employee</> : <><Plus size={18}/> Add Employee</>}</span></div>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+              <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {editingId ? <><Pencil size={18}/> Edit Employee</> : <><Plus size={18}/> Add Employee</>}
+              </span>
+              <button type="button" className="listing-header-link" onClick={() => setShowForm(false)}>
+                Close
+              </button>
+            </div>
             <div className="card-body">
               {/* Row 1 */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
@@ -236,52 +248,34 @@ export default function EmployeePage() {
 
   return (
     <div className="page-content">
-      <TopNav title="Employees">
-          <input type="text" placeholder="Search employees..." value={search} onChange={e => setSearch(e.target.value)}
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 220 }} />
-          <button className="btn" onClick={openAdd} style={{ background: '#17a2b8', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Plus size={16} /> Add Employee</button>
-        </TopNav>
+      <TopNav title="Manage Employee" />
       <div style={{ padding: '1.5rem' }}>
-        <div className="card">
-          <div className="card-body" style={{ padding: 0 }}>
-            {loading ? <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
-              : filtered.length === 0 ? <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No Employees found.</div>
-              : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      {['First Name', 'Last Name', 'Department', 'Mobile', 'Actions'].map(h => (
-                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(e => (
-                      <tr key={e.id} style={{ borderBottom: '1px solid var(--border)' }}
-                        onMouseEnter={ev => (ev.currentTarget.style.background = 'var(--bg-card-hover)')}
-                        onMouseLeave={ev => (ev.currentTarget.style.background = '')}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{e.first_name}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{e.last_name}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{e.department || '—'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{e.mobile}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>
-                          <div style={{ display: 'flex', gap: '0.35rem' }}>
-                            <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => openEdit(e)} title="Edit Employee"><Pencil size={14} /></button>
-                            {e.status ? (
-                              <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: '#0a6a31', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => toggleStatus(e)} title="Disable Employee"><ToggleRight size={14} /></button>
-                            ) : (
-                              <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: 'gray', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => toggleStatus(e)} title="Enable Employee"><ToggleLeft size={14} /></button>
-                            )}
-                            <button className="btn" style={{ fontSize: '0.85rem', padding: '0.4rem 0.6rem', background: '#f00e0e', color: '#fff', border: 'none', borderRadius: 4 }} onClick={() => remove(e.id)} title="Delete Employee"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-          </div>
-        </div>
+        <ListingTable
+          title="List of Employees"
+          className="employee-listing"
+          columns={employeeColumns}
+          rows={employees}
+          loading={loading}
+          emptyText="No employees found."
+          headerActions={(
+            <button type="button" className="employee-add-button" onClick={openAdd}>
+              Add Employee
+            </button>
+          )}
+          actionsLabel="Actions"
+          actionsWidth={130}
+          defaultPageSize={10}
+          rowActions={employee => (
+            <ActionIcons
+              onEdit={() => openEdit(employee)}
+              onToggleStatus={() => toggleStatus(employee)}
+              onDelete={() => remove(employee.id)}
+              statusActive={!!employee.status}
+              editTitle="Edit Employee"
+              deleteTitle="Delete Employee"
+            />
+          )}
+        />
       </div>
     </div>
   );

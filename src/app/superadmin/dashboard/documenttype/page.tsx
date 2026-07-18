@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -14,12 +15,11 @@ export default function DocumentTypePage() {
   const confirmDialog = useConfirm();
   const [types, setTypes] = useState<DocumentType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
+  const [titleError, setTitleError] = useState('');
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [search, setSearch] = useState('');
 
   const loadData = () => {
     setLoading(true);
@@ -30,11 +30,16 @@ export default function DocumentTypePage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, []);
 
   const save = async () => {
-    if (!form.name) {
-      setMsg({ type: 'error', text: 'Name is required.' }); return;
+    if (!form.name.trim()) {
+      setTitleError('Please enter the document type title.');
+      setMsg({ type: 'error', text: 'Please correct the highlighted field before saving.' });
+      window.setTimeout(() => document.getElementById('document-type-title')?.focus(), 0);
+      return;
     }
     setSaving(true); setMsg(null);
     const method = editingId ? 'PUT' : 'POST';
@@ -49,7 +54,8 @@ export default function DocumentTypePage() {
     if (d.response_code === '200') {
       setMsg({ type: 'success', text: `Document Type ${editingId ? 'updated' : 'added'}.` });
       setForm({ ...emptyForm });
-      setShowModal(false);
+      setTitleError('');
+      setEditingId(null);
       loadData();
     } else { setMsg({ type: 'error', text: d.obj }); }
   };
@@ -76,86 +82,132 @@ export default function DocumentTypePage() {
 
   const openEdit = (t: DocumentType) => {
     setEditingId(t.id);
-    setForm({ ...emptyForm, ...t as unknown as Record<string, string> });
-    setShowModal(true);
+    setForm({ name: t.name || '', description: t.description || '' });
+    setTitleError('');
+    setMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const filtered = types.filter(t => !search || t.name?.toLowerCase().includes(search.toLowerCase()));
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ ...emptyForm });
+    setTitleError('');
+    setMsg(null);
+  };
+
+  const columns: ListingColumn<DocumentType>[] = [
+    { key: 'name', label: 'Title', width: '70%' },
+  ];
 
   return (
     <div className="page-content">
-      <TopNav title="Document Types">
-          <input type="text" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)}
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 240 }} />
-          <button className="btn btn-primary" onClick={() => { setEditingId(null); setShowModal(true); setMsg(null); setForm({ ...emptyForm }); }}>➕ Add Document Type</button>
-        </TopNav>
+      <TopNav title="Manage Document Type" />
       <div style={{ padding: '1.5rem' }}>
-        {msg && !showModal && (
-          <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>
-            {msg.text}
+        {msg && (
+          <div
+            role="alert"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              background: msg.type === 'success' ? '#ecfdf5' : '#fef2f2',
+              border: `1px solid ${msg.type === 'success' ? '#10b981' : '#ef4444'}`,
+              borderRadius: 8,
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+              fontSize: '0.875rem',
+              color: msg.type === 'success' ? '#047857' : '#b91c1c',
+              fontWeight: 600,
+            }}
+          >
+            <span>{msg.type === 'success' ? '✓ ' : '⚠ '}{msg.text}</span>
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={() => setMsg(null)}
+              style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '1rem' }}
+            >
+              ✕
+            </button>
           </div>
         )}
 
-        {showModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-            <div className="card" style={{ width: '100%', maxWidth: 480, margin: '1rem' }}>
-              <div className="card-header"><span className="card-title">{editingId ? '✏️ Edit' : '➕ Add'} Document Type</span></div>
-              <div className="card-body">
-                {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.6rem 0.9rem', marginBottom: '1rem', fontSize: '0.85rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
-                
+        <div className="document-type-split">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">
+                {editingId ? 'Edit Document Type Detail' : 'Document Type Detail'}
+              </span>
+            </div>
+            <div className="card-body">
                 <div className="form-group">
-                    <label>Title <span style={{color: '#ef4444'}}>*</span></label>
-                    <input type="text" placeholder="Enter Document Title" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                  <label htmlFor="document-type-title">Title<span className="required-star">*</span></label>
+                  <input
+                    id="document-type-title"
+                    type="text"
+                    placeholder="Enter Title"
+                    value={form.name}
+                    aria-invalid={!!titleError}
+                    onChange={e => {
+                      setForm(previous => ({ ...previous, name: e.target.value }));
+                      if (titleError) setTitleError('');
+                      if (msg?.type === 'error') setMsg(null);
+                    }}
+                    style={{
+                      borderColor: titleError ? '#ef4444' : undefined,
+                      boxShadow: titleError ? '0 0 0 1px rgba(239,68,68,0.15)' : undefined,
+                    }}
+                  />
+                  {titleError && (
+                    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>
+                      {titleError}
+                    </div>
+                  )}
                 </div>
-                
+
                 <div className="form-group">
-                    <label>Description</label>
-                    <textarea rows={3} placeholder="Enter Description" value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                        style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }} />
+                  <label htmlFor="document-type-description">Description</label>
+                  <textarea
+                    id="document-type-description"
+                    rows={4}
+                    value={form.description}
+                    onChange={e => setForm(previous => ({ ...previous, description: e.target.value }))}
+                    style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }}
+                  />
                 </div>
-                
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                  <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳' : '💾 Save'}</button>
-                  <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                </div>
-              </div>
+            </div>
+            <div className="document-type-form-actions">
+              <button className="btn btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}>
+                Reset Data
+              </button>
             </div>
           </div>
-        )}
 
-        <div className="card">
-          <div className="card-body" style={{ padding: 0 }}>
-            {loading ? <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : filtered.length === 0 ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No document types found.</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['#', 'Title', 'Description', 'Status', 'Action'].map(h => (
-                      <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((t, i) => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{i + 1}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{t.name}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{t.description}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}><span className={`badge ${t.status ? 'badge-success' : 'badge-danger'}`}>{t.status ? 'Active' : 'Inactive'}</span></td>
-                      <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => openEdit(t)}>✏️ Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => toggleStatus(t)}>⚡ {t.status ? 'Disable' : 'Enable'}</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem', color: '#ef4444' }} onClick={() => remove(t.id)}>🗑 Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <ListingTable
+            title="List of Document Types"
+            columns={columns}
+            rows={types}
+            loading={loading}
+            emptyText="No document types found."
+            headerActions={<ListingHeaderActions onRefresh={loadData} />}
+            actionsLabel="Actions"
+            actionsWidth={150}
+            defaultPageSize={10}
+            rowActions={documentType => (
+              <ActionIcons
+                onEdit={() => openEdit(documentType)}
+                onToggleStatus={() => toggleStatus(documentType)}
+                onDelete={() => remove(documentType.id)}
+                statusActive={!!documentType.status}
+                editTitle="Edit Document Type"
+                deleteTitle="Delete Document Type"
+              />
             )}
-          </div>
+          />
         </div>
       </div>
     </div>

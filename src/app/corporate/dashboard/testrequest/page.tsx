@@ -1,8 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Eye, Trash2, FileDown, Plus, Mail } from 'lucide-react';
+import { FileDown, Mail } from 'lucide-react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import ListingTable, { ListingColumn } from '../../../components/ListingTable';
+import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
@@ -11,14 +13,57 @@ function getStoredUser() {
   try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
 }
 
+interface TestRequest {
+  id: number;
+  title: string;
+  year: string;
+  frequency: string;
+  quarter?: string;
+  allSubmitStatus?: boolean;
+  creationTimestamp?: string;
+  creation_timestamp?: string;
+}
+
+interface TestRequestDetail extends TestRequest {
+  reasonForTest?: string;
+  testType?: string;
+  selectionType?: number | string;
+  drugCount?: number;
+  alcoholCount?: number;
+  alternateCount?: number;
+  totalCount?: number;
+  totalSelectedCount?: number;
+  corporateClientCompany?: string;
+  b2bClientCompany?: string;
+}
+
+interface EmployeeRecord {
+  id: number;
+  employee_id?: number;
+  first_name?: string;
+  firstName?: string;
+  last_name?: string;
+  lastName?: string;
+  mobile?: string;
+  department?: string;
+  isSelectedForDrug?: boolean;
+  isSelectedForAlcohol?: boolean;
+  isSelectedForAlternate?: boolean;
+  is_selected_for_drug?: boolean;
+  is_selected_for_alcohol?: boolean;
+  is_selected_for_alternate?: boolean;
+  drugReportSubmitStatus?: boolean;
+  alcoholReportSubmitStatus?: boolean;
+}
+
 export default function TestRequestsPage() {
   const confirmDialog = useConfirm();
-  const [requests, setRequests] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [requests, setRequests] = useState<TestRequest[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'LIST' | 'GENERATE' | 'VIEW'>('LIST');
-  const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [selectedRequestEmployees, setSelectedRequestEmployees] = useState<any[]>([]);
+  const [selectedRequest, setSelectedRequest] = useState<TestRequestDetail | null>(null);
+  const [selectedRequestEmployees, setSelectedRequestEmployees] = useState<EmployeeRecord[]>([]);
   const [viewLoading, setViewLoading] = useState(false);
 
   // Form State
@@ -67,9 +112,11 @@ export default function TestRequestsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, []);
 
-  function sortRandomlyExceptSelected(items: any[], flagKey: string) {
+  function sortRandomlyExceptSelected(items: EmployeeRecord[], flagKey: keyof EmployeeRecord) {
     const selected = items.filter(item => item[flagKey]);
     const nonSelected = items.filter(item => !item[flagKey]);
     const shuffled = nonSelected.sort(() => Math.random() - 0.5);
@@ -80,8 +127,8 @@ export default function TestRequestsPage() {
     if (!form.title) return alert("Request Title is mandatory");
     if (!form.reasonForTest) return alert("Reason for test is mandatory");
 
-    let total = employees.length;
-    let altC = form.alternateCount || 0;
+    const total = employees.length;
+    const altC = form.alternateCount || 0;
     
     let alcC = form.alcoholCount || 0;
     if (form.selectionType === '2') alcC = Math.ceil((alcC / 100) * total);
@@ -149,23 +196,7 @@ export default function TestRequestsPage() {
     }
   };
 
-  const remove = async (id: number) => {
-    const ok = await confirmDialog({
-      title: 'You are trying to delete Test Request, Please confirm',
-      message: 'This cannot be restored once deleted.',
-      cancelText: 'NO, WAIT!',
-      confirmText: 'CONFIRM DELETION',
-    });
-    if (!ok) return;
-    await fetch(`${API}/api/TestRequest/deleteTestRequest`, { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id })
-    });
-    loadData();
-  };
-
-  const viewRequest = async (r: any) => {
+  const viewRequest = async (r: TestRequest) => {
     setSelectedRequest(r); // set basic info immediately so page shows
     setSelectedRequestEmployees([]);
     setViewLoading(true);
@@ -221,86 +252,164 @@ export default function TestRequestsPage() {
       } else {
         alert("Failed to email report: " + data.obj);
       }
-    } catch (e: any) {
-      alert("Error: " + e.message);
+    } catch (error: unknown) {
+      alert("Error: " + (error instanceof Error ? error.message : 'Unable to email report'));
     }
   };
+
+  const downloadRequest = async (id: number) => {
+    const res = await fetch(`${API}/api/TestRequest/downloadTestRequestReport`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', token: getToken() },
+      body: JSON.stringify({ id }),
+    });
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `TR-${id}-Report.pdf`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const requestColumns: ListingColumn<TestRequest>[] = [
+    {
+      key: 'creationTimestamp',
+      label: 'Creation Timestamp',
+      width: '19%',
+      getValue: request => formatDateTime(request.creationTimestamp || request.creation_timestamp),
+      render: request => formatDateTime(request.creationTimestamp || request.creation_timestamp),
+    },
+    {
+      key: 'requestId',
+      label: 'Request ID',
+      width: '14%',
+      getValue: request => `TR-${request.id}`,
+      render: request => `TR-${request.id}`,
+    },
+    { key: 'title', label: 'Request Title', width: '20%' },
+    {
+      key: 'yearFrequency',
+      label: 'Year/Frequency',
+      width: '19%',
+      getValue: request => `${request.year}/${request.frequency}${request.frequency === 'Quarter' ? ` ${request.quarter || ''}` : ''}`,
+      render: request => `${request.year}/${request.frequency}${request.frequency === 'Quarter' ? ` ${request.quarter || ''}` : ''}`,
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      width: '14%',
+      getValue: request => request.allSubmitStatus ? 'Processed' : 'Pending',
+      render: request => request.allSubmitStatus ? 'Processed' : 'Pending',
+    },
+  ];
+
+  const employeeDetailColumns: ListingColumn<EmployeeRecord>[] = [
+    { key: 'last_name', label: 'Last Name', width: '18%' },
+    { key: 'first_name', label: 'First Name', width: '18%' },
+    { key: 'mobile', label: 'Mobile', width: '18%' },
+    { key: 'department', label: 'Department', width: '18%' },
+    {
+      key: 'drug',
+      label: 'Drug',
+      width: '10%',
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      render: employee => <input type="checkbox" checked={!!employee.isSelectedForDrug} disabled />,
+    },
+    {
+      key: 'alcohol',
+      label: 'Alcohol',
+      width: '10%',
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      render: employee => <input type="checkbox" checked={!!employee.isSelectedForAlcohol} disabled />,
+    },
+    {
+      key: 'alternate',
+      label: 'Alternate',
+      width: '10%',
+      sortable: false,
+      filterable: false,
+      align: 'center',
+      render: employee => <input type="checkbox" checked={!!employee.isSelectedForAlternate} disabled />,
+    },
+  ];
 
 
   return (
     <div className="page-content">
       {viewMode === 'LIST' && (
         <>
-          <TopNav title="List of Test Requests">
-          <button className="btn" style={{ background: '#17a2b8', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem' }} onClick={() => setViewMode('GENERATE')}>
-            <Plus size={16} /> Generate Test Request
-          </button>
-        </TopNav>
-          <div className="card" style={{ padding: '1rem' }}>
-            {loading ? <div>Loading...</div> : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Creation Timestamp</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Request Id</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Request Title</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Year/Frequency</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Status</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map(r => (
-                    <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.75rem' }}>{r.creationTimestamp}</td>
-                      <td style={{ padding: '0.75rem' }}>TR-{r.id}</td>
-                      <td style={{ padding: '0.75rem' }}>{r.title}</td>
-                      <td style={{ padding: '0.75rem' }}>{r.year}/{r.frequency} {r.frequency === 'Quarter' ? r.quarter : ''}</td>
-                      <td style={{ padding: '0.75rem' }}>{r.allSubmitStatus ? 'Processed' : 'Pending'}</td>
-                      <td style={{ padding: '0.75rem' }}>
-                        <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                          <button
-                            title="View"
-                            style={{ padding: '0.35rem 0.6rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-                            onClick={() => viewRequest(r)}
-                          ><Eye size={13} /></button>
-                          <button
-                            title="Download Report"
-                            style={{ padding: '0.35rem 0.6rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-                            onClick={async () => {
-                              const res = await fetch(`${API}/api/TestRequest/downloadTestRequestReport`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json', token: getToken() },
-                                body: JSON.stringify({ id: r.id }),
-                              });
-                              const blob = await res.blob();
-                              const url = URL.createObjectURL(blob);
-                              const a = document.createElement('a'); a.href = url; a.download = `TR-${r.id}-Report.pdf`; a.click();
-                            }}
-                          ><FileDown size={13} /></button>
-                          <button
-                            title="Delete"
-                            style={{ padding: '0.35rem 0.6rem', background: '#f00e0e', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.78rem' }}
-                            onClick={() => remove(r.id)}
-                          ><Trash2 size={13} /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+          <TopNav title="Manage Test Request" />
+          <div style={{ padding: '1.5rem 1.75rem' }}>
+            <ListingTable
+              className="test-requests-table corporate-test-requests-table"
+              title="List of Test Requests"
+              columns={requestColumns}
+              rows={requests}
+              loading={loading}
+              emptyText="No test requests found."
+              headerActions={(
+                <button type="button" className="test-request-generate-button" onClick={() => setViewMode('GENERATE')}>
+                  Generate Test Request
+                </button>
+              )}
+              actionsLabel="Actions"
+              actionsWidth={120}
+              defaultPageSize={10}
+              rowActions={request => (
+                <div className="listing-actions">
+                  <button
+                    type="button"
+                    className="action-btn action-btn-download"
+                    title="Download Test Request"
+                    onClick={() => downloadRequest(request.id)}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn action-btn-view-eye"
+                    title="View Test Request"
+                    onClick={() => viewRequest(request)}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            />
           </div>
         </>
       )}
 
       {viewMode === 'GENERATE' && (
         <>
-          <TopNav title="Test Request Detail">
-          <button className="btn btn-ghost" onClick={() => setViewMode('LIST')}>Close</button>
-        </TopNav>
+          <TopNav title="Manage Test Request" />
           
           <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+            <div
+              className="card-header"
+              style={{
+                margin: '-1.5rem -1.5rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+              }}
+            >
+              <span className="card-title">Test Request Detail</span>
+              <button type="button" className="listing-header-link" onClick={() => setViewMode('LIST')}>
+                Close
+              </button>
+            </div>
             <div className="row" style={{ display: 'flex', flexWrap: 'wrap', margin: '-0.5rem' }}>
               <div style={{ width: '50%', padding: '0.5rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
@@ -354,7 +463,7 @@ export default function TestRequestsPage() {
 
             <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <p style={{ margin: 0 }}><b>Test Date: {new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }).replace(/\//g, '-')}</b></p>
+                <p style={{ margin: 0 }}><b>Test Date: {formatDate(new Date())}</b></p>
                 <p style={{ margin: 0 }}><b>Test Time: {new Date().toLocaleTimeString('en-US')}</b></p>
               </div>
 
@@ -467,41 +576,14 @@ export default function TestRequestsPage() {
             </div>
 
             <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
-              <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 }}>Employees List (Total Employees: {employees.length})</h3>
-              <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Last Name</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>First Name</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Mobile</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'left' }}>Department</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'center', minWidth: '140px' }}>Drug</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'center', minWidth: '140px' }}>Alcohol</th>
-                      <th style={{ padding: '0.75rem', textAlign: 'center' }}>Alternate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {employees.map(e => (
-                      <tr key={e.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '0.75rem' }}>{e.last_name}</td>
-                        <td style={{ padding: '0.75rem' }}>{e.first_name}</td>
-                        <td style={{ padding: '0.75rem' }}>{e.mobile}</td>
-                        <td style={{ padding: '0.75rem' }}>{e.department}</td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                          <input type="checkbox" checked={!!e.isSelectedForDrug} disabled />
-                        </td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                          <input type="checkbox" checked={!!e.isSelectedForAlcohol} disabled />
-                        </td>
-                        <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                          <input type="checkbox" checked={!!e.isSelectedForAlternate} disabled />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ListingTable
+                className="test-requests-table test-request-employees-table"
+                title={`Employees List (Total Employees: ${employees.length})`}
+                columns={employeeDetailColumns}
+                rows={employees}
+                emptyText="No employees found."
+                defaultPageSize={25}
+              />
             </div>
 
           </div>
@@ -509,11 +591,24 @@ export default function TestRequestsPage() {
       )}
       {viewMode === 'VIEW' && selectedRequest && (
         <>
-          <TopNav title="Test Request Detail">
-            <button className="btn btn-ghost" onClick={() => setViewMode('LIST')}>Close</button>
-          </TopNav>
+          <TopNav title="Manage Test Request" />
 
           <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+            <div
+              className="card-header"
+              style={{
+                margin: '-1.5rem -1.5rem 1.5rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem',
+              }}
+            >
+              <span className="card-title">Test Request Detail</span>
+              <button type="button" className="listing-header-link" onClick={() => setViewMode('LIST')}>
+                Close
+              </button>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Request Title</label>
@@ -529,7 +624,7 @@ export default function TestRequestsPage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Test Date Time</label>
-                <div style={{ fontSize: '1rem', fontWeight: 500 }}>{selectedRequest.creationTimestamp}</div>
+                <div style={{ fontSize: '1rem', fontWeight: 500 }}>{formatDateTime(selectedRequest.creationTimestamp)}</div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Type:</label>

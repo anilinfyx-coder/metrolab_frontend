@@ -2,6 +2,8 @@
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { formatDate, formatDateTime } from '../../../utils/dateFormat';
+import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -19,6 +21,7 @@ interface B2BClient {
 }
 interface Subscription { id: number; start_date: string; end_date: string; amount: number; b2b_client_id: number; }
 interface LabTest { id: number; name: string; description: string; b2b_client_lab_test_access_id?: number; is_selected?: boolean; }
+interface B2BDocument { id: number; type_data_id: number; typeData: string; file_name: string; }
 
 const emptyClient = {
   company_name: '', contact_person_name: '', mobile: '', email: '', address: '',
@@ -55,7 +58,6 @@ export default function B2BClientsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [search, setSearch] = useState('');
 
   // Subscriptions
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -63,9 +65,14 @@ export default function B2BClientsPage() {
   const [editingSubId, setEditingSubId] = useState<number | null>(null);
 
   // Documents
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<B2BDocument[]>([]);
   const [docTypes, setDocTypes] = useState<{id: number, name: string}[]>([]);
-  const [docForm, setDocForm] = useState<{typeDataId: string, file: File | null}>({ typeDataId: '', file: null });
+  const [docForm, setDocForm] = useState<{ id: number | null; typeDataId: string; file: File | null; fileName: string }>({
+    id: null,
+    typeDataId: '',
+    file: null,
+    fileName: '',
+  });
 
   // Lab Test Access
   const [labTests, setLabTests] = useState<LabTest[]>([]);
@@ -243,25 +250,27 @@ export default function B2BClientsPage() {
     setSelectedClient(c);
     if (docTypes.length === 0) loadDocTypes();
     loadDocuments(c.id);
-    setDocForm({ typeDataId: '', file: null });
+    setDocForm({ id: null, typeDataId: '', file: null, fileName: '' });
     setView('documents');
   };
 
   const saveDoc = async () => {
-    if (!docForm.typeDataId || !docForm.file) {
+    if (!docForm.typeDataId || (!docForm.id && !docForm.file)) {
       setMsg({ type: 'error', text: 'Document Type and File are required.' }); return;
     }
     const formData = new FormData();
     formData.append('b2bClientId', String(selectedClient?.id));
     formData.append('typeDataId', docForm.typeDataId);
-    formData.append('UploadFile', docForm.file);
+    if (docForm.id) formData.append('id', String(docForm.id));
+    if (docForm.fileName) formData.append('fileName', docForm.fileName);
+    if (docForm.file) formData.append('UploadFile', docForm.file);
 
     await fetch(`${API}/api/B2bClientDocument/saveB2bClientDocument`, {
       method: 'POST', headers: { token: getToken() },
       body: formData
     });
-    setDocForm({ typeDataId: '', file: null });
-    setMsg({ type: 'success', text: 'Document uploaded successfully.' });
+    setMsg({ type: 'success', text: `Document ${docForm.id ? 'updated' : 'uploaded'} successfully.` });
+    setDocForm({ id: null, typeDataId: '', file: null, fileName: '' });
     if (selectedClient) loadDocuments(selectedClient.id);
   };
 
@@ -349,12 +358,35 @@ export default function B2BClientsPage() {
     }
   };
 
-  const filtered = clients.filter(c =>
-    !search ||
-    c.company_name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.email?.toLowerCase().includes(search.toLowerCase()) ||
-    c.mobile?.includes(search)
-  );
+  const clientColumns: ListingColumn<B2BClient>[] = [
+    { key: 'company_name', label: 'Company Name', width: '25%' },
+    { key: 'mobile', label: 'Mobile', width: '20%' },
+    { key: 'email', label: 'Email', width: '25%' },
+    {
+      key: 'configurations',
+      label: 'Configurations',
+      width: '18%',
+      sortable: false,
+      filterable: false,
+      render: client => (
+        <div className="listing-actions">
+          <button type="button" className="action-btn action-btn-download" title="Documents" onClick={() => openDocuments(client)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm0 7V3.5L18.5 8H14z" />
+            </svg>
+          </button>
+          <button type="button" className="action-btn action-btn-status" title="Subscriptions" onClick={() => openSubscription(client)}>
+            <span aria-hidden style={{ fontSize: '1rem', fontWeight: 700 }}>$</span>
+          </button>
+          <button type="button" className="action-btn b2b-config-settings" title="Lab Test Access" onClick={() => openLabTestAccess(client)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58-1.92-3.32-2.39.96a7.1 7.1 0 0 0-1.62-.94L14.87 3h-3.84l-.36 2.18c-.58.24-1.12.55-1.62.94l-2.39-.96-1.92 3.32 2.03 1.58c-.05.31-.09.64-.09.94s.03.63.08.94l-2.02 1.58 1.92 3.32 2.39-.96c.5.39 1.04.71 1.62.94l.36 2.18h3.84l.36-2.18c.58-.24 1.12-.55 1.62-.94l2.39.96 1.92-3.32-2.02-1.58zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z" />
+            </svg>
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   const inp = (key: string, label: string, type = 'text', required = false, readOnly = false) => (
     <div className="form-group" key={key}>
@@ -503,8 +535,8 @@ export default function B2BClientsPage() {
                 <tbody>
                   {subscriptions.map(s => (
                     <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.75rem 1rem' }}>{s.start_date?.slice(0, 10) || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{s.end_date?.slice(0, 10) || '—'}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{formatDate(s.start_date)}</td>
+                      <td style={{ padding: '0.75rem 1rem' }}>{formatDate(s.end_date)}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>USD {s.amount}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', marginRight: '0.5rem' }}
@@ -529,18 +561,25 @@ export default function B2BClientsPage() {
   // View: DOCUMENTS
   // ════════════════════════════════════════════════════════════════════════════
   if (view === 'documents') {
+    const documentColumns: ListingColumn<B2BDocument>[] = [
+      {
+        key: 'typeData',
+        label: 'Document Type',
+        width: '75%',
+        getValue: document => document.typeData || '',
+      },
+    ];
+
     return (
       <div className="page-content">
-        <TopNav title={`Documents — ${selectedClient?.company_name || ''}`}>
-          <button className="btn btn-ghost" onClick={() => { if (selectedClient) loadDocuments(selectedClient.id); }}>🔄 Refresh</button>
-          <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
-        </TopNav>
-        <div style={{ padding: '1.5rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-          {/* Upload Form */}
-          <div style={{ flex: '1 1 350px' }}>
+        <TopNav title="Manage B2B Labs" />
+        <div className="b2b-documents-split" style={{ padding: '1.5rem' }}>
+          <div>
             <MsgBanner msg={msg} />
             <div className="card">
-              <div className="card-header"><span className="card-title">Upload Document</span></div>
+              <div className="card-header">
+                <span className="card-title">{docForm.id ? 'Edit Document Detail' : 'Document Detail'}</span>
+              </div>
               <div className="card-body">
                 <div className="form-group">
                   <label>Document Type<span style={{ color: '#ef4444' }}> *</span></label>
@@ -552,47 +591,81 @@ export default function B2BClientsPage() {
                 <div className="form-group">
                   <label>File Upload<span style={{ color: '#ef4444' }}> *</span></label>
                   <input type="file" onChange={e => setDocForm(p => ({ ...p, file: e.target.files ? e.target.files[0] : null }))} />
+                  {docForm.id && !docForm.file && (
+                    <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                      Leave empty to keep the current file.
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="card-footer" style={{ display: 'flex', gap: '0.75rem' }}>
-                <button className="btn btn-primary" onClick={saveDoc} disabled={!docForm.typeDataId || !docForm.file}>💾 Upload</button>
-                <button className="btn btn-ghost" onClick={() => setDocForm({ typeDataId: '', file: null })}>Reset</button>
+              <div className="b2b-document-form-actions">
+                <button className="btn btn-primary" onClick={saveDoc} disabled={!docForm.typeDataId || (!docForm.id && !docForm.file)}>
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => setDocForm({ id: null, typeDataId: '', file: null, fileName: '' })}
+                >
+                  Reset Data
+                </button>
               </div>
             </div>
           </div>
-          
-          {/* List */}
-          <div style={{ flex: '2 1 500px' }}>
-            <div className="card">
-              <div className="card-header"><span className="card-title">Uploaded Documents</span></div>
-              <div className="card-body" style={{ padding: 0 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Document Type</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'center', color: 'var(--text-muted)', width: 150 }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {documents.map(d => (
-                      <tr key={d.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{d.typeData}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'center' }}>
-                            <a href={`${API}/api/B2bClientDocument/file/${d.file_name}`} target="_blank" rel="noreferrer" title="View" className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(47,81,131,0.1)', color: '#2f5183' }}>👁 View</a>
-                            <button title="Delete" className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', color: '#ef4444' }} onClick={() => deleteDoc(d.id)}>🗑</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {documents.length === 0 && (
-                      <tr><td colSpan={2} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No documents found.</td></tr>
-                    )}
-                  </tbody>
-                </table>
+
+          <ListingTable
+            title={`List of Documents for B2B Labs ("${selectedClient?.company_name || ''}")`}
+            columns={documentColumns}
+            rows={documents}
+            emptyText="No documents found."
+            headerActions={(
+              <button type="button" className="listing-header-link" onClick={() => { setView('list'); setMsg(null); }}>
+                Close
+              </button>
+            )}
+            actionsLabel="Actions"
+            actionsWidth={170}
+            defaultPageSize={10}
+            rowActions={document => (
+              <div className="listing-actions">
+                <button
+                  type="button"
+                  className="action-btn action-btn-view-eye"
+                  title="View Document"
+                  onClick={() => window.open(`${API}/api/B2bClientDocument/file/${document.file_name}`, '_blank', 'noopener,noreferrer')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="12" cy="12" r="3" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="action-btn action-btn-edit"
+                  title="Edit Document"
+                  onClick={() => {
+                    setDocForm({
+                      id: document.id,
+                      typeDataId: String(document.type_data_id),
+                      file: null,
+                      fileName: document.file_name,
+                    });
+                    setMsg(null);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
+                  </svg>
+                </button>
+                <button type="button" className="action-btn action-btn-delete" title="Delete Document" onClick={() => deleteDoc(document.id)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                  </svg>
+                </button>
               </div>
-            </div>
-          </div>
+            )}
+          />
         </div>
       </div>
     );
@@ -717,7 +790,7 @@ export default function B2BClientsPage() {
                     {walletHistory.map((t: any) => (
                       <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                          {new Date(t.creation_timestamp).toLocaleString()}
+                          {formatDateTime(t.creation_timestamp)}
                         </td>
                         <td style={{ padding: '0.75rem 1rem' }}>
                           <span style={{
@@ -750,75 +823,29 @@ export default function B2BClientsPage() {
   // ════════════════════════════════════════════════════════════════════════════
   return (
     <div className="page-content">
-      <TopNav title="B2B Labs">
-          <input type="text" placeholder="Search B2B labs..." value={search} onChange={e => setSearch(e.target.value)}
-            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 240 }} />
-          <button className="btn btn-ghost" onClick={loadClients}>🔄 Refresh</button>
-          <button id="add-b2b-btn" className="btn btn-primary" onClick={openAdd}>➕ Add B2B Lab</button>
-        </TopNav>
+      <TopNav title="Manage B2B Labs" />
       <div style={{ padding: '1.5rem' }}>
-        <div className="card">
-          <div className="card-body" style={{ padding: 0 }}>
-            {loading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
-            ) : filtered.length === 0 ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No B2B Labs found.</div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Company Name', 'Mobile', 'Email', 'Wallet Balance', 'Configurations', 'Actions'].map(h => (
-                      <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map(c => (
-                    <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '')}>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{c.company_name}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{c.mobile || '—'}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{c.email}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <span style={{ fontWeight: 600, color: (c as any).wallet_balance > 0 ? '#10b981' : '#9ca3af' }}>
-                          ${parseFloat((c as any).wallet_balance || 0).toFixed(2)}
-                        </span>
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                          <button title="Documents" className="btn btn-ghost"
-                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(34,138,202,0.1)', color: '#228aca', border: '1px solid rgba(34,138,202,0.3)' }}
-                            onClick={() => openDocuments(c)}>📄 Docs</button>
-                          <button title="Subscription" className="btn btn-ghost"
-                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(13,138,111,0.1)', color: '#0d8a6f', border: '1px solid rgba(13,138,111,0.3)' }}
-                            onClick={() => openSubscription(c)}>💵 Sub</button>
-                          <button title="Lab Test Access" className="btn btn-ghost"
-                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }}
-                            onClick={() => openLabTestAccess(c)}>⚙️ Tests</button>
-                          <button title="Manage Wallet" className="btn btn-ghost"
-                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', background: 'rgba(99,102,241,0.12)', color: '#6366f1', border: '1px solid rgba(99,102,241,0.3)' }}
-                            onClick={() => openWallet(c)}>💰 Wallet{(c as any).wallet_balance > 0 ? ` ($${parseFloat((c as any).wallet_balance).toFixed(2)})` : ''}</button>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                          <button title="Edit" className="btn btn-ghost" style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem' }} onClick={() => openEdit(c)}>✏️</button>
-                          <button title={c.status ? 'Disable' : 'Enable'} className="btn btn-ghost"
-                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', color: c.status ? '#10b981' : '#9ca3af' }}
-                            onClick={() => toggleStatus(c)}>{c.status ? '🟢' : '🔴'}</button>
-                          <button title="Delete" className="btn btn-ghost"
-                            style={{ fontSize: '0.72rem', padding: '0.2rem 0.5rem', color: '#ef4444' }}
-                            onClick={() => deleteClient(c.id)}>🗑</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+        <ListingTable
+          title="List of B2B Labs"
+          columns={clientColumns}
+          rows={clients}
+          loading={loading}
+          emptyText="No B2B Labs found."
+          headerActions={<ListingHeaderActions onAdd={openAdd} onRefresh={loadClients} />}
+          actionsLabel="Actions"
+          actionsWidth={150}
+          defaultPageSize={10}
+          rowActions={client => (
+            <ActionIcons
+              onEdit={() => openEdit(client)}
+              onToggleStatus={() => toggleStatus(client)}
+              onDelete={() => deleteClient(client.id)}
+              statusActive={!!client.status}
+              editTitle="Edit B2B Lab"
+              deleteTitle="Delete B2B Lab"
+            />
+          )}
+        />
       </div>
     </div>
   );

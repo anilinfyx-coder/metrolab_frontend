@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -14,9 +15,10 @@ export default function SpecimenTypePage() {
   const confirmDialog = useConfirm();
   const [types, setTypes] = useState<SpecimenType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...emptyForm });
+  const [nameError, setNameError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const loadData = () => {
     setLoading(true);
@@ -26,20 +28,41 @@ export default function SpecimenTypePage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, []);
 
   const save = async () => {
-    if (!form.name) return;
+    if (!form.name.trim()) {
+      setNameError('Please enter the specimen type name.');
+      setMsg({ type: 'error', text: 'Please correct the highlighted field before saving.' });
+      window.setTimeout(() => document.getElementById('specimen-type-name')?.focus(), 0);
+      return;
+    }
     setSaving(true);
+    setMsg(null);
     const method = form.id ? 'PUT' : 'POST';
     const url = `${API}/api/SpecimenType${form.id ? `/${form.id}` : ''}`;
-    await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ name: form.name, description: form.description })
-    });
-    setSaving(false);
-    setShowModal(false);
-    loadData();
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', token: getToken() },
+        body: JSON.stringify({ name: form.name.trim(), description: form.description.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok && data.response_code === '200') {
+        setMsg({ type: 'success', text: `Specimen Type ${form.id ? 'updated' : 'added'} successfully.` });
+        setForm({ ...emptyForm });
+        setNameError('');
+        loadData();
+      } else {
+        setMsg({ type: 'error', text: typeof data.obj === 'string' ? data.obj : 'Unable to save specimen type.' });
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Unable to connect to the server. Please try again.' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id: number) => {
@@ -62,66 +85,124 @@ export default function SpecimenTypePage() {
     loadData();
   };
 
+  const openEdit = (specimenType: SpecimenType) => {
+    setForm({ name: specimenType.name || '', description: specimenType.description || '', id: specimenType.id });
+    setNameError('');
+    setMsg(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const resetForm = () => {
+    setForm({ ...emptyForm });
+    setNameError('');
+    setMsg(null);
+  };
+
+  const columns: ListingColumn<SpecimenType>[] = [
+    { key: 'name', label: 'Name', width: '70%' },
+  ];
+
   return (
     <div className="page-content">
-      <TopNav title="Specimen Types">
-          <button className="btn btn-primary" onClick={() => { setForm({ ...emptyForm }); setShowModal(true); }}>➕ Add Specimen Type</button>
-        </TopNav>
+      <TopNav title="Manage Specimen Type" />
       <div style={{ padding: '1.5rem' }}>
-        {showModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-            <div className="card" style={{ width: '100%', maxWidth: 400, margin: '1rem' }}>
-              <div className="card-header"><span className="card-title">{form.id ? 'Edit Specimen Type' : 'Add Specimen Type'}</span></div>
-              <div className="card-body">
-                <div className="form-group">
-                  <label>Type Name *</label>
-                  <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
-                </div>
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea rows={3} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                      style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }} />
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳' : 'Save'}</button>
-                  <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                </div>
-              </div>
-            </div>
+        {msg && (
+          <div
+            role="alert"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.75rem',
+              background: msg.type === 'success' ? '#ecfdf5' : '#fef2f2',
+              border: `1px solid ${msg.type === 'success' ? '#10b981' : '#ef4444'}`,
+              borderRadius: 8,
+              padding: '0.75rem 1rem',
+              marginBottom: '1rem',
+              color: msg.type === 'success' ? '#047857' : '#b91c1c',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}
+          >
+            <span>{msg.type === 'success' ? '✓ ' : '⚠ '}{msg.text}</span>
+            <button
+              type="button"
+              aria-label="Dismiss message"
+              onClick={() => setMsg(null)}
+              style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '1rem' }}
+            >
+              ✕
+            </button>
           </div>
         )}
 
-        <div className="card">
-          <div className="card-body" style={{ padding: 0 }}>
-            {loading ? <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>#</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Name</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Description</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Status</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {types.map((t, i) => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{i + 1}</td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{t.name}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{t.description}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}><span className={`badge ${t.status ? 'badge-success' : 'badge-danger'}`}>{t.status ? 'Active' : 'Inactive'}</span></td>
-                      <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} onClick={() => { setForm({ name: t.name, description: t.description, id: t.id }); setShowModal(true); }}>✏️ Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }} onClick={() => toggleStatus(t)}>⚡ {t.status ? 'Disable' : 'Enable'}</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => remove(t.id)}>🗑 Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+        <div className="specimen-type-split">
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">{form.id ? 'Edit Specimen Type Detail' : 'Specimen Type Detail'}</span>
+            </div>
+            <div className="card-body">
+                <div className="form-group">
+                  <label htmlFor="specimen-type-name">Name<span className="required-star">*</span></label>
+                  <input
+                    id="specimen-type-name"
+                    type="text"
+                    placeholder="Enter Name"
+                    value={form.name}
+                    aria-invalid={!!nameError}
+                    onChange={e => {
+                      setForm(previous => ({ ...previous, name: e.target.value }));
+                      if (nameError) setNameError('');
+                      if (msg?.type === 'error') setMsg(null);
+                    }}
+                    style={{
+                      borderColor: nameError ? '#ef4444' : undefined,
+                      boxShadow: nameError ? '0 0 0 1px rgba(239,68,68,0.15)' : undefined,
+                    }}
+                  />
+                  {nameError && (
+                    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>
+                      {nameError}
+                    </div>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label htmlFor="specimen-type-description">Description</label>
+                  <textarea id="specimen-type-description" rows={4} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                      style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }} />
+                </div>
+            </div>
+            <div className="specimen-type-form-actions">
+              <button className="btn btn-primary" onClick={save} disabled={saving}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}>
+                Reset Data
+              </button>
+            </div>
           </div>
+
+          <ListingTable
+            title="List of Specimen Types"
+            columns={columns}
+            rows={types}
+            loading={loading}
+            emptyText="No specimen types found."
+            headerActions={<ListingHeaderActions onRefresh={loadData} />}
+            actionsLabel="Actions"
+            actionsWidth={150}
+            defaultPageSize={10}
+            rowActions={specimenType => (
+              <ActionIcons
+                onEdit={() => openEdit(specimenType)}
+                onToggleStatus={() => toggleStatus(specimenType)}
+                onDelete={() => remove(specimenType.id)}
+                statusActive={!!specimenType.status}
+                editTitle="Edit Specimen Type"
+                deleteTitle="Delete Specimen Type"
+              />
+            )}
+          />
         </div>
       </div>
     </div>

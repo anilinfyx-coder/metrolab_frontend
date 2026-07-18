@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import TopNav from '../../../../components/TopNav';
 import { useConfirm } from '../../../../components/ConfirmModal';
+import { formatDateTime } from '../../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() {
@@ -444,7 +445,7 @@ export default function TestRequestDetailPage() {
                   </div>
                   <div className="tr-detail-field">
                     <div className="tr-detail-label">Test Date Time:</div>
-                    <div className="tr-detail-value">{detail.creationTimestamp || '—'}</div>
+                    <div className="tr-detail-value">{formatDateTime(detail.creationTimestamp)}</div>
                   </div>
                   <div className="tr-detail-field">
                     <div className="tr-detail-label">Year/Frequency:</div>

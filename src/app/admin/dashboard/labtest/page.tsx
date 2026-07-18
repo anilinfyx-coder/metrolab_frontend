@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { formatDateTime } from '../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -20,14 +21,6 @@ interface WaitingEntry {
   status: boolean;
   tests?: string;
   test_count?: number;
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 const columns: ListingColumn<WaitingEntry>[] = [

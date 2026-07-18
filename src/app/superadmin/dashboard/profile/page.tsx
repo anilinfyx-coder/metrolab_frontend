@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Mail, Phone, User, Lock, Save, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { formatDate } from '../../../utils/dateFormat';
 
 const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
@@ -109,7 +110,7 @@ export default function SuperAdminProfilePage() {
         <h1 className="topnav-title">Super Admin Profile</h1>
         <div className="topnav-actions">
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+            {formatDate(new Date())}
           </span>
           <div className="avatar">A</div>
         </div>
