@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
-import ViewLabTestFormModal from '../../../components/ViewLabTestFormModal';
+import ViewLabTestForm from '../../../components/ViewLabTestForm';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
@@ -22,7 +22,9 @@ const columns: ListingColumn<LabTest>[] = [
 export default function AssignedTestCategoryPage() {
   const [categories, setCategories] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [view, setView] = useState<'list' | 'form'>('list');
   const [viewTestId, setViewTestId] = useState<number | null>(null);
+  const [viewTestName, setViewTestName] = useState('');
 
   const loadData = () => {
     const b2bId = getUser().id;
@@ -48,6 +50,37 @@ export default function AssignedTestCategoryPage() {
 
   useEffect(() => { loadData(); }, []);
 
+  const openView = (c: LabTest) => {
+    setViewTestId(c.id);
+    setViewTestName(c.name || 'View Form');
+    setView('form');
+  };
+
+  const closeView = () => {
+    setView('list');
+    setViewTestId(null);
+    setViewTestName('');
+  };
+
+  if (view === 'form' && viewTestId != null) {
+    return (
+      <div className="page-content" style={{ paddingTop: 0 }}>
+        <TopNav title="Manage Assign Test Categories" />
+        <div style={{ padding: '1.25rem 1.5rem' }}>
+          <div className="card">
+            <div className="listing-card-header">
+              <h2 className="listing-card-title">👁 View Form — {viewTestName}</h2>
+              <button type="button" className="listing-header-link" onClick={closeView}>Close</button>
+            </div>
+            <div className="card-body">
+              <ViewLabTestForm labTestId={viewTestId} token={getToken()} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Assign Test Categories" />
@@ -60,20 +93,12 @@ export default function AssignedTestCategoryPage() {
           loading={loading}
           emptyText="No assigned test categories found."
           rowActions={(c) => (
-            <ActionIcons onView={() => setViewTestId(c.id)} />
+            <ActionIcons onView={() => openView(c)} />
           )}
           actionsLabel="View Form"
           actionsWidth={110}
         />
       </div>
-
-      {viewTestId != null && (
-        <ViewLabTestFormModal
-          labTestId={viewTestId}
-          token={getToken()}
-          onClose={() => setViewTestId(null)}
-        />
-      )}
     </div>
   );
 }

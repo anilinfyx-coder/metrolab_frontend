@@ -308,8 +308,147 @@ body.sidebar-collapsed .main-content {
   color: var(--text);
 }
 
+.manage-parameters-split {
+  display: grid;
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.superadmin-staff-split {
+  display: grid;
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.document-type-split {
+  display: grid;
+  grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.specimen-type-split {
+  display: grid;
+  grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.labtest-specimen-split {
+  display: grid;
+  grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.labtest-question-split {
+  display: grid;
+  grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.b2b-documents-split {
+  display: grid;
+  grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.superadmin-staff-form-actions {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.9rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.superadmin-staff-form-actions .btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.document-type-form-actions {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.9rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.document-type-form-actions .btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.specimen-type-form-actions {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.9rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.specimen-type-form-actions .btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.labtest-specimen-form-actions {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.9rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.labtest-specimen-form-actions .btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.labtest-question-form-actions {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.9rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.labtest-question-form-actions .btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.b2b-document-form-actions {
+  display: flex;
+  gap: 1.75rem;
+  padding: 0.9rem 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.b2b-document-form-actions .btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 2px;
+}
+
 @media (max-width: 720px) {
   .view-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1100px) {
+  .manage-parameters-split,
+  .superadmin-staff-split,
+  .document-type-split,
+  .specimen-type-split,
+  .labtest-specimen-split,
+  .labtest-question-split,
+  .b2b-documents-split {
     grid-template-columns: 1fr;
   }
 }
@@ -1379,6 +1518,62 @@ body.sidebar-collapsed .sidebar-link .icon {
   font-weight: 600;
 }
 
+.test-reports-page-busy {
+  pointer-events: none;
+  user-select: none;
+}
+
+.test-reports-email-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.test-reports-email-overlay-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.5rem 1.75rem;
+  min-width: 280px;
+  max-width: 420px;
+  text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+.test-reports-email-spinner {
+  display: inline-block;
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(47, 81, 131, 0.2);
+  border-top-color: #2f5183;
+  border-radius: 50%;
+  animation: test-reports-email-spin 0.75s linear infinite;
+  margin-bottom: 0.85rem;
+}
+
+.test-reports-email-overlay-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.35rem;
+}
+
+.test-reports-email-overlay-text {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+@keyframes test-reports-email-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .test-reports-table .table-pagination {
   padding: 0.85rem 1.35rem;
   border-top: 1px solid #e0e4e8;
@@ -2426,6 +2621,93 @@ body.sidebar-collapsed .sidebar-link .icon {
   border-radius: 2px;
   height: 28px;
   padding: 0.2rem 0.45rem;
+}
+
+.employee-add-button {
+  min-height: 36px;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #0789ad;
+  border-radius: 2px;
+  background: #0789ad;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.employee-add-button:hover {
+  background: #067796;
+  border-color: #067796;
+}
+
+.test-request-generate-button {
+  min-height: 36px;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #0789ad;
+  border-radius: 2px;
+  background: #0789ad;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.test-request-generate-button:hover {
+  background: #067796;
+  border-color: #067796;
+}
+
+.b2b-config-settings {
+  background: #fff;
+  border: 1px solid #d8dde3;
+  color: #333;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.b2b-config-settings:hover {
+  background: #f5f7f9;
+  border-color: #c5cbd2;
+}
+
+.employee-listing .listing-card-header {
+  padding: 1rem 1.25rem;
+}
+
+.employee-listing .listing-card-title {
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.employee-listing .listing-table thead th {
+  padding: 1rem 0.75rem 0.5rem;
+  color: var(--primary-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.employee-listing .listing-table .th-sort-btn {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.employee-listing .listing-table .table-filter-row td {
+  padding: 0.45rem 0.75rem 0.75rem;
+}
+
+.employee-listing .listing-table .table-filter-row input {
+  height: 34px;
+  border-color: #606b76;
+  font-size: 0.9rem;
+}
+
+.employee-listing .listing-table tbody td {
+  padding: 0.9rem 0.75rem;
+  font-size: 0.9rem;
 }
 
 .listing-loading,

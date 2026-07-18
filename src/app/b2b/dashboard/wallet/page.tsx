@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
+import { formatDateTime } from '../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
@@ -105,7 +106,7 @@ export default function WalletPage() {
                           onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
                           onMouseLeave={e => (e.currentTarget.style.background = '')}>
                           <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                            {new Date(t.creation_timestamp).toLocaleString()}
+                            {formatDateTime(t.creation_timestamp)}
                           </td>
                           <td style={{ padding: '0.75rem 1rem' }}>
                             <span style={{

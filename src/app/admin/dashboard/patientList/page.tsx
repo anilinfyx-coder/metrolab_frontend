@@ -1,7 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
-import ListingTable, { ListingColumn } from '../../../components/ListingTable';
+import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { useConfirm } from '../../../components/ConfirmModal';
+import { formatDate } from '../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -17,12 +19,15 @@ interface Patient {
   gender: string | number;
 }
 
-interface WaitingEntry {
+interface TestHistoryEntry {
   id: number;
+  waiting_list_id: number;
   creation_timestamp: string;
   reason_for_test: string;
-  lab_tests?: { lab_test_name: string }[];
-  patient_id?: number;
+  lab_test_id: number;
+  lab_test_name: string;
+  report_id?: number | null;
+  report_uid?: string | null;
 }
 
 const GENDER_LABELS: Record<string, string> = {
@@ -66,11 +71,14 @@ function HistoryEyeIcon({ onClick, title = 'View History' }: { onClick: () => vo
 }
 
 export default function PatientListPage() {
+  const confirmDialog = useConfirm();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Patient | null>(null);
-  const [history, setHistory] = useState<WaitingEntry[]>([]);
+  const [history, setHistory] = useState<TestHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [emailing, setEmailing] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     fetch(`${API}/api/Patient`, { headers: { token: getToken() } })
@@ -83,11 +91,81 @@ export default function PatientListPage() {
     setSelected(p);
     setHistoryLoading(true);
     setHistory([]);
-    const res = await fetch(`${API}/api/WaitingList`, { headers: { token: getToken() } });
-    const d = await res.json();
-    setHistoryLoading(false);
-    if (d.response_code === '200') {
-      setHistory((d.obj || []).filter((w: WaitingEntry) => w.patient_id === p.id));
+    setMsg(null);
+    try {
+      const res = await fetch(`${API}/api/WaitingList/patient/${p.id}/history`, { headers: { token: getToken() } });
+      const d = await res.json();
+      if (res.ok && d.response_code === '200') {
+        setHistory(d.obj || []);
+      } else {
+        setMsg({ type: 'error', text: String(d.obj || 'Unable to load patient test history.') });
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Unable to connect to the server while loading test history.' });
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const downloadReport = async (entry: TestHistoryEntry) => {
+    if (!entry.report_id) return;
+    setMsg(null);
+    try {
+      const res = await fetch(`${API}/api/LabTestCategoryReport/downloadLabTestCategoryReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken() },
+        body: JSON.stringify({ id: entry.report_id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        setMsg({ type: 'error', text: String(data?.obj || 'Report download failed.') });
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${entry.report_uid || `Report-${entry.report_id}`}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMsg({ type: 'error', text: 'Unable to download the report. Please try again.' });
+    }
+  };
+
+  const emailReport = async (entry: TestHistoryEntry) => {
+    if (!entry.report_id || !selected || emailing) return;
+    if (!selected.email?.trim()) {
+      setMsg({ type: 'error', text: 'No email address is available for this patient.' });
+      return;
+    }
+
+    const confirmed = await confirmDialog({
+      title: 'Send report by email?',
+      message: `Email the password-protected ${entry.lab_test_name} report to ${selected.email}? The patient will need their birthdate 4 digits (MMDD) to open it.`,
+      cancelText: 'Cancel',
+      confirmText: 'Send Email',
+    });
+    if (!confirmed) return;
+
+    setEmailing(true);
+    setMsg(null);
+    try {
+      const res = await fetch(`${API}/api/LabTestCategoryReport/emailLabTestCategoryReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken() },
+        body: JSON.stringify({ id: entry.report_id }),
+      });
+      const data = await res.json();
+      if (res.ok && data.response_code === '200') {
+        setMsg({ type: 'success', text: `Report emailed successfully to ${data.obj?.email || selected.email}.` });
+      } else {
+        setMsg({ type: 'error', text: String(data.obj || 'Failed to send the report email.') });
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Unable to send the report email. Please try again.' });
+    } finally {
+      setEmailing(false);
     }
   };
 
@@ -140,15 +218,78 @@ export default function PatientListPage() {
     },
   ];
 
+  const historyColumns: ListingColumn<TestHistoryEntry>[] = [
+    {
+      key: 'creation_timestamp',
+      label: 'Date',
+      sortable: true,
+      filterable: true,
+      width: '22%',
+      getValue: row => formatDate(row.creation_timestamp),
+      render: row => formatDate(row.creation_timestamp),
+    },
+    {
+      key: 'reason_for_test',
+      label: 'Reason for Test',
+      sortable: true,
+      filterable: true,
+      width: '30%',
+      getValue: row => row.reason_for_test || '',
+      render: row => row.reason_for_test || '—',
+    },
+    {
+      key: 'lab_test_name',
+      label: 'Test Name',
+      sortable: true,
+      filterable: true,
+      width: '34%',
+      getValue: row => row.lab_test_name || '',
+      render: row => <span style={{ fontWeight: 500 }}>{row.lab_test_name || '—'}</span>,
+    },
+  ];
+
   if (selected) {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
-        <TopNav title={`Patient History — ${selected.name || ''}`}>
-          <button className="btn btn-ghost" id="back-to-list-btn" onClick={() => setSelected(null)}>← Back to List</button>
-        </TopNav>
-        <div style={{ padding: '1.25rem 1.5rem' }}>
+        <TopNav title={`Patient History — ${selected.name || ''}`} />
+
+        {emailing && (
+          <div className="test-reports-email-overlay" role="status" aria-live="polite" aria-busy="true">
+            <div className="test-reports-email-overlay-card">
+              <span className="test-reports-email-spinner" aria-hidden />
+              <div className="test-reports-email-overlay-title">Sending email...</div>
+              <div className="test-reports-email-overlay-text">
+                Please wait while we generate and send the report PDF.
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ padding: '1.25rem 1.5rem' }} className={emailing ? 'test-reports-page-busy' : undefined}>
+          {msg && (
+            <div
+              role="alert"
+              style={{
+                background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+                borderRadius: 8,
+                padding: '0.75rem 1rem',
+                marginBottom: '1rem',
+                fontSize: '0.875rem',
+                color: msg.type === 'success' ? '#10b981' : '#ef4444',
+              }}
+            >
+              {msg.text}
+            </div>
+          )}
+
           <div className="card" style={{ marginBottom: '1.5rem' }}>
-            <div className="card-header"><span className="card-title">Patient Info</span></div>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span className="card-title">Patient Info</span>
+              <button type="button" className="btn btn-ghost" onClick={() => setSelected(null)}>
+                ✕ Close
+              </button>
+            </div>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', fontSize: '0.875rem' }}>
                 {[
@@ -157,7 +298,7 @@ export default function PatientListPage() {
                   ['Mobile', formatMobile(selected.mobile) || selected.mobile],
                   ['Gender', genderLabel(selected.gender)],
                   ['Email', selected.email],
-                  ['DOB', selected.dob ? new Date(selected.dob).toLocaleDateString() : '—'],
+                  ['DOB', formatDate(selected.dob)],
                   ['SSN', selected.ssn],
                 ].map(([k, v]) => (
                   <div key={k}><span style={{ color: 'var(--text-muted)' }}>{k}:</span> <strong>{v || '—'}</strong></div>
@@ -166,36 +307,30 @@ export default function PatientListPage() {
             </div>
           </div>
 
-          <div className="card">
-            <div className="card-header"><span className="card-title">Test History ({history.length})</span></div>
-            <div className="card-body" style={{ padding: 0 }}>
-              {historyLoading ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
-              ) : history.length === 0 ? (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No test history found.</div>
+          <ListingTable
+            className="patient-history-table"
+            title="Test History"
+            columns={historyColumns}
+            rows={history}
+            loading={historyLoading}
+            showTotal
+            emptyText="No test history found."
+            actionsLabel="Actions"
+            actionsWidth={130}
+            defaultPageSize={10}
+            rowActions={entry => (
+              entry.report_id ? (
+                <ActionIcons
+                  onDownload={() => downloadReport(entry)}
+                  downloadTitle={`Download ${entry.lab_test_name} report`}
+                  onMail={() => emailReport(entry)}
+                  mailTitle={`Email ${entry.lab_test_name} report`}
+                />
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      {['#', 'Date', 'Reason for Test', 'Tests Assigned'].map(h => (
-                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((w, i) => (
-                      <tr key={w.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{i + 1}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{new Date(w.creation_timestamp).toLocaleDateString()}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{w.reason_for_test || '—'}</td>
-                        <td style={{ padding: '0.75rem 1rem' }}>{w.lab_tests?.map(t => t.lab_test_name).join(', ') || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Report pending</span>
+              )
+            )}
+          />
         </div>
       </div>
     );

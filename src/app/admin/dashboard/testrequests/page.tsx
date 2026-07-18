@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { formatDateTime } from '../../../utils/dateFormat';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
@@ -21,15 +22,6 @@ interface TestRequest {
   b2bClientCompany: string;
   creationTimestamp: string;
   creation_timestamp?: string;
-}
-
-function formatDateTime(value?: string) {
-  if (!value) return '—';
-  if (/^\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}:\d{2}$/.test(value)) return value;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 function statusLabel(r: TestRequest) {
