@@ -703,7 +703,7 @@ export default function TestRequestsPage() {
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
                                 <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><FileDown size={12} /></button>
-                                <button title="Email" onClick={() => emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
+                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
                               </div>
                             )}
                           </div>
@@ -720,7 +720,7 @@ export default function TestRequestsPage() {
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
                                 <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><FileDown size={12} /></button>
-                                <button title="Email" onClick={() => emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
+                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
                               </div>
                             )}
                           </div>
