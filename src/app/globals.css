@@ -873,6 +873,7 @@ body.sidebar-collapsed .sidebar-link .icon {
 .action-btn-delete { background: #E53935; }
 .action-btn-view   { background: var(--primary); }
 .action-btn-download { background: #00AED9; }
+.action-btn-wallet { background: #D97706; }
 .action-btn-lock { background: #0076A3; }
 .action-btn-lock.locked { background: #546E7A; }
 .action-btn-mail { background: #1A237E; }

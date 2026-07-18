@@ -383,6 +383,11 @@ export default function B2BClientsPage() {
               <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58-1.92-3.32-2.39.96a7.1 7.1 0 0 0-1.62-.94L14.87 3h-3.84l-.36 2.18c-.58.24-1.12.55-1.62.94l-2.39-.96-1.92 3.32 2.03 1.58c-.05.31-.09.64-.09.94s.03.63.08.94l-2.02 1.58 1.92 3.32 2.39-.96c.5.39 1.04.71 1.62.94l.36 2.18h3.84l.36-2.18c.58-.24 1.12-.55 1.62-.94l2.39.96 1.92-3.32-2.02-1.58zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z" />
             </svg>
           </button>
+          <button type="button" className="action-btn action-btn-wallet" title="Wallet" onClick={() => openWallet(client)}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+              <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1.5H13a2.5 2.5 0 0 1 0-5H21zm-8 1.5a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h9V9h-9zm3 2.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
+            </svg>
+          </button>
         </div>
       ),
     },
