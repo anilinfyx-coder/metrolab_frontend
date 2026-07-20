@@ -13,20 +13,15 @@ import {
   MdWavingHand,
 } from 'react-icons/md';
 import TopNav from '../../components/TopNav';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiFetch } from '../../../lib/api';
 
 function useApi(endpoint: string) {
   const [data, setData] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE}${endpoint}`, {
-      headers: { token: token || '', 'Content-Type': 'application/json' }
-    })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setData(d.obj); })
-      .catch(() => {})
+    apiFetch<unknown[]>(endpoint, { tokenKey: 'admin_token' })
+      .then((obj) => setData(Array.isArray(obj) ? obj : []))
+      .catch(() => setData([]))
       .finally(() => setLoading(false));
   }, [endpoint]);
   return { data, loading };

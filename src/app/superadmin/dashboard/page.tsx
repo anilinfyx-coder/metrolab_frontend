@@ -15,41 +15,30 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = getToken();
-        const headers = { token, 'Content-Type': 'application/json' };
-        
-        // Fetch stats
-        const statsRes = await fetch(`${API_BASE}/api/SuperAdmin/dashboardStats`, { headers });
-        const statsData = await statsRes.json();
-        if (statsData.response_code === '200') setStats(statsData.obj);
+        const [statsData, patientsData, testsData, b2bData] = await Promise.all([
+          apiFetch<Record<string, number>>('/api/SuperAdmin/dashboardStats', {
+            tokenKey: 'superadmin_token',
+          }).catch(() => null),
+          apiFetch<unknown[]>('/api/Patient', {
+            tokenKey: 'superadmin_token',
+          }).catch(() => []),
+          apiFetch<unknown[]>('/api/WaitingList', {
+            tokenKey: 'superadmin_token',
+          }).catch(() => []),
+          apiFetch<unknown[]>('/api/B2bClients', {
+            tokenKey: 'superadmin_token',
+          }).catch(() => []),
+        ]);
 
-        // Fetch recent patients
-        const patientsRes = await fetch(`${API_BASE}/api/Patient`, { headers });
-        const patientsData = await patientsRes.json();
-        if (patientsData.response_code === '200') {
-          setRecentPatients(patientsData.obj.slice(0, 5));
-        }
-
-        // Fetch recent tests
-        const testsRes = await fetch(`${API_BASE}/api/WaitingList`, { headers });
-        const testsData = await testsRes.json();
-        if (testsData.response_code === '200') {
-          setRecentTests(testsData.obj.slice(0, 5));
-        }
-
-        // Fetch recent B2B clients
-        const b2bRes = await fetch(`${API_BASE}/api/B2bClients`, { headers });
-        const b2bData = await b2bRes.json();
-        if (b2bData.response_code === '200') {
-          setRecentB2BClients(b2bData.obj.slice(0, 5));
-        }
-      } catch (err) {
-        console.error(err);
+        if (statsData) setStats(statsData);
+        setRecentPatients((patientsData || []).slice(0, 5));
+        setRecentTests((testsData || []).slice(0, 5));
+        setRecentB2BClients((b2bData || []).slice(0, 5));
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 

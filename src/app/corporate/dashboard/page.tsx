@@ -17,8 +17,7 @@ import TopNav from '../../components/TopNav';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
-function getUser() { 
+function getUser() {
   if (typeof window !== 'undefined') {
     const userStr = localStorage.getItem('corporate_user');
     if (userStr) return JSON.parse(userStr);
@@ -35,34 +34,27 @@ export default function CorporateDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = getToken();
         const currentUser = getUser();
         setUser(currentUser);
 
-        const headers = { token, 'Content-Type': 'application/json' };
-        
         if (currentUser?.id) {
-            // Fetch employees for this corporate client
-            const empRes = await fetch(`${API_BASE}/api/Employees?corporate_client_id=${currentUser.id}`, { headers });
-            const empData = await empRes.json();
-            if (empData.response_code === '200') {
-                setEmployees(empData.obj);
-            }
+          const [empList, trList] = await Promise.all([
+            apiFetch<unknown[]>(`/api/Employees?corporate_client_id=${currentUser.id}`, {
+              tokenKey: 'corporate_token',
+            }).catch(() => []),
+            apiFetch<unknown[]>(`/api/TestRequest?corporate_client_id=${currentUser.id}`, {
+              tokenKey: 'corporate_token',
+            }).catch(() => []),
+          ]);
 
-            // Fetch test requests filtered by this corporate client
-            const trRes = await fetch(`${API_BASE}/api/TestRequest?corporate_client_id=${currentUser.id}`, { headers });
-            const trData = await trRes.json();
-            if (trData.response_code === '200') {
-                setTestRequests(trData.obj);
-            }
+          setEmployees((empList as any[]) || []);
+          setTestRequests((trList as any[]) || []);
         }
-      } catch (err) {
-        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 
