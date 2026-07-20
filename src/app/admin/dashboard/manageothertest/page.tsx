@@ -1,7 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { MdLock } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { useConfirm } from '../../../components/ConfirmModal';
@@ -103,7 +102,7 @@ export default function TestsReportsPage() {
       const ok = await confirmDialog({
         title: 'Lock this report?',
         message:
-          'Once locked, this report cannot be edited and its action buttons will be hidden. Continue?',
+          'Once locked, this report cannot be edited. Only the email action will remain available. Continue?',
         cancelText: 'Cancel',
         confirmText: 'Lock',
       });
@@ -259,10 +258,10 @@ export default function TestsReportsPage() {
           }
           rowActions={(r) =>
             r.status ? (
-              <span className="report-locked-label" title="This report is locked">
-                <MdLock size={14} aria-hidden />
-                Locked
-              </span>
+              <ActionIcons
+                onMail={() => emailReport(r)}
+                mailTitle={`Email report ${r.uid || r.id}`}
+              />
             ) : (
               <ActionIcons
                 onDownload={() => downloadReport(r)}
