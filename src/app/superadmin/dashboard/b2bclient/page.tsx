@@ -21,7 +21,7 @@ import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
+import { apiFetch, toastApiSuccess, API_BASE, getToken } from '../../../../lib/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface B2BClient {
@@ -33,6 +33,8 @@ interface B2BClient {
   smtp_server: string; smtp_port: string; smtp_email: string; smtp_password: string;
   tagline: string; public_fax: string; primary_color_code: string; approval_note: string;
   password?: string;
+  is_fixed_price?: boolean;
+  fixed_price_amount?: number | string;
 }
 interface Subscription { id: number; start_date: string; end_date: string; amount: number; b2b_client_id: number; }
 interface LabTest { id: number; name: string; description: string; b2b_client_lab_test_access_id?: number; is_selected?: boolean; }
@@ -45,6 +47,7 @@ const emptyClient = {
   website: '', medical_officer_name: '', medical_officer_position: '', mrocc: '', clia_number: '',
   smtp_server: '', smtp_port: '', smtp_email: '', smtp_password: '',
   tagline: '', primary_color_code: '', approval_note: '', password: '',
+  fixed_price_amount: '',
 };
 
 type View = 'list' | 'form' | 'subscription' | 'labtestaccess' | 'documents' | 'wallet';
@@ -91,6 +94,7 @@ export default function B2BClientsPage() {
   const [reportFooterFile, setReportFooterFile] = useState<File | null>(null);
   const [medOfficerSigFile, setMedOfficerSigFile] = useState<File | null>(null);
   const [isApproval, setIsApproval] = useState(false);
+  const [isFixedPrice, setIsFixedPrice] = useState(false);
 
   const loadClients = async () => {
     setLoading(true);
@@ -117,7 +121,7 @@ export default function B2BClientsPage() {
            setSelectedClient(c);
            setWalletBalance((c as any).wallet_balance || 0);
            setWalletForm({ amount: '', description: '' });
-           fetch(`${API}/api/B2bClients/walletHistory/${c.id}`, { headers: { token: getToken() } })
+           fetch(`${API_BASE}/api/B2bClients/walletHistory/${c.id}`, { headers: { token: getToken() } })
              .then(r => r.json())
              .then(d => { if (d.response_code === '200') setWalletHistory(d.obj || []); });
            setView('wallet');
@@ -138,6 +142,8 @@ export default function B2BClientsPage() {
   const openAdd = () => {
     setEditingId(null);
     setForm({ ...emptyClient, password: generatePassword() });
+    setIsApproval(false);
+    setIsFixedPrice(false);
     setView('form');
   };
 
@@ -145,6 +151,7 @@ export default function B2BClientsPage() {
     setEditingId(c.id);
     setForm({ ...emptyClient, ...c as unknown as Record<string, string> });
     setIsApproval(!!(c as any).is_approval);
+    setIsFixedPrice(!!c.is_fixed_price);
     setView('form');
   };
 
@@ -160,7 +167,7 @@ export default function B2BClientsPage() {
     try {
       if (hasFiles) {
         const fd = new FormData();
-        Object.entries({ ...form, role_id: '2', status: 'true', is_approval: String(isApproval) }).forEach(([k, v]) => fd.append(k, v as string));
+        Object.entries({ ...form, role_id: '2', status: 'true', is_approval: String(isApproval), is_fixed_price: String(isFixedPrice) }).forEach(([k, v]) => fd.append(k, v as string));
         if (logoFile) fd.append('logo_file', logoFile);
         if (reportHeaderFile) fd.append('report_header_file', reportHeaderFile);
         if (reportFooterFile) fd.append('report_footer_file', reportFooterFile);
@@ -176,13 +183,14 @@ export default function B2BClientsPage() {
         await apiFetch(path, {
           method,
           tokenKey: 'superadmin_token',
-          body: JSON.stringify({ ...form, role_id: 2, status: true, deleted: false, is_approval: isApproval }),
+          body: JSON.stringify({ ...form, role_id: 2, status: true, deleted: false, is_approval: isApproval, is_fixed_price: isFixedPrice }),
           successMessage: `B2B Lab ${editingId ? 'updated' : 'added'} successfully.`,
           errorFallback: 'Unable to save B2B Lab.',
         });
       }
       setLogoFile(null); setReportHeaderFile(null); setReportFooterFile(null); setMedOfficerSigFile(null);
       setIsApproval(false);
+      setIsFixedPrice(false);
       setView('list');
       loadClients();
     } catch {
@@ -530,6 +538,18 @@ export default function B2BClientsPage() {
                     <span style={{ fontSize: '0.875rem' }}>{isApproval ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Approval Required</> : 'No Approval Required'}</span>
                   </label>
                 </div>
+
+                {/* Fixed Price Toggle */}
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <label style={{ marginBottom: '0.5rem' }}>Fixed Price Per Report</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
+                    <input type="checkbox" checked={isFixedPrice} onChange={e => setIsFixedPrice(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: '0.875rem' }}>{isFixedPrice ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Yes, Fixed Price</> : 'No, Use Global Setting'}</span>
+                  </label>
+                </div>
+
+                {isFixedPrice && inp('fixed_price_amount', 'Fixed Price Amount ($)', 'number', true)}
 
                 {inp('approval_note', 'Approval Note')}
 

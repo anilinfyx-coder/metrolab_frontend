@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   MdDelete,
@@ -363,7 +363,7 @@ export default function ListingTable<T extends { id: number | string }>({
                             wordBreak: 'break-word',
                           }}
                         >
-                          {col.render ? col.render(row) : (getCellText(row, col) || 'ΓÇö')}
+                          {col.render ? col.render(row) : (getCellText(row, col) || '—')}
                         </td>
                       ))}
                       {rowActions && <td style={{ width: actionsWidth }}>{rowActions(row)}</td>}
