@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const corporateNavItems: NavItem[] = [
+  { href: '', label: 'Dashboard', icon: '📊', section: 'Overview' },
   { href: '/employee', label: 'Employees', icon: '👥', section: 'Corporate' },
   { href: '/testrequest', label: 'Test Requests', icon: '🧪', section: 'Corporate' },
 ];
