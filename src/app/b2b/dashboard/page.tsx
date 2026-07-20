@@ -17,10 +17,7 @@ import TopNav from '../../components/TopNav';
 import { apiFetch } from '../../../lib/api';
 import { formatDate } from '../../utils/dateFormat';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
-function getUser() { 
+function getUser() {
   if (typeof window !== 'undefined') {
     const userStr = localStorage.getItem('b2b_user');
     if (userStr) return JSON.parse(userStr);
@@ -39,36 +36,35 @@ export default function B2bDashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = getToken();
         const currentUser = getUser();
         setUser(currentUser);
 
         if (currentUser?.id) {
-          const headers = { token, 'Content-Type': 'application/json' };
-          
-          const [walletRes, corpRes, patientRes, testReqRes] = await Promise.all([
-            fetch(`${API_BASE}/api/B2bClients/${currentUser.id}`, { headers }),
-            fetch(`${API_BASE}/api/CorporateClients?b2b_client_id=${currentUser.id}`, { headers }),
-            fetch(`${API_BASE}/api/Patient?b2b_client_id=${currentUser.id}`, { headers }),
-            fetch(`${API_BASE}/api/TestRequest?b2b_client_id=${currentUser.id}`, { headers }),
+          const [wallet, corp, patientList, testReqList] = await Promise.all([
+            apiFetch<{ wallet_balance?: string | number }>(`/api/B2bClients/${currentUser.id}`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => null),
+            apiFetch<unknown[]>(`/api/CorporateClients?b2b_client_id=${currentUser.id}`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => []),
+            apiFetch<unknown[]>(`/api/Patient?b2b_client_id=${currentUser.id}`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => []),
+            apiFetch<unknown[]>(`/api/TestRequest?b2b_client_id=${currentUser.id}`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => []),
           ]);
 
-          const [walletData, corpData, patientData, testReqData] = await Promise.all([
-            walletRes.json(), corpRes.json(), patientRes.json(), testReqRes.json()
-          ]);
-
-          if (walletData.response_code === '200') setWalletBalance(parseFloat(walletData.obj?.wallet_balance || 0));
-          if (corpData.response_code === '200') setCorporateClients(corpData.obj || []);
-          if (patientData.response_code === '200') setPatients(patientData.obj || []);
-          if (testReqData.response_code === '200') setTestRequests(testReqData.obj || []);
+          if (wallet) setWalletBalance(parseFloat(String(wallet.wallet_balance || 0)));
+          setCorporateClients((corp as any[]) || []);
+          setPatients((patientList as any[]) || []);
+          setTestRequests((testReqList as any[]) || []);
         }
-      } catch (err) {
-        console.error(err);
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchData();
   }, []);
 
