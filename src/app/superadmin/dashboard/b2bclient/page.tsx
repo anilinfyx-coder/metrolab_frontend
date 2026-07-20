@@ -58,6 +58,7 @@ export default function B2BClientsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [initViewHandled, setInitViewHandled] = useState(false);
 
   // Subscriptions
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -99,6 +100,27 @@ export default function B2BClientsPage() {
   };
 
   useEffect(() => { loadClients(); }, []);
+
+  useEffect(() => {
+    if (clients.length > 0 && !initViewHandled && typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const v = urlParams.get('view');
+      const cid = urlParams.get('clientId');
+      if (v === 'wallet' && cid) {
+         const c = clients.find(x => x.id.toString() === cid);
+         if (c) {
+           setSelectedClient(c);
+           setWalletBalance((c as any).wallet_balance || 0);
+           setWalletForm({ amount: '', description: '' });
+           fetch(`${API}/api/B2bClients/walletHistory/${c.id}`, { headers: { token: getToken() } })
+             .then(r => r.json())
+             .then(d => { if (d.response_code === '200') setWalletHistory(d.obj || []); });
+           setView('wallet');
+         }
+      }
+      setInitViewHandled(true);
+    }
+  }, [clients, initViewHandled]);
 
   // ── B2B Client CRUD ──────────────────────────────────────────────────────
   const generatePassword = () => {

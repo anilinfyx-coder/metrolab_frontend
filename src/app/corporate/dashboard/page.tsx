@@ -1,102 +1,298 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import TopNav from '../../components/TopNav';
+import { formatDate } from '../../utils/dateFormat';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
-function useApi(endpoint: string) {
-  const [data, setData] = useState<unknown[]>([]);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    fetch(`${API_BASE}${endpoint}`, {
-      headers: { token: token || '', 'Content-Type': 'application/json' }
-    })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setData(d.obj); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [endpoint]);
-  return { data, loading };
+function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
+function getUser() { 
+  if (typeof window !== 'undefined') {
+    const userStr = localStorage.getItem('corporate_user');
+    if (userStr) return JSON.parse(userStr);
+  }
+  return null;
 }
 
-export default function DashboardPage() {
-  const { data: patients, loading: l1 } = useApi('/api/Patient');
-  const { data: labTests, loading: l2 } = useApi('/api/LabTests');
-  const { data: b2bClients, loading: l3 } = useApi('/api/B2bClients');
-  const { data: adminUsers, loading: l4 } = useApi('/api/AdminUsers');
+export default function CorporateDashboard() {
+  const [user, setUser] = useState<any>(null);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [testRequests, setTestRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const stats = [
-    { label: 'Total Patients', value: patients.length, icon: '🧑‍⚕️', color: 'blue' },
-    { label: 'Lab Tests',      value: labTests.length,  icon: '🔬',  color: 'purple' },
-    { label: 'B2B Clients',    value: b2bClients.length, icon: '🏢', color: 'green' },
-    { label: 'Admin Users',    value: adminUsers.length, icon: '🔑', color: 'orange' },
-  ];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const token = getToken();
+        const currentUser = getUser();
+        setUser(currentUser);
 
-  const loading = l1 || l2 || l3 || l4;
+        const headers = { token, 'Content-Type': 'application/json' };
+        
+        if (currentUser?.id) {
+            // Fetch employees for this corporate client
+            const empRes = await fetch(`${API_BASE}/api/Employees?corporate_client_id=${currentUser.id}`, { headers });
+            const empData = await empRes.json();
+            if (empData.response_code === '200') {
+                setEmployees(empData.obj);
+            }
+
+            // Fetch test requests filtered by this corporate client
+            const trRes = await fetch(`${API_BASE}/api/TestRequest?corporate_client_id=${currentUser.id}`, { headers });
+            const trData = await trRes.json();
+            if (trData.response_code === '200') {
+                setTestRequests(trData.obj);
+            }
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, []);
+
+  const recentEmployees = employees.slice(0, 5);
+  const recentTestRequests = testRequests.slice(0, 5);
+  const pendingRequests = testRequests.filter(tr => tr.status !== 'Completed').length;
 
   return (
     <>
       <TopNav title="Dashboard" />
 
-      <div className="page-content">
-        <div className="page-header">
-          <div>
-            <h2 className="page-title">Welcome back 👋</h2>
-            <p className="page-subtitle">Here&apos;s what&apos;s happening in your lab today.</p>
-          </div>
-        </div>
+      <div className="page-content" style={{ backgroundColor: '#f0f4f8', minHeight: 'calc(100vh - 70px)', padding: '24px' }}>
+        {loading ? (
+          <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading your dashboard...</div>
+        ) : (
+          <div style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+            
+            <div style={{ marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '1.8rem', color: '#0f172a', margin: '0 0 8px 0' }}>
+                Welcome back, {user?.name || 'Corporate Admin'} 👋
+              </h2>
+              <p style={{ color: '#64748b', margin: 0 }}>Here is what is happening with your employees and test requests today.</p>
+            </div>
 
-        <div className="stats-grid">
-          {stats.map(stat => (
-            <div key={stat.label} className="stat-card">
-              <div className={`stat-icon ${stat.color}`}>{stat.icon}</div>
-              <div>
-                <div className="stat-value">
-                  {loading ? <span className="loading">—</span> : stat.value}
+            {/* KPI Cards section */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+              gap: '20px', 
+              marginBottom: '30px' 
+            }}>
+              <DashboardCard 
+                title="Total Employees" 
+                value={employees.length} 
+                icon="👥" 
+                gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)" 
+              />
+              <DashboardCard 
+                title="Total Test Requests" 
+                value={testRequests.length} 
+                icon="🧪" 
+                gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)" 
+              />
+              <DashboardCard 
+                title="Pending Tests" 
+                value={pendingRequests} 
+                icon="⏳" 
+                gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)" 
+              />
+            </div>
+
+            {/* Tables Section */}
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', 
+              gap: '24px' 
+            }}>
+              
+              {/* Recent Test Requests */}
+              <div className="card" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', backgroundColor: '#fff' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f9', borderRadius: '12px 12px 0 0', padding: '20px' }}>
+                  <h3 className="card-title" style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b' }}>Recent Test Requests</h3>
+                  <Link href="/corporate/dashboard/testrequest" style={{ fontSize: '0.85rem', color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}>
+                    View All →
+                  </Link>
                 </div>
-                <div className="stat-label">{stat.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">🚀 Quick Actions</span>
-            </div>
-            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <a href="/admin/dashboard/patients" className="btn btn-primary" id="quick-add-patient">➕ Add New Patient</a>
-              <a href="/admin/dashboard/test-requests" className="btn btn-ghost" id="quick-test-request">🧪 New Test Request</a>
-              <a href="/admin/dashboard/waiting-list" className="btn btn-ghost" id="quick-waiting-list">📋 View Waiting List</a>
-            </div>
-          </div>
-
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">📊 System Status</span>
-            </div>
-            <div className="card-body">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                {[
-                  { label: 'Node.js API', status: true },
-                  { label: 'Database', status: true },
-                  { label: 'Prisma ORM', status: true },
-                  { label: 'Next.js UI', status: true },
-                ].map(s => (
-                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.875rem' }}>{s.label}</span>
-                    <span className={`badge ${s.status ? 'badge-success' : 'badge-danger'}`}>
-                      {s.status ? '● Online' : '● Offline'}
-                    </span>
+                <div className="card-body" style={{ padding: 0 }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Request ID</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Title</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Employees</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentTestRequests.length === 0 ? (
+                          <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No recent test requests found.</td></tr>
+                        ) : (
+                          recentTestRequests.map((tr, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #edf2f9', transition: 'background-color 0.2s' }}>
+                              <td style={{ padding: '16px 20px', color: '#3b82f6', fontWeight: 500 }}>#{tr.id}</td>
+                              <td style={{ padding: '16px 20px', color: '#334155', fontWeight: 500 }}>{tr.title || 'N/A'}</td>
+                              <td style={{ padding: '16px 20px', color: '#475569' }}>{tr.numberOfEmployee || 0}</td>
+                              <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                {tr.creation_timestamp ? formatDate(tr.creation_timestamp) : (tr.creationTimestamp || 'N/A')}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
-                ))}
+                </div>
               </div>
+
+              {/* Recent Employees */}
+              <div className="card" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', backgroundColor: '#fff' }}>
+                <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #edf2f9', borderRadius: '12px 12px 0 0', padding: '20px' }}>
+                  <h3 className="card-title" style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b' }}>Recently Added Employees</h3>
+                  <Link href="/corporate/dashboard/employee" style={{ fontSize: '0.85rem', color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}>
+                    View All →
+                  </Link>
+                </div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Employee ID</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Name</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Department</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Added Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentEmployees.length === 0 ? (
+                          <tr><td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>No employees found.</td></tr>
+                        ) : (
+                          recentEmployees.map((emp, i) => (
+                            <tr key={i} style={{ borderBottom: '1px solid #edf2f9', transition: 'background-color 0.2s' }}>
+                              <td style={{ padding: '16px 20px', color: '#10b981', fontWeight: 500 }}>{emp.employee_id || emp.id}</td>
+                              <td style={{ padding: '16px 20px', color: '#334155' }}>
+                                <div style={{ fontWeight: 500 }}>{emp.first_name} {emp.last_name}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{emp.email}</div>
+                              </td>
+                              <td style={{ padding: '16px 20px', color: '#64748b' }}>
+                                <span style={{ 
+                                  backgroundColor: '#f1f5f9', 
+                                  color: '#475569',
+                                  padding: '4px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                }}>
+                                  {emp.department || 'General'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                 {emp.creation_timestamp ? formatDate(emp.creation_timestamp) : 'N/A'}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="card" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', backgroundColor: '#fff', gridColumn: '1 / -1' }}>
+                <div className="card-header" style={{ borderBottom: '1px solid #edf2f9', borderRadius: '12px 12px 0 0', padding: '20px' }}>
+                  <h3 className="card-title" style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b' }}>🚀 Quick Actions</h3>
+                </div>
+                <div className="card-body" style={{ padding: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                  <Link href="/corporate/dashboard/employee" style={quickActionStyle('#e0e7ff', '#4f46e5')}>
+                    <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>👥</span>
+                    <span style={{ fontWeight: 600 }}>Manage Employees</span>
+                  </Link>
+                  <Link href="/corporate/dashboard/testrequest" style={quickActionStyle('#fce7f3', '#db2777')}>
+                    <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🧪</span>
+                    <span style={{ fontWeight: 600 }}>New Test Request</span>
+                  </Link>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   );
 }
+
+function DashboardCard({ title, value, icon, gradient }: { title: string, value: number, icon: string, gradient: string }) {
+  return (
+    <div style={{
+      background: '#fff',
+      borderRadius: '16px',
+      padding: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+      cursor: 'default',
+      position: 'relative',
+      overflow: 'hidden'
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = 'translateY(-5px)';
+      e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.03)';
+    }}
+    >
+      <div style={{
+        position: 'absolute',
+        top: 0, left: 0, width: '100%', height: '4px',
+        background: gradient
+      }} />
+      <div>
+        <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          {title}
+        </div>
+        <div style={{ color: '#0f172a', fontSize: '2rem', fontWeight: 800, lineHeight: 1 }}>
+          {value}
+        </div>
+      </div>
+      <div style={{
+        width: '56px', height: '56px',
+        borderRadius: '12px',
+        background: gradient,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.8rem',
+        color: '#fff',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+      }}>
+        {icon}
+      </div>
+    </div>
+  );
+}
+
+const quickActionStyle = (bg: string, color: string): React.CSSProperties => ({
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '24px',
+  backgroundColor: bg,
+  color: color,
+  borderRadius: '12px',
+  textDecoration: 'none',
+  minWidth: '200px',
+  flex: '1 1 auto',
+  transition: 'transform 0.2s',
+  border: `1px solid ${color}33`,
+});

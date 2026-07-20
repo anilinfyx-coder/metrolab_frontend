@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const b2bNavItems: NavItem[] = [
+  { href: '', label: 'Dashboard', icon: '📊', section: 'Overview' },
   { href: '/admindashboard', label: 'Admin Dashboard', icon: '🖥️', section: 'Lab Admin' },
   { href: '/users', label: 'Manage Staff Users', icon: '👥', section: 'Lab Admin' },
   { href: '/assigntestcategory', label: 'Assigned Test Category', icon: '📋', section: 'Lab Admin' },

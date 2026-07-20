@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const adminNavItems: NavItem[] = [
+  { href: '', label: 'Dashboard', icon: '📊', section: 'Overview' },
   { href: '/labtest', label: 'Waiting List', icon: '📋', section: 'Reports' },
   { href: '/manageothertest', label: 'Tests Reports', icon: '📝', section: 'Reports' },
   { href: '/testrequests', label: 'Manage Requests', icon: '🧪', section: 'Corporate' },

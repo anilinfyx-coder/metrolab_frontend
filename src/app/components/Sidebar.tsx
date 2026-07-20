@@ -96,10 +96,13 @@ export default function Sidebar({
             <div className="sidebar-section-label">{section}</div>
             {items.map(item => {
               const fullHref = `${basePath}${item.href}`;
-              const isActive = pathname === fullHref || pathname.startsWith(fullHref + '/');
+              const isActive = item.href === '' 
+                ? pathname === fullHref 
+                : (pathname === fullHref || pathname.startsWith(fullHref + '/'));
               return (
                 <Link
                   key={item.href}
+                  // @ts-ignore
                   href={fullHref}
                   className={`sidebar-link ${isActive ? 'active' : ''}`}
                   id={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}

@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const superAdminNavItems: NavItem[] = [
+  { href: '', label: 'Dashboard', icon: '📊', section: 'Overview' },
   { href: '/superadminstaff', label: 'Super Admin Staff', icon: '🔑', section: 'Master Configurations' },
   { href: '/documenttype', label: 'Document Type', icon: '📄', section: 'Master Configurations' },
   { href: '/specimentype', label: 'Specimen Type', icon: '🧪', section: 'Master Configurations' },
