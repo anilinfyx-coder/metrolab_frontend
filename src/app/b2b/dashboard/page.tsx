@@ -1,7 +1,20 @@
 'use client';
 import { useEffect, useState } from 'react';
+import {
+  MdAccountBalanceWallet,
+  MdAssignment,
+  MdBiotech,
+  MdBlock,
+  MdBusiness,
+  MdComputer,
+  MdLocalHospital,
+  MdRocketLaunch,
+  MdWarning,
+  MdWavingHand,
+} from 'react-icons/md';
 import Link from 'next/link';
 import TopNav from '../../components/TopNav';
+import { apiFetch } from '../../../lib/api';
 import { formatDate } from '../../utils/dateFormat';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -88,7 +101,7 @@ export default function B2bDashboardPage() {
                 border: `1px solid ${walletBalance <= 0 ? '#fecaca' : '#fef3c7'}`,
                 display: 'flex', gap: '12px', alignItems: 'flex-start'
               }}>
-                <div style={{ fontSize: '1.5rem', lineHeight: 1 }}>{walletBalance <= 0 ? '🚫' : '⚠️'}</div>
+                <div style={{ fontSize: '1.5rem', lineHeight: 1 }}>{walletBalance <= 0 ? <MdBlock size={20} aria-hidden /> : <MdWarning size={20} aria-hidden />}</div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '1rem', color: walletBalance <= 0 ? '#dc2626' : '#d97706', marginBottom: '4px' }}>
                     {walletBalance <= 0 ? 'Wallet Empty — Test submissions are blocked!' : 'Low Wallet Balance'}

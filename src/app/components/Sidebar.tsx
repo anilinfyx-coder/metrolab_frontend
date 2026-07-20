@@ -1,12 +1,15 @@
 'use client';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
+import { MdMenu } from 'react-icons/md';
+import { HiOutlineSwitchHorizontal } from 'react-icons/hi';
 
 export type NavItem = {
   href: string;
   label: string;
-  icon: string;
+  icon: ReactNode;
   section: string;
 };
 
@@ -44,19 +47,23 @@ export default function Sidebar({
 
   return (
     <aside className="sidebar">
-      {/* Logo */}
+      {/* Logo — same asset and presentation as login page */}
       <div className="sidebar-logo">
         <div className="sidebar-logo-left">
-          <div className="sidebar-logo-icon">ML</div>
-          <div>
-            <div className="sidebar-logo-text">METRO LAB</div>
-            <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.92)', fontStyle: 'italic', marginTop: '1px' }}>
-              Precision is our Home Mark
-            </div>
+          <div className="sidebar-brand-block">
+            <Image
+              src="/login-logo.png"
+              alt="Metro Lab"
+              width={280}
+              height={250}
+              priority
+              className="sidebar-brand-full"
+            />
+            <div className="sidebar-logo-tagline">Precision is our Home Mark</div>
           </div>
         </div>
         <button onClick={toggleSidebar} className="hamburger-btn" title="Toggle Menu">
-          ☰
+          <MdMenu size={20} aria-hidden />
         </button>
       </div>
 
@@ -120,7 +127,7 @@ export default function Sidebar({
       <div className="sidebar-footer" style={{ background: 'transparent', borderTop: '1px solid rgba(255,255,255,0.15)' }}>
         <div className="sidebar-link-text">
           <Link href="/" style={{ fontSize: '0.75rem', color: '#ffffff', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            ← Switch Portal
+            <HiOutlineSwitchHorizontal size={14} aria-hidden /> Switch Portal
           </Link>
         </div>
       </div>

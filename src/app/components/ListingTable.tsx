@@ -1,5 +1,17 @@
-'use client';
+﻿'use client';
 import { ReactNode, useMemo, useState } from 'react';
+import {
+  MdDelete,
+  MdDescription,
+  MdDownload,
+  MdEdit,
+  MdEmail,
+  MdLock,
+  MdLockOpen,
+  MdToggleOff,
+  MdToggleOn,
+  MdVisibility,
+} from 'react-icons/md';
 import TablePagination, { useClientPagination } from './TablePagination';
 
 export type ListingColumn<T> = {
@@ -88,17 +100,13 @@ export function ActionIcons({
       onClick={onEdit}
       disabled={editDisabled}
     >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-        <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
-      </svg>
+      <MdEdit size={15} aria-hidden />
     </button>
   ) : null;
 
   const deleteBtn = onDelete ? (
     <button type="button" className="action-btn action-btn-delete" title={deleteTitle} onClick={onDelete}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-        <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-      </svg>
+      <MdDelete size={14} aria-hidden />
     </button>
   ) : null;
 
@@ -106,26 +114,20 @@ export function ActionIcons({
     <button
       type="button"
       className={`action-btn action-btn-status${statusActive ? '' : ' inactive'}`}
-      title={statusTitle || (statusActive ? 'Active — click to disable' : 'Inactive — click to enable')}
+      title={statusTitle || (statusActive ? 'Active ΓÇö click to disable' : 'Inactive ΓÇö click to enable')}
       onClick={onToggleStatus}
     >
       {statusActive ? (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-        </svg>
+        <MdToggleOn size={18} aria-hidden />
       ) : (
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zM7 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-        </svg>
+        <MdToggleOff size={18} aria-hidden />
       )}
     </button>
   ) : null;
 
   const downloadBtn = onDownload ? (
     <button type="button" className="action-btn action-btn-download" title={downloadTitle} onClick={onDownload}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-      </svg>
+      <MdDownload size={15} aria-hidden />
     </button>
   ) : null;
 
@@ -137,39 +139,28 @@ export function ActionIcons({
       onClick={onLock}
     >
       {locked ? (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h2c0-1.66 1.34-3 3-3s3 1.34 3 3v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z" />
-        </svg>
+        <MdLock size={14} aria-hidden />
       ) : (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-          <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM9 6c0-1.66 1.34-3 3-3s3 1.34 3 3v2H9V6zm9 14H6V10h12v10z" />
-        </svg>
+        <MdLockOpen size={14} aria-hidden />
       )}
     </button>
   ) : null;
 
   const mailBtn = onMail ? (
     <button type="button" className="action-btn action-btn-mail" title={mailTitle} onClick={onMail}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" />
-      </svg>
+      <MdEmail size={15} aria-hidden />
     </button>
   ) : null;
 
   const viewEyeBtn = onView ? (
     <button type="button" className="action-btn action-btn-view-eye" title={viewTitle} onClick={onView}>
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
+      <MdVisibility size={16} aria-hidden />
     </button>
   ) : null;
 
   const viewDocBtn = onView ? (
     <button type="button" className="action-btn action-btn-view" title={viewTitle} onClick={onView}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z" />
-      </svg>
+      <MdDescription size={15} aria-hidden />
     </button>
   ) : null;
 
@@ -330,9 +321,9 @@ export default function ListingTable<T extends { id: number | string }>({
                           >
                             {col.label}
                             {sortKey === col.key && (
-                              <span aria-hidden>{sortAsc ? '▲' : '▼'}</span>
+                              <span aria-hidden>{sortAsc ? 'Γû▓' : 'Γû╝'}</span>
                             )}
-                            {sortKey !== col.key && <span className="th-sort-hint" aria-hidden>⇅</span>}
+                            {sortKey !== col.key && <span className="th-sort-hint" aria-hidden>Γçà</span>}
                           </button>
                         ) : (
                           col.label
@@ -372,7 +363,7 @@ export default function ListingTable<T extends { id: number | string }>({
                             wordBreak: 'break-word',
                           }}
                         >
-                          {col.render ? col.render(row) : (getCellText(row, col) || '—')}
+                          {col.render ? col.render(row) : (getCellText(row, col) || 'ΓÇö')}
                         </td>
                       ))}
                       {rowActions && <td style={{ width: actionsWidth }}>{rowActions(row)}</td>}

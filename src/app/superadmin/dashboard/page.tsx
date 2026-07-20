@@ -3,10 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import TopNav from '../../components/TopNav';
 import { formatDate } from '../../utils/dateFormat';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch } from '../../../lib/api';
 
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<any>(null);

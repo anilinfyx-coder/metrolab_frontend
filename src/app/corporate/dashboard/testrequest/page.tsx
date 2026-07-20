@@ -1,13 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { FileDown, Mail } from 'lucide-react';
+import { MdDownload, MdEmail, MdVisibility } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ListingColumn } from '../../../components/ListingTable';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
   try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
@@ -89,26 +88,25 @@ export default function TestRequestsPage() {
     setLoading(true);
     const user = getStoredUser();
     const query = user?.id ? `?corporate_client_id=${user.id}` : '';
-    const [rRes, eRes] = await Promise.all([
-      fetch(`${API}/api/TestRequest/getTestRequestList`, { method: 'POST', headers: { token: getToken() } }),
-      fetch(`${API}/api/Employees${query}`, { headers: { token: getToken() } })
-    ]);
-    const parseJson = async (res: Response, name: string) => {
-      try {
-        const text = await res.text();
-        return JSON.parse(text);
-      } catch (err) {
-        console.error(`Error parsing JSON for ${name} from URL ${res.url}. Status: ${res.status}. Body:`, err);
-        return { response_code: '500', obj: [] };
-      }
-    };
-
-    const trD = await parseJson(rRes, 'TestRequest');
-    const empD = await parseJson(eRes, 'Employees');
-
-    if (trD.response_code === '200') setRequests(trD.obj || []);
-    if (empD.response_code === '200') setEmployees(empD.obj || []);
-    
+    try {
+      const trD = await apiFetch<TestRequest[]>('/api/TestRequest/getTestRequestList', {
+        method: 'POST',
+        tokenKey: 'corporate_token',
+        errorFallback: 'Unable to load test requests.',
+      });
+      setRequests(trD || []);
+    } catch {
+      setRequests([]);
+    }
+    try {
+      const empD = await apiFetch<EmployeeRecord[]>(`/api/Employees${query}`, {
+        tokenKey: 'corporate_token',
+        errorFallback: 'Unable to load employees.',
+      });
+      setEmployees(empD || []);
+    } catch {
+      setEmployees([]);
+    }
     setLoading(false);
   };
 
@@ -124,8 +122,8 @@ export default function TestRequestsPage() {
   }
 
   const generateAndSubmit = async () => {
-    if (!form.title) return alert("Request Title is mandatory");
-    if (!form.reasonForTest) return alert("Reason for test is mandatory");
+    if (!form.title) return toastApiError("Request Title is mandatory");
+    if (!form.reasonForTest) return toastApiError("Reason for test is mandatory");
 
     const total = employees.length;
     const altC = form.alternateCount || 0;
@@ -136,8 +134,8 @@ export default function TestRequestsPage() {
     let drugC = form.drugCount || 0;
     if (form.selectionType === '2') drugC = Math.ceil((drugC / 100) * total);
 
-    if (altC + drugC > total) return alert("Count in Drug + Alternate exceeds total employees");
-    if (altC + alcC > total) return alert("Count in Alcohol + Alternate exceeds total employees");
+    if (altC + drugC > total) return toastApiError("Count in Drug + Alternate exceeds total employees");
+    if (altC + alcC > total) return toastApiError("Count in Alcohol + Alternate exceeds total employees");
 
     const ok = await confirmDialog({
       title: 'This is Random Pulling, Please confirm',
@@ -150,7 +148,6 @@ export default function TestRequestsPage() {
     setSaving(true);
 
     let emps = [...employees];
-    
     // Assign Alternate
     emps.forEach(e => e.isSelectedForAlternate = false);
     emps.sort(() => Math.random() - 0.5);
@@ -178,21 +175,20 @@ export default function TestRequestsPage() {
       employeesList: emps
     };
 
-    const res = await fetch(`${API}/api/TestRequest/saveTestRequestInBulk`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(payload)
-    });
-    
-    setSaving(false);
-    
-    const data = await res.json();
-    if (data.response_code === '200') {
-      alert("Successfully generated test request");
+    try {
+      await apiFetch('/api/TestRequest/saveTestRequestInBulk', {
+        method: 'POST',
+        tokenKey: 'corporate_token',
+        body: JSON.stringify(payload),
+        successMessage: 'Successfully generated test request',
+        errorFallback: 'Unable to generate test request.',
+      });
       setViewMode('LIST');
       loadData();
-    } else {
-      alert("Error: " + data.obj);
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -203,36 +199,32 @@ export default function TestRequestsPage() {
     setViewMode('VIEW');
     // Fetch full details including all summary fields + employees from GET /:id
     try {
-      const res = await fetch(`${API}/api/TestRequest/${r.id}`, {
-        headers: { token: getToken() }
+      const detail = await apiFetch<Record<string, unknown>>(`/api/TestRequest/${r.id}`, {
+        tokenKey: 'corporate_token',
+        errorFallback: 'Unable to load test request details.',
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        const detail = d.obj;
-        // Merge full detail into selectedRequest (camelCase names used by view)
-        setSelectedRequest({
-          id: detail.id,
-          title: detail.title,
-          reasonForTest: detail.reason_for_test,
-          testType: detail.test_type,
-          year: detail.year,
-          frequency: detail.frequency,
-          quarter: detail.quarter,
-          selectionType: detail.selection_type,
-          drugCount: detail.drug_count,
-          alcoholCount: detail.alcohol_count,
-          alternateCount: detail.alternate_count,
-          totalCount: detail.total_count,
-          totalSelectedCount: detail.total_selected_count,
-          corporateClientCompany: detail.corporateClientCompany,
-          b2bClientCompany: detail.b2bClientCompany,
-          creationTimestamp: detail.creationTimestamp,
-          allSubmitStatus: detail.status,
-        });
-        setSelectedRequestEmployees(detail.employees || []);
-      }
-    } catch (e) {
-      console.error('Failed to fetch test request detail', e);
+      setSelectedRequest({
+        id: Number(detail.id),
+        title: String(detail.title || ''),
+        reasonForTest: detail.reason_for_test as string | undefined,
+        testType: detail.test_type as string | undefined,
+        year: String(detail.year || ''),
+        frequency: String(detail.frequency || ''),
+        quarter: detail.quarter as string | undefined,
+        selectionType: detail.selection_type as number | string | undefined,
+        drugCount: detail.drug_count as number | undefined,
+        alcoholCount: detail.alcohol_count as number | undefined,
+        alternateCount: detail.alternate_count as number | undefined,
+        totalCount: detail.total_count as number | undefined,
+        totalSelectedCount: detail.total_selected_count as number | undefined,
+        corporateClientCompany: detail.corporateClientCompany as string | undefined,
+        b2bClientCompany: detail.b2bClientCompany as string | undefined,
+        creationTimestamp: detail.creationTimestamp as string | undefined,
+        allSubmitStatus: detail.status as boolean | undefined,
+      });
+      setSelectedRequestEmployees((detail.employees as EmployeeRecord[]) || []);
+    } catch {
+      /* toast handled by apiFetch */
     } finally {
       setViewLoading(false);
     }
@@ -241,35 +233,35 @@ export default function TestRequestsPage() {
 
   const emailReport = async (testRequestId: number, employeeId: number) => {
     try {
-      const res = await fetch(`${API}/api/TestRequest/emailTestRequestReport`, {
+      await apiFetch('/api/TestRequest/emailTestRequestReport', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify({ test_request_id: testRequestId, employee_id: employeeId })
+        tokenKey: 'corporate_token',
+        body: JSON.stringify({ test_request_id: testRequestId, employee_id: employeeId }),
+        successMessage: 'Report emailed successfully.',
+        errorFallback: 'Failed to email report.',
       });
-      const data = await res.json();
-      if (data.response_code === '200') {
-        alert("Report emailed successfully.");
-      } else {
-        alert("Failed to email report: " + data.obj);
-      }
-    } catch (error: unknown) {
-      alert("Error: " + (error instanceof Error ? error.message : 'Unable to email report'));
+    } catch {
+      /* toast handled by apiFetch */
     }
   };
 
   const downloadRequest = async (id: number) => {
-    const res = await fetch(`${API}/api/TestRequest/downloadTestRequestReport`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id }),
-    });
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `TR-${id}-Report.pdf`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    try {
+      const blob = await apiFetch<Blob>('/api/TestRequest/downloadTestRequestReport', {
+        method: 'POST',
+        tokenKey: 'corporate_token',
+        body: JSON.stringify({ id }),
+        errorFallback: 'Unable to download report.',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `TR-${id}-Report.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const requestColumns: ListingColumn<TestRequest>[] = [
@@ -368,9 +360,7 @@ export default function TestRequestsPage() {
                     title="Download Test Request"
                     onClick={() => downloadRequest(request.id)}
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                      <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
-                    </svg>
+                    <MdDownload size={15} aria-hidden />
                   </button>
                   <button
                     type="button"
@@ -378,10 +368,7 @@ export default function TestRequestsPage() {
                     title="View Test Request"
                     onClick={() => viewRequest(request)}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
+                    <MdVisibility size={16} aria-hidden />
                   </button>
                 </div>
               )}
@@ -702,8 +689,8 @@ export default function TestRequestsPage() {
                               <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Pending</span>
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
-                                <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><FileDown size={12} /></button>
-                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
+                                <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdDownload size={12} /></button>
+                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdEmail size={12} /></button>
                               </div>
                             )}
                           </div>
@@ -719,8 +706,8 @@ export default function TestRequestsPage() {
                               <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Pending</span>
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
-                                <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><FileDown size={12} /></button>
-                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><Mail size={12} /></button>
+                                <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdDownload size={12} /></button>
+                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdEmail size={12} /></button>
                               </div>
                             )}
                           </div>

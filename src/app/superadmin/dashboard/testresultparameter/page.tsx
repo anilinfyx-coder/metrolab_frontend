@@ -1,10 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { MdAdd, MdClose, MdDelete, MdEdit, MdHourglassEmpty, MdRefresh, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch } from '../../../../lib/api';
 
 interface TestResultParameter {
   id: number;
@@ -44,49 +43,57 @@ export default function TestResultParameterPage() {
   const [form, setForm] = useState<Record<string, string | boolean>>({ ...emptyForm });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [search, setSearch] = useState('');
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    fetch(`${API}/api/ReportRequestParameters`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setParams(d.obj || []); })
-      .catch(() => setParams([]))
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<TestResultParameter[]>('/api/ReportRequestParameters', { tokenKey: 'superadmin_token' });
+      setParams(data || []);
+    } catch {
+      setParams([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const loadDocTypes = () => {
-    fetch(`${API}/api/TypeData`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setDocTypes(d.obj || []); });
+  const loadDocTypes = async () => {
+    try {
+      const data = await apiFetch<DocType[]>('/api/TypeData', { tokenKey: 'superadmin_token' });
+      setDocTypes(data || []);
+    } catch {
+      setDocTypes([]);
+    }
   };
 
   useEffect(() => { loadData(); loadDocTypes(); }, []);
 
   const save = async () => {
-    setSaving(true); setMsg(null);
+    setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
-    const url = `${API}/api/ReportRequestParameters${editingId ? `/${editingId}` : ''}`;
+    const path = `/api/ReportRequestParameters${editingId ? `/${editingId}` : ''}`;
     const payload = {
       ...form,
       type_data_id: form.type_data_id || null,
       is_mandatory: form.is_mandatory === true || form.is_mandatory === 'true',
     };
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(payload)
-    });
-    const d = await res.json();
-    setSaving(false);
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: `Parameter ${editingId ? 'updated' : 'added'}.` });
+    try {
+      await apiFetch(path, {
+        method,
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify(payload),
+        successMessage: `Parameter ${editingId ? 'updated' : 'added'}.`,
+        errorFallback: 'Error saving.',
+      });
       setForm({ ...emptyForm });
       setEditingId(null);
       setView('list');
       loadData();
-    } else { setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Error saving.' }); }
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id: number) => {
@@ -97,16 +104,25 @@ export default function TestResultParameterPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/ReportRequestParameters/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadData();
+    try {
+      await apiFetch(`/api/ReportRequestParameters/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      loadData();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const toggleStatus = async (p: TestResultParameter) => {
-    await fetch(`${API}/api/ReportRequestParameters/${p.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !p.status })
-    });
-    loadData();
+    try {
+      await apiFetch(`/api/ReportRequestParameters/${p.id}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ status: !p.status }),
+      });
+      loadData();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const openEdit = (p: TestResultParameter) => {
@@ -118,7 +134,6 @@ export default function TestResultParameterPage() {
       description: p.description || '', is_mandatory: p.is_mandatory || false,
       type_data_id: String(p.type_data_id || ''),
     });
-    setMsg(null);
     setView('form');
   };
 
@@ -140,14 +155,9 @@ export default function TestResultParameterPage() {
     return (
       <div className="page-content">
         <TopNav title={editingId ? 'Edit Test Result Parameter' : 'Add Test Result Parameter'}>
-          <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+          <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
         <div style={{ padding: '1.5rem' }}>
-          {msg && (
-            <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>
-              {msg.text}
-            </div>
-          )}
           <div className="card">
             <div className="card-header"><span className="card-title">Test Result Parameter Detail</span></div>
             <div className="card-body">
@@ -194,8 +204,8 @@ export default function TestResultParameterPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? '⏳ Saving...' : '💾 Save'}</button>
-                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyForm }); setMsg(null); }}>🔄 Reset</button>
+                <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}</button>
+                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyForm }); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
               </div>
             </div>
           </div>
@@ -209,18 +219,12 @@ export default function TestResultParameterPage() {
       <TopNav title="Test Result Parameters">
         <input type="text" placeholder="Search parameters..." value={search} onChange={e => setSearch(e.target.value)}
           style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 240 }} />
-        <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm }); setMsg(null); setView('form'); }}>
-          ➕ Add Parameter
+        <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm }); setView('form'); }}>
+          <MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Parameter
         </button>
       </TopNav>
 
       <div style={{ padding: '1.5rem' }}>
-        {msg && (
-          <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>
-            {msg.text}
-          </div>
-        )}
-
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>
             {loading ? (
@@ -251,9 +255,9 @@ export default function TestResultParameterPage() {
                         <span className={`badge ${p.status ? 'badge-success' : 'badge-danger'}`}>{p.status ? 'Active' : 'Inactive'}</span>
                       </td>
                       <td style={{ padding: '0.75rem 1rem', display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => openEdit(p)}>✏️ Edit</button>
+                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => openEdit(p)}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
                         <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem' }} onClick={() => toggleStatus(p)}>⚡ {p.status ? 'Disable' : 'Enable'}</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem', color: '#ef4444' }} onClick={() => remove(p.id)}>🗑 Delete</button>
+                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.75rem', color: '#ef4444' }} onClick={() => remove(p.id)}><MdDelete size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Delete</button>
                       </td>
                     </tr>
                   ))}

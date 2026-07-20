@@ -3,11 +3,12 @@ import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { MdPeople, MdScience } from 'react-icons/md';
 
 const corporateNavItems: NavItem[] = [
   { href: '', label: 'Dashboard', icon: '📊', section: 'Overview' },
-  { href: '/employee', label: 'Employees', icon: '👥', section: 'Corporate' },
-  { href: '/testrequest', label: 'Test Requests', icon: '🧪', section: 'Corporate' },
+  { href: '/employee', label: 'Employees', icon: <MdPeople size={18} />, section: 'Corporate' },
+  { href: '/testrequest', label: 'Test Requests', icon: <MdScience size={18} />, section: 'Corporate' },
 ];
 
 export default function CorporateDashboardLayout({ children }: { children: React.ReactNode }) {

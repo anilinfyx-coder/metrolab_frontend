@@ -1,6 +1,8 @@
 'use client';
 import { useState, FormEvent } from 'react';
+import { MdCheckCircle, MdHourglassEmpty } from 'react-icons/md';
 import Link from 'next/link';
+import { apiFetch, toastApiError } from '../../lib/api';
 
 export default function CorporateRegistrationPage() {
   const [form, setForm] = useState({
@@ -17,28 +19,24 @@ export default function CorporateRegistrationPage() {
   });
   
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [otpGenerated, setOtpGenerated] = useState(false);
 
-  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-
   const handleGenerateOTP = async () => {
     if (!form.email || !form.mobile) {
-      setError('Please provide email and mobile to generate OTP.');
+      toastApiError('Please provide email and mobile to generate OTP.');
       return;
     }
     setLoading(true);
-    setError('');
     try {
       // In a real integration, call the actual OTP generation API
-      // const res = await fetch(`${API}/api/Auth/generate-otp`, { method: 'POST', body: JSON.stringify({ email: form.email, mobile: form.mobile }) });
+      // await apiFetch('/api/Auth/generate-otp', { skipAuth: true, method: 'POST', body: JSON.stringify({ email: form.email, mobile: form.mobile }) });
       
       // Simulating API Call
       await new Promise(r => setTimeout(r, 1000));
       setOtpGenerated(true);
     } catch {
-      setError('Unable to generate OTP.');
+      toastApiError('Unable to generate OTP.');
     } finally {
       setLoading(false);
     }
@@ -47,28 +45,23 @@ export default function CorporateRegistrationPage() {
   const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.otp) {
-      setError('Please enter the OTP.');
+      toastApiError('Please enter the OTP.');
       return;
     }
     
     setLoading(true);
-    setError('');
     
     try {
-      const res = await fetch(`${API}/api/CorporateClient/register`, {
+      await apiFetch('/api/CorporateClient/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        skipAuth: true,
+        acceptHttpOk: true,
         body: JSON.stringify(form),
+        errorFallback: 'Error registering account',
       });
-      const data = await res.json();
-      
-      if (data.response_code === '200' || res.ok) {
-        setSuccess(true);
-      } else {
-        setError(typeof data.obj === 'string' ? data.obj : data.message || 'Error registering account');
-      }
+      setSuccess(true);
     } catch {
-      setError('Unable to connect to server. Please try again.');
+      /* toast handled by apiFetch */
     } finally {
       setLoading(false);
     }
@@ -136,7 +129,8 @@ export default function CorporateRegistrationPage() {
               borderRadius: 6, padding: '1rem', marginBottom: '1.5rem',
               fontSize: '0.9rem', color: '#27ae60',
             }}>
-              ✅ Registration successful! Your account has been created.
+              <MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />
+              Registration successful! Your account has been created.
             </div>
             <Link href="/" style={{ color: '#18BADD', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 500 }}>
               ← Proceed to Login
@@ -156,16 +150,6 @@ export default function CorporateRegistrationPage() {
               {inp('pincode', 'Pincode')}
             </div>
 
-            {error && (
-              <div style={{
-                background: 'rgba(231,76,60,0.08)', border: '1px solid rgba(231,76,60,0.2)',
-                borderRadius: 6, padding: '0.65rem 0.9rem', marginBottom: '1rem',
-                fontSize: '0.83rem', color: '#c0392b',
-              }}>
-                ⚠️ {error}
-              </div>
-            )}
-
             <div style={{ marginTop: '1rem' }}>
               {!otpGenerated ? (
                 <button
@@ -180,7 +164,7 @@ export default function CorporateRegistrationPage() {
                     fontFamily: 'inherit', transition: 'background 0.15s',
                   }}
                 >
-                  {loading ? '⏳ Generating...' : 'Generate OTP'}
+                  {loading ? <><MdHourglassEmpty size={16} aria-hidden /> Generating...</> : 'Generate OTP'}
                 </button>
               ) : (
                 <form onSubmit={handleRegister}>
@@ -197,7 +181,7 @@ export default function CorporateRegistrationPage() {
                         fontFamily: 'inherit', transition: 'background 0.15s',
                       }}
                     >
-                      {loading ? '⏳ Registering...' : 'Complete Registration'}
+                      {loading ? <><MdHourglassEmpty size={16} aria-hidden /> Registering...</> : 'Complete Registration'}
                     </button>
                     <button
                       type="button"

@@ -1,8 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { MdClose } from 'react-icons/md';
+import { apiFetch, handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
 
 function formatCutoff(value?: string | null, unit?: string | null) {
   if (value === null || value === undefined || value === '' || value === 'Null' || value === 'null') {
@@ -31,37 +30,43 @@ export default function ApplyTestForm({
   const [loading, setLoading] = useState(true);
   const [selectedTestId, setSelectedTestId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const [formData, setFormData] = useState<any>({});
   const isPage = variant === 'page';
 
   useEffect(() => {
-    fetch(`${API}/api/WaitingList/${waitingListId}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200') {
-          setData(d.obj);
-          const initialForm: any = {};
-          d.obj.labTestList.forEach((t: any) => {
-            initialForm[t.id] = {
-              collectedDate: '', collectedTime: '', receivedDate: '', receivedTime: '',
-              reportedDate: '', reportedTime: '', regulation: 'Non-DOT', specimenTypeId: t.specimenTypeList?.[0]?.id || '',
-              dateOfTest: '', dateOfTime: '', testPerformedBy: '', reportStatus: 'Pending',
-              reasonForTest: d.obj.reason_for_test || '',
-              fasting: '1', requisitionNo: '', deviceIdentifier: '',
-              lot: '', expiryDate: '', dateRead: '', mmIndurations: '', followUp: 'None',
-              finalResult: '1', finalResultText: '', testRemark: '', referenceRangeNote: '',
-              clinicalSignificanceNote: '', resultInterpretationNote: '', finalResultDisposition: 'Negative',
-              finalRemark: '', dateAdministered: '', appliedToArm: 'Right Arm',
-              confirmed: false,
-              questions: t.testReportQuestionList.map((q: any) => ({ ...q, value: q.answer_type === 1 ? 'Yes' : '' })),
-              parameters: t.testResultParameterList.map((p: any) => ({ ...p, value: '' }))
-            };
-          });
-          setFormData(initialForm);
-        }
-      })
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/WaitingList/${waitingListId}`, {
+          headers: { token: getToken('admin_token') },
+        });
+        const obj = await handleApiResponse<any>(res, {
+          errorFallback: 'Failed to load test details.',
+        });
+        setData(obj);
+        const initialForm: any = {};
+        obj.labTestList.forEach((t: any) => {
+          initialForm[t.id] = {
+            collectedDate: '', collectedTime: '', receivedDate: '', receivedTime: '',
+            reportedDate: '', reportedTime: '', regulation: 'Non-DOT', specimenTypeId: t.specimenTypeList?.[0]?.id || '',
+            dateOfTest: '', dateOfTime: '', testPerformedBy: '', reportStatus: 'Pending',
+            reasonForTest: obj.reason_for_test || '',
+            fasting: '1', requisitionNo: '', deviceIdentifier: '',
+            lot: '', expiryDate: '', dateRead: '', mmIndurations: '', followUp: 'None',
+            finalResult: '1', finalResultText: '', testRemark: '', referenceRangeNote: '',
+            clinicalSignificanceNote: '', resultInterpretationNote: '', finalResultDisposition: 'Negative',
+            finalRemark: '', dateAdministered: '', appliedToArm: 'Right Arm',
+            confirmed: false,
+            questions: t.testReportQuestionList.map((q: any) => ({ ...q, value: q.answer_type === 1 ? 'Yes' : '' })),
+            parameters: t.testResultParameterList.map((p: any) => ({ ...p, value: '' }))
+          };
+        });
+        setFormData(initialForm);
+      } catch {
+        // Error toast handled by handleApiResponse
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [waitingListId]);
 
   if (loading) {
@@ -123,11 +128,10 @@ export default function ApplyTestForm({
   const handleSubmit = async () => {
     if (!test) return;
     if (!form.confirmed) {
-      alert('Please confirm the test results by checking the box at the bottom.');
+      toastApiError('Please confirm the test results by checking the box at the bottom.');
       return;
     }
     setSaving(true);
-    setMsg(null);
     try {
       const payload = {
         waiting_list_id: waitingListId,
@@ -135,29 +139,25 @@ export default function ApplyTestForm({
         b2b_client_id: data.b2b_client_id,
         ...form
       };
-      const res = await fetch(`${API}/api/LabTestReport`, {
+      await apiFetch('/api/LabTestReport', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify(payload)
+        tokenKey: 'admin_token',
+        body: JSON.stringify(payload),
+        successMessage: 'Test report submitted successfully!',
+        errorFallback: 'Failed to submit test report.',
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        alert('Test report submitted successfully!');
-        setData((prev: any) => {
-          const newList = prev.labTestList.map((t: any) =>
-            t.id === test.id ? { ...t, submitStatus: true } : t
-          );
-          if (newList.every((t: any) => t.submitStatus)) {
-            setTimeout(() => onSuccess(), 0);
-          }
-          return { ...prev, labTestList: newList };
-        });
-        setSelectedTestId(null);
-      } else {
-        setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : JSON.stringify(d.obj) });
-      }
-    } catch (e: any) {
-      setMsg({ type: 'error', text: e.message });
+      setData((prev: any) => {
+        const newList = prev.labTestList.map((t: any) =>
+          t.id === test.id ? { ...t, submitStatus: true } : t
+        );
+        if (newList.every((t: any) => t.submitStatus)) {
+          setTimeout(() => onSuccess(), 0);
+        }
+        return { ...prev, labTestList: newList };
+      });
+      setSelectedTestId(null);
+    } catch {
+      // Error toast handled by apiFetch
     }
     setSaving(false);
   };
@@ -203,7 +203,7 @@ export default function ApplyTestForm({
           background: 'var(--bg-card)',
         }}>
           <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Patient Demographics & Apply Test</h2>
-          <button type="button" className="btn btn-ghost" onClick={onClose}>✕ Close</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </div>
       )}
 
@@ -246,7 +246,6 @@ export default function ApplyTestForm({
               onClick={() => {
                 if (t.submitStatus) return;
                 setSelectedTestId(t.id);
-                setMsg(null);
               }}
               disabled={t.submitStatus}
             >
@@ -259,8 +258,6 @@ export default function ApplyTestForm({
           <div className="card wl-test-form-card">
             <h3 className="wl-test-form-title">{test.name}</h3>
             <div className="card-body wl-test-form-body">
-              {msg && <div className={`alert alert-${msg.type}`} style={{ marginBottom: '1rem', color: msg.type === 'error' ? 'red' : 'green' }}>{msg.text}</div>}
-
               <div className="wl-form-row wl-form-row-2">
                 {test.show_regulation && (
                   <div className="form-group">

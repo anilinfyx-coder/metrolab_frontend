@@ -1,12 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Pencil, Save, RotateCcw, Plus } from 'lucide-react';
+import { MdAdd, MdEdit, MdRefresh, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
   try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
@@ -48,23 +47,29 @@ export default function EmployeePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadEmployees = () => {
+  const loadEmployees = async () => {
     setLoading(true);
     const user = getStoredUser();
     const query = user?.id ? `?corporate_client_id=${user.id}` : '';
-    fetch(`${API}/api/Employees${query}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setEmployees(d.obj || []); })
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<Employee[]>(`/api/Employees${query}`, {
+        tokenKey: 'corporate_token',
+        errorFallback: 'Unable to load employees.',
+      });
+      setEmployees(data || []);
+    } catch {
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     void Promise.resolve().then(loadEmployees);
   }, []);
 
-  const openAdd = () => { setEditingId(null); setForm({ ...emptyForm }); setMsg(null); setShowForm(true); };
+  const openAdd = () => { setEditingId(null); setForm({ ...emptyForm }); setShowForm(true); };
   
   const openEdit = (e: Employee) => {
     setEditingId(e.id);
@@ -79,19 +84,21 @@ export default function EmployeePage() {
       dob_year: dobParts[0] || '', dob_month: String(parseInt(dobParts[1]) || 1), dob_day: String(parseInt(dobParts[2]) || 1),
       gender: employeeValues.gender || '1'
     });
-    setMsg(null); setShowForm(true);
+    setShowForm(true);
   };
 
   const save = async () => {
     if (!form.first_name || !form.last_name || !form.mobile) {
-      setMsg({ type: 'error', text: 'First Name, Last Name, and Mobile are required.' }); return;
+      toastApiError('First Name, Last Name, and Mobile are required.');
+      return;
     }
     const mobileRegex = /^[0-9]{10}$/;
     if (!mobileRegex.test(form.mobile as string)) {
-      setMsg({ type: 'error', text: 'Mobile number must be exactly 10 digits.' }); return;
+      toastApiError('Mobile number must be exactly 10 digits.');
+      return;
     }
 
-    setSaving(true); setMsg(null);
+    setSaving(true);
     const dobString = form.dob_year
       ? `${form.dob_year}-${String(form.dob_month).padStart(2, '0')}-${String(form.dob_day).padStart(2, '0')}`
       : null;
@@ -106,20 +113,21 @@ export default function EmployeePage() {
     };
 
     const method = editingId ? 'PUT' : 'POST';
-    const url = `${API}/api/Employees${editingId ? `/${editingId}` : ''}`;
-    
-    const res = await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(payload)
-    });
-    const d = await res.json();
-    setSaving(false);
+    const path = `/api/Employees${editingId ? `/${editingId}` : ''}`;
 
-    if (d.response_code === '200') {
+    try {
+      await apiFetch(path, {
+        method,
+        tokenKey: 'corporate_token',
+        body: JSON.stringify(payload),
+        errorFallback: 'Unable to save employee.',
+      });
       setShowForm(false);
       loadEmployees();
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : JSON.stringify(d.obj) });
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -131,16 +139,30 @@ export default function EmployeePage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/Employees/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadEmployees();
+    try {
+      await apiFetch(`/api/Employees/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'corporate_token',
+        errorFallback: 'Unable to delete employee.',
+      });
+      loadEmployees();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const toggleStatus = async (e: Employee) => {
-    await fetch(`${API}/api/Employees/${e.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !e.status })
-    });
-    loadEmployees();
+    try {
+      await apiFetch(`/api/Employees/${e.id}`, {
+        method: 'PUT',
+        tokenKey: 'corporate_token',
+        body: JSON.stringify({ status: !e.status }),
+        errorFallback: 'Unable to update employee status.',
+      });
+      loadEmployees();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const inp = (key: string, ph: string, type = 'text', maxLength?: number) => (
@@ -153,11 +175,10 @@ export default function EmployeePage() {
       <div className="page-content">
         <TopNav title="Employee Details" />
         <div style={{ padding: '1.5rem' }}>
-          {msg && <div style={{ background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`, borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444' }}>{msg.text}</div>}
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
               <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                {editingId ? <><Pencil size={18}/> Edit Employee</> : <><Plus size={18}/> Add Employee</>}
+                {editingId ? <><MdEdit size={18}/> Edit Employee</> : <><MdAdd size={18}/> Add Employee</>}
               </span>
               <button type="button" className="listing-header-link" onClick={() => setShowForm(false)}>
                 Close
@@ -233,10 +254,10 @@ export default function EmployeePage() {
 
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                 <button className="btn" onClick={save} disabled={saving} style={{ background: '#17a2b8', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.5rem' }}>
-                  <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+                  <MdSave size={16} /> {saving ? 'Saving...' : 'Save'}
                 </button>
-                <button className="btn" onClick={() => { setForm({ ...emptyForm }); setMsg(null); }} style={{ background: '#595959', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.5rem' }}>
-                  <RotateCcw size={16} /> Reset Data
+                <button className="btn" onClick={() => { setForm({ ...emptyForm }); }} style={{ background: '#595959', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.5rem 1.5rem' }}>
+                  <MdRefresh size={16} /> Reset Data
                 </button>
               </div>
             </div>

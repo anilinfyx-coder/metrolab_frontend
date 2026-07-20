@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { MdAdd, MdClose, MdDelete, MdEdit } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiFetch } from '../../../../lib/api';
 
 interface Patient {
   id: number;
@@ -34,18 +34,20 @@ export default function PatientsPage() {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
-  const headers = { 'Content-Type': 'application/json', token };
-
   const fetchPatients = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/Patient`, { headers });
-      const data = await res.json();
-      if (data.response_code === '200') setPatients(data.obj);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      const data = await apiFetch<Patient[]>('/api/Patient', {
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to load patients.',
+      });
+      setPatients(data || []);
+    } catch {
+      setPatients([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => { fetchPatients(); }, [fetchPatients]);
 
@@ -62,16 +64,21 @@ export default function PatientsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const url = editId ? `${API_BASE}/api/Patient/${editId}` : `${API_BASE}/api/Patient`;
+      const path = editId ? `/api/Patient/${editId}` : '/api/Patient';
       const method = editId ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers, body: JSON.stringify(form) });
-      const data = await res.json();
-      if (data.response_code === '200') {
-        setShowModal(false);
-        fetchPatients();
-      }
-    } catch { /* ignore */ }
-    finally { setSaving(false); }
+      await apiFetch(path, {
+        method,
+        tokenKey: 'b2b_token',
+        body: JSON.stringify(form),
+        errorFallback: editId ? 'Unable to update patient.' : 'Unable to add patient.',
+      });
+      setShowModal(false);
+      fetchPatients();
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -82,8 +89,16 @@ export default function PatientsPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API_BASE}/api/Patient/${id}`, { method: 'DELETE', headers });
-    fetchPatients();
+    try {
+      await apiFetch(`/api/Patient/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to delete patient.',
+      });
+      fetchPatients();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const genderLabel = (g: number | null) => g === 1 ? 'Male' : g === 2 ? 'Female' : 'Other';
@@ -91,7 +106,7 @@ export default function PatientsPage() {
   return (
     <>
       <TopNav title="Patients">
-          <button id="add-patient-btn" className="btn btn-primary" onClick={openAdd}>➕ Add Patient</button>
+          <button id="add-patient-btn" className="btn btn-primary" onClick={openAdd}><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Patient</button>
         </TopNav>
 
       <div className="page-content">
@@ -147,8 +162,8 @@ export default function PatientsPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost btn-sm" id={`edit-patient-${p.id}`} onClick={() => openEdit(p)}>✏️ Edit</button>
-                        <button className="btn btn-danger btn-sm" id={`del-patient-${p.id}`} onClick={() => handleDelete(p.id)}>🗑️</button>
+                        <button className="btn btn-ghost btn-sm" id={`edit-patient-${p.id}`} onClick={() => openEdit(p)}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
+                        <button className="btn btn-danger btn-sm" id={`del-patient-${p.id}`} onClick={() => handleDelete(p.id)}><MdDelete size={14} aria-hidden /></button>
                       </div>
                     </td>
                   </tr>
@@ -164,7 +179,7 @@ export default function PatientsPage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{editId ? 'Edit Patient' : 'Add New Patient'}</h2>
-              <button className="btn btn-ghost btn-sm" id="close-patient-modal" onClick={() => setShowModal(false)}>✕</button>
+              <button className="btn btn-ghost btn-sm" id="close-patient-modal" onClick={() => setShowModal(false)}><MdClose size={16} aria-hidden /></button>
             </div>
             <form onSubmit={handleSave}>
               <div className="modal-body">

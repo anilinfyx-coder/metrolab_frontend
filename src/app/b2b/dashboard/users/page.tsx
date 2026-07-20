@@ -1,11 +1,11 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { MdDelete, MdEdit, MdToggleOff, MdToggleOn } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import TablePagination, { useClientPagination } from '../../../components/TablePagination';
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
 function getUser() { return typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('b2b_user') || '{}') : {}; }
 
 interface B2BUser {
@@ -42,19 +42,23 @@ export default function B2BUsersPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...emptyForm });
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [filters, setFilters] = useState({ name: '', mobile: '', email: '', role: '' });
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
     const b2bId = getUser().id;
     const qs = b2bId ? `?user_id=${b2bId}` : '';
-    fetch(`${API}/api/AdminUsers${qs}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200') setUsers(d.obj || []);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<B2BUser[]>(`/api/AdminUsers${qs}`, {
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to load staff users.',
+      });
+      setUsers(data || []);
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -76,12 +80,11 @@ export default function B2BUsersPage() {
 
   const resetForm = () => {
     setForm({ ...emptyForm });
-    setMsg(null);
   };
 
   const save = async () => {
     if (!form.name.trim() || !form.email.trim() || !form.mobile.trim() || !form.role_id) {
-      setMsg({ type: 'error', text: 'Name, Email, Mobile No. and Role are required.' });
+      toastApiError('Name, Email, Mobile No. and Role are required.');
       return;
     }
 
@@ -89,16 +92,15 @@ export default function B2BUsersPage() {
     if (!form.id || form.password.trim()) {
       const pwdError = validatePassword(form.password);
       if (pwdError) {
-        setMsg({ type: 'error', text: pwdError });
+        toastApiError(pwdError);
         return;
       }
     }
 
     setSaving(true);
-    setMsg(null);
 
     const method = form.id ? 'PUT' : 'POST';
-    const url = `${API}/api/AdminUsers${form.id ? `/${form.id}` : ''}`;
+    const path = `/api/AdminUsers${form.id ? `/${form.id}` : ''}`;
     const b2b_client_id = getUser().id;
 
     const payload: Record<string, unknown> = {
@@ -113,23 +115,20 @@ export default function B2BUsersPage() {
       payload.password = form.password.trim();
     }
 
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(payload),
-    });
-    const d = await res.json();
-    setSaving(false);
-
-    if (d.response_code === '200') {
-      setMsg({
-        type: 'success',
-        text: `Staff user ${form.id ? 'updated' : 'added'}.`,
+    try {
+      await apiFetch(path, {
+        method,
+        tokenKey: 'b2b_token',
+        body: JSON.stringify(payload),
+        successMessage: `Staff user ${form.id ? 'updated' : 'added'}.`,
+        errorFallback: 'Unable to save staff user.',
       });
       resetForm();
       loadData();
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : JSON.stringify(d.obj) });
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -142,7 +141,6 @@ export default function B2BUsersPage() {
       role_id: String(u.role_id ?? 2),
       id: u.id,
     });
-    setMsg(null);
   };
 
   const remove = async (id: number) => {
@@ -153,24 +151,32 @@ export default function B2BUsersPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/AdminUsers/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    if (form.id === id) resetForm();
-    setMsg({ type: 'success', text: 'User deleted successfully.' });
-    loadData();
+    try {
+      await apiFetch(`/api/AdminUsers/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'b2b_token',
+        successMessage: 'User deleted successfully.',
+        errorFallback: 'Unable to delete user.',
+      });
+      if (form.id === id) resetForm();
+      loadData();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const toggleStatus = async (u: B2BUser) => {
-    const res = await fetch(`${API}/api/AdminUsers/${u.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !u.status }),
-    });
-    const d = await res.json();
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: 'Status Updated Successfully' });
+    try {
+      await apiFetch(`/api/AdminUsers/${u.id}`, {
+        method: 'PUT',
+        tokenKey: 'b2b_token',
+        body: JSON.stringify({ status: !u.status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
+      });
       loadData();
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Failed to update status.' });
+    } catch {
+      /* toast handled by apiFetch */
     }
   };
 
@@ -179,22 +185,6 @@ export default function B2BUsersPage() {
       <TopNav title="Manage Staff Users" />
 
       <div style={{ padding: '1.25rem 1.5rem' }}>
-        {msg && (
-          <div
-            style={{
-              background: msg.type === 'success' ? 'rgba(0,128,0,0.08)' : 'rgba(231,76,60,0.08)',
-              border: `1px solid ${msg.type === 'success' ? 'rgba(0,128,0,0.25)' : 'rgba(231,76,60,0.25)'}`,
-              borderRadius: 4,
-              padding: '0.55rem 0.75rem',
-              marginBottom: '1rem',
-              fontSize: '0.82rem',
-              color: msg.type === 'success' ? '#008000' : '#c0392b',
-            }}
-          >
-            {msg.text}
-          </div>
-        )}
-
         <div className="split-pane">
           {/* Left: Staff Users Detail form */}
           <div className="card">
@@ -350,9 +340,7 @@ export default function B2BUsersPage() {
                                 title="Edit"
                                 onClick={() => editUser(u)}
                               >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
-                                </svg>
+                                <MdEdit size={15} aria-hidden />
                               </button>
                               <button
                                 type="button"
@@ -361,13 +349,9 @@ export default function B2BUsersPage() {
                                 onClick={() => toggleStatus(u)}
                               >
                                 {u.status ? (
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                    <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-                                  </svg>
+                                  <MdToggleOn size={18} aria-hidden />
                                 ) : (
-                                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                    <path d="M17 7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h10c2.76 0 5-2.24 5-5s-2.24-5-5-5zM7 15c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z" />
-                                  </svg>
+                                  <MdToggleOff size={18} aria-hidden />
                                 )}
                               </button>
                               <button
@@ -376,9 +360,7 @@ export default function B2BUsersPage() {
                                 title="Delete"
                                 onClick={() => remove(u.id)}
                               >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-                                </svg>
+                                <MdDelete size={14} aria-hidden />
                               </button>
                             </div>
                           </td>

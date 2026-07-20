@@ -1,9 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
 interface TestCount {
   lab_test_id: number;
@@ -32,18 +30,17 @@ export default function B2BDashboardPage() {
   const [monthTotal, setMonthTotal] = useState(0);
   const [yearTotal, setYearTotal] = useState(0);
 
-  const fetchStats = async (startDate: string, endDate: string) => {
+  const fetchStats = async (startDate: string, endDate: string): Promise<TestCount[] | null> => {
     try {
-      const res = await fetch(`${API}/api/LabTestCategoryReport/getLabTestCategoryCountList`, {
+      return await apiFetch<TestCount[]>('/api/LabTestCategoryReport/getLabTestCategoryCountList', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        tokenKey: 'b2b_token',
         body: JSON.stringify({ startDate, endDate }),
-      });
-      const d = await res.json();
-      return d.response_code === '200' ? (d.obj || []) : [];
-    } catch (e) {
-      console.error(e);
-      return [];
+        errorFallback: 'Unable to load test statistics.',
+        showErrorToast: false,
+      }) || [];
+    } catch {
+      return null;
     }
   };
 
@@ -79,15 +76,19 @@ export default function B2BDashboardPage() {
       const lastDayOfYear = new Date(yDate.getFullYear(), 11, 31);
       const yearData = await fetchStats(formatDate(firstDayOfYear), formatDate(lastDayOfYear));
 
-      setTodayList(todayData);
-      setWeekList(weekData);
-      setMonthList(monthData);
-      setYearList(yearData);
+      if ([todayData, weekData, monthData, yearData].some(data => data === null)) {
+        toastApiError('Unable to load test statistics.');
+      }
 
-      setTodayTotal(todayData.reduce((acc: number, item: any) => acc + Number(item.labTestCount), 0));
-      setWeekTotal(weekData.reduce((acc: number, item: any) => acc + Number(item.labTestCount), 0));
-      setMonthTotal(monthData.reduce((acc: number, item: any) => acc + Number(item.labTestCount), 0));
-      setYearTotal(yearData.reduce((acc: number, item: any) => acc + Number(item.labTestCount), 0));
+      setTodayList(todayData || []);
+      setWeekList(weekData || []);
+      setMonthList(monthData || []);
+      setYearList(yearData || []);
+
+      setTodayTotal((todayData || []).reduce((acc: number, item: TestCount) => acc + Number(item.labTestCount), 0));
+      setWeekTotal((weekData || []).reduce((acc: number, item: TestCount) => acc + Number(item.labTestCount), 0));
+      setMonthTotal((monthData || []).reduce((acc: number, item: TestCount) => acc + Number(item.labTestCount), 0));
+      setYearTotal((yearData || []).reduce((acc: number, item: TestCount) => acc + Number(item.labTestCount), 0));
 
       setLoading(false);
     };

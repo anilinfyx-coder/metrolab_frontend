@@ -1,14 +1,11 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { MdBlock, MdForward } from 'react-icons/md';
 import TopNav from '../../../../components/TopNav';
 import { useConfirm } from '../../../../components/ConfirmModal';
 import { formatDateTime } from '../../../../utils/dateFormat';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() {
-  return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : '';
-}
+import { handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../../lib/api';
 
 type EmployeeRow = {
   id: number;
@@ -107,7 +104,7 @@ export default function TestRequestDetailPage() {
 
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<TestRequestDetail | null>(null);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     last_name: '',
     first_name: '',
@@ -132,19 +129,18 @@ export default function TestRequestDetailPage() {
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
-      const res = await fetch(`${API}/api/TestRequest/${id}`, {
-        headers: { token: getToken() },
+      const res = await fetch(`${API_BASE}/api/TestRequest/${id}`, {
+        headers: { token: getToken('admin_token') },
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setDetail(d.obj);
-      } else {
-        setMsg({ type: 'error', text: String(d.obj || 'Failed to load request') });
-        setDetail(null);
-      }
+      const obj = await handleApiResponse<TestRequestDetail>(res, {
+        errorFallback: 'Failed to load request',
+      });
+      setDetail(obj);
     } catch (err: unknown) {
-      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to load request' });
+      setLoadError(err instanceof Error ? err.message : 'Failed to load request');
+      setDetail(null);
     } finally {
       setLoading(false);
     }
@@ -192,33 +188,37 @@ export default function TestRequestDetailPage() {
 
   const rejectRequest = async () => {
     if (!detail) return;
-    const res = await fetch(`${API}/api/TestRequest/changeTestRequestStatus`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id: detail.id, status: false }),
-    });
-    const d = await res.json();
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: 'Request rejected.' });
+    try {
+      const res = await fetch(`${API_BASE}/api/TestRequest/changeTestRequestStatus`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+        body: JSON.stringify({ id: detail.id, status: false }),
+      });
+      await handleApiResponse(res, {
+        successMessage: 'Request rejected.',
+        errorFallback: 'Failed to reject',
+      });
       loadDetail();
-    } else {
-      setMsg({ type: 'error', text: String(d.obj || 'Failed to reject') });
+    } catch {
+      // Error toast handled by handleApiResponse
     }
   };
 
   const approveRequest = async () => {
     if (!detail) return;
-    const res = await fetch(`${API}/api/TestRequest/changeTestRequestStatus`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id: detail.id, status: true }),
-    });
-    const d = await res.json();
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: 'Request approved.' });
+    try {
+      const res = await fetch(`${API_BASE}/api/TestRequest/changeTestRequestStatus`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+        body: JSON.stringify({ id: detail.id, status: true }),
+      });
+      await handleApiResponse(res, {
+        successMessage: 'Request approved.',
+        errorFallback: 'Failed to approve',
+      });
       loadDetail();
-    } else {
-      setMsg({ type: 'error', text: String(d.obj || 'Failed to approve') });
+    } catch {
+      // Error toast handled by handleApiResponse
     }
   };
 
@@ -235,11 +235,11 @@ export default function TestRequestDetailPage() {
   const openCancelModal = async (employee: EmployeeRow) => {
     if (!detail) return;
     if (!employee.status || employee.is_cancelled) {
-      setMsg({ type: 'error', text: 'Employee is already cancelled.' });
+      toastApiError('Employee is already cancelled.');
       return;
     }
     if (!employeeHasSelectedTest(employee)) {
-      setMsg({ type: 'error', text: 'Employee is not allotted for any test.' });
+      toastApiError('Employee is not allotted for any test.');
       return;
     }
 
@@ -250,28 +250,20 @@ export default function TestRequestDetailPage() {
     setSelectedReason('');
 
     try {
-      const res = await fetch(`${API}/api/TestRequest/getAlternateEmployeesForReassign`, {
+      const res = await fetch(`${API_BASE}/api/TestRequest/getAlternateEmployeesForReassign`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify({ id: employee.id }),
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        const list = (d.obj || []) as AlternateEmployeeOption[];
-        setAlternateEmployees(list);
-        if (list.length === 0) {
-          setMsg({ type: 'error', text: 'No employee available in this corporate to assign' });
-          closeCancelModal();
-        }
-      } else {
-        setMsg({ type: 'error', text: String(d.obj || 'Failed to load alternate employees') });
+      const list = await handleApiResponse<AlternateEmployeeOption[]>(res, {
+        errorFallback: 'Failed to load alternate employees',
+      });
+      setAlternateEmployees(list || []);
+      if (!list || list.length === 0) {
+        toastApiError('No employee available in this corporate to assign');
         closeCancelModal();
       }
-    } catch (err: unknown) {
-      setMsg({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to load alternate employees',
-      });
+    } catch {
       closeCancelModal();
     } finally {
       setCancelLoading(false);
@@ -281,41 +273,33 @@ export default function TestRequestDetailPage() {
   const submitCancellation = async () => {
     if (!cancelEmployee) return;
     if (!selectedAlternateId) {
-      setMsg({ type: 'error', text: 'Please select an alternate employee.' });
+      toastApiError('Please select an alternate employee.');
       return;
     }
     if (!selectedReason) {
-      setMsg({ type: 'error', text: 'Please select a reason.' });
+      toastApiError('Please select a reason.');
       return;
     }
 
     setCancelSubmitting(true);
     try {
-      const res = await fetch(`${API}/api/TestRequest/excludeAndReassignEmployee`, {
+      const res = await fetch(`${API_BASE}/api/TestRequest/excludeAndReassignEmployee`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify({
           id: cancelEmployee.id,
           alternate_employee_id: Number(selectedAlternateId),
           reason: selectedReason,
         }),
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setMsg({ type: 'success', text: String(d.obj?.message || 'Employee cancelled and reassigned.') });
-        closeCancelModal();
-        await loadDetail();
-      } else {
-        setMsg({
-          type: 'error',
-          text: String(d.obj || 'No employee available in this corporate to assign'),
-        });
-      }
-    } catch (err: unknown) {
-      setMsg({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to cancel employee',
+      const result = await handleApiResponse<{ message?: string }>(res, {
+        errorFallback: 'No employee available in this corporate to assign',
       });
+      toastApiSuccess(String(result?.message || 'Employee cancelled and reassigned.'));
+      closeCancelModal();
+      await loadDetail();
+    } catch {
+      // Error toast handled by handleApiResponse
     } finally {
       setCancelSubmitting(false);
     }
@@ -332,15 +316,17 @@ export default function TestRequestDetailPage() {
     });
     if (!ok) return;
 
-    const res = await fetch(`${API}/api/TestRequest/transferEmployeeToWaitingList`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id: employee.id }),
-    });
-    const d = await res.json();
-    if (d.response_code === '200') {
-      const waitingListId = d.obj?.waiting_list_id;
-      const patientUid = d.obj?.patient_uid;
+    try {
+      const res = await fetch(`${API_BASE}/api/TestRequest/transferEmployeeToWaitingList`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+        body: JSON.stringify({ id: employee.id }),
+      });
+      const result = await handleApiResponse<{ waiting_list_id?: number; patient_uid?: string }>(res, {
+        errorFallback: 'Failed to transfer employee',
+      });
+      const waitingListId = result?.waiting_list_id;
+      const patientUid = result?.patient_uid;
       setDetail((prev) => {
         if (!prev) return prev;
         return {
@@ -356,14 +342,13 @@ export default function TestRequestDetailPage() {
           ),
         };
       });
-      setMsg({
-        type: 'success',
-        text: patientUid
+      toastApiSuccess(
+        patientUid
           ? `Employee transferred to waiting list (UID: ${patientUid}).`
           : 'Employee transferred to waiting list.',
-      });
-    } else {
-      setMsg({ type: 'error', text: String(d.obj || 'Failed to transfer employee') });
+      );
+    } catch {
+      // Error toast handled by handleApiResponse
     }
   };
 
@@ -389,7 +374,7 @@ export default function TestRequestDetailPage() {
         ) : !detail ? (
           <div className="card tr-detail-card">
             <div className="tr-detail-body">
-              <p>{msg?.text || 'Test request not found.'}</p>
+              <p>{loadError || 'Test request not found.'}</p>
               <button type="button" className="btn btn-primary" onClick={goBack}>Back to List</button>
             </div>
           </div>
@@ -415,12 +400,6 @@ export default function TestRequestDetailPage() {
             </div>
 
             <div className="tr-detail-body">
-              {msg && (
-                <div className={`tr-detail-msg ${msg.type === 'success' ? 'ok' : 'err'}`}>
-                  {msg.text}
-                </div>
-              )}
-
               <div className="tr-detail-grid">
                 <div className="tr-detail-col">
                   <div className="tr-detail-field">
@@ -560,9 +539,7 @@ export default function TestRequestDetailPage() {
                                   disabled={!canTransferEmployee(e, detail.status)}
                                   onClick={() => transferEmployee(e)}
                                 >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                    <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
-                                  </svg>
+                                  <MdForward size={16} aria-hidden />
                                 </button>
                                 <button
                                   type="button"
@@ -570,9 +547,7 @@ export default function TestRequestDetailPage() {
                                   title="Exclude employee and reassign"
                                   onClick={() => openCancelModal(e)}
                                 >
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8 0-1.85.63-3.55 1.69-4.9L16.9 18.31A7.902 7.902 0 0 1 12 20zm6.31-3.1L7.1 5.69A7.902 7.902 0 0 1 12 4c4.42 0 8 3.58 8 8 0 1.85-.63 3.55-1.69 4.9z" />
-                                  </svg>
+                                  <MdBlock size={15} aria-hidden />
                                 </button>
                               </div>
                             )}

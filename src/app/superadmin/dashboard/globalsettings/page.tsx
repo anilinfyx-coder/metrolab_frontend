@@ -1,9 +1,17 @@
 'use client';
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import {
+  MdBloodtype,
+  MdCoronavirus,
+  MdHourglassEmpty,
+  MdLocalBar,
+  MdMedication,
+  MdSave,
+  MdScience,
+} from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../../lib/api';
 
 interface LabTest {
   id: number;
@@ -15,30 +23,33 @@ export default function GlobalSettingsPage() {
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/api/GlobalSettings`, { headers: { token: getToken() } }).then(r => r.json()),
-      fetch(`${API}/api/LabTests`, { headers: { token: getToken() } }).then(r => r.json())
-    ])
-    .then(([settingsRes, testsRes]) => {
-      if (testsRes.response_code === '200') {
-        const tests = testsRes.obj || [];
-        setLabTests(tests);
-        
-        const s = settingsRes.response_code === '200' ? settingsRes.obj : {};
+    const load = async () => {
+      try {
+        const [settingsRes, testsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/GlobalSettings`, { headers: { token: getToken('superadmin_token') } }),
+          fetch(`${API_BASE}/api/LabTests`, { headers: { token: getToken('superadmin_token') } }),
+        ]);
+        const [settings, tests] = await Promise.all([
+          handleApiResponse<Record<string, { value?: string }>>(settingsRes),
+          handleApiResponse<LabTest[]>(testsRes),
+        ]);
+        const testList = tests || [];
+        setLabTests(testList);
         const newPrices: Record<string, string> = {};
-        
-        tests.forEach((t: LabTest) => {
+        testList.forEach((t: LabTest) => {
           const key = `lab_test_${t.id}_price`;
-          newPrices[key] = s[key]?.value || '';
+          newPrices[key] = settings[key]?.value || '';
         });
-        
         setPrices(newPrices);
-      }
-    })
-    .finally(() => setLoading(false));
+    } catch {
+      /* error toasted by handleApiResponse */
+    } finally {
+      setLoading(false);
+    }
+    };
+    void load();
   }, []);
 
   const save = async () => {
@@ -46,22 +57,24 @@ export default function GlobalSettingsPage() {
     for (const [k, v] of Object.entries(prices)) {
       const p = parseFloat(v);
       if (isNaN(p) || p < 0) {
-        setMsg({ type: 'error', text: `Invalid value for one of the test prices` }); return;
+        toast.error('Invalid value for one of the test prices');
+        return;
       }
       parsed[k] = p;
     }
-    setSaving(true); setMsg(null);
-    const res = await fetch(`${API}/api/GlobalSettings/updatePricing`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ prices: parsed })
-    });
-    const d = await res.json();
-    setSaving(false);
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: 'Pricing updated successfully.' });
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Failed to update pricing.' });
+    setSaving(true);
+    try {
+      await apiFetch('/api/GlobalSettings/updatePricing', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ prices: parsed }),
+        successMessage: 'Pricing updated successfully.',
+        errorFallback: 'Failed to update pricing.',
+      });
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -69,15 +82,6 @@ export default function GlobalSettingsPage() {
     <div className="page-content">
       <TopNav title="Global Settings — Test Pricing" />
       <div style={{ padding: '1.5rem' }}>
-        {msg && (
-          <div style={{
-            background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-            border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-            borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem',
-            fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444'
-          }}>{msg.text}</div>
-        )}
-
         <div className="card">
           <div className="card-header">
             <span className="card-title">💲 Test Pricing Configuration</span>
@@ -93,13 +97,13 @@ export default function GlobalSettingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
                 {labTests.map(test => {
                   const key = `lab_test_${test.id}_price`;
-                  let icon = '🧪';
+                  let icon: React.ReactNode = <MdScience size={24} aria-hidden />;
                   let color = '#6366f1';
                   const n = (test.name || '').toLowerCase();
-                  if (n.includes('drug')) { icon = '💊'; color = '#ef4444'; }
-                  else if (n.includes('alcohol')) { icon = '🍺'; color = '#f59e0b'; }
-                  else if (n.includes('covid')) { icon = '🦠'; color = '#10b981'; }
-                  else if (n.includes('blood')) { icon = '🩸'; color = '#e11d48'; }
+                  if (n.includes('drug')) { icon = <MdMedication size={24} aria-hidden />; color = '#ef4444'; }
+                  else if (n.includes('alcohol')) { icon = <MdLocalBar size={24} aria-hidden />; color = '#f59e0b'; }
+                  else if (n.includes('covid')) { icon = <MdCoronavirus size={24} aria-hidden />; color = '#10b981'; }
+                  else if (n.includes('blood')) { icon = <MdBloodtype size={24} aria-hidden />; color = '#e11d48'; }
 
                   return (
                     <div key={key} className="card" style={{ border: `1px solid ${color}30`, padding: '1.25rem', margin: 0 }}>
@@ -133,7 +137,7 @@ export default function GlobalSettingsPage() {
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button className="btn btn-primary" onClick={save} disabled={saving || loading}>
-                {saving ? '⏳ Saving...' : '💾 Save Pricing'}
+                {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing</>}
               </button>
             </div>
           </div>

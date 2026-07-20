@@ -3,8 +3,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
 import { getStoredUser } from '../../../components/portalConfig';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
 const emptyProfile = {
   id: 0,
@@ -33,10 +32,6 @@ export default function B2BProfilePage() {
   const [changingPwd, setChangingPwd] = useState(false);
   const [form, setForm] = useState<ProfileForm>({ ...emptyProfile });
   const [pwd, setPwd] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [pwdMsg, setPwdMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const token = () => localStorage.getItem('b2b_token') || '';
 
   useEffect(() => {
     const stored = getStoredUser('b2b_user');
@@ -44,30 +39,30 @@ export default function B2BProfilePage() {
       router.push('/');
       return;
     }
-    fetch(`${API}/api/B2bClients/${stored.id}`, { headers: { token: token() } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200' && d.obj) {
-          const u = d.obj;
-          setForm({
-            id: u.id,
-            support_person_name: u.support_person_name || '',
-            support_mobile: u.support_mobile || '',
-            support_email: u.support_email || '',
-            primary_color_code: u.primary_color_code || '#0076A3',
-            public_phone_no: u.public_phone_no || '',
-            public_email: u.public_email || '',
-            public_fax: u.public_fax || '',
-            tagline: u.tagline || '',
-            smtp_server: u.smtp_server || '',
-            smtp_port: u.smtp_port || '',
-            smtp_email: u.smtp_email || '',
-            smtp_password: u.smtp_password || '',
-            company_name: u.company_name || '',
-            contact_person_name: u.contact_person_name || '',
-          });
-        }
+    apiFetch<Record<string, string | number>>(`/api/B2bClients/${stored.id}`, {
+      tokenKey: 'b2b_token',
+      errorFallback: 'Unable to load profile.',
+    })
+      .then(u => {
+        setForm({
+          id: Number(u.id),
+          support_person_name: String(u.support_person_name || ''),
+          support_mobile: String(u.support_mobile || ''),
+          support_email: String(u.support_email || ''),
+          primary_color_code: String(u.primary_color_code || '#0076A3'),
+          public_phone_no: String(u.public_phone_no || ''),
+          public_email: String(u.public_email || ''),
+          public_fax: String(u.public_fax || ''),
+          tagline: String(u.tagline || ''),
+          smtp_server: String(u.smtp_server || ''),
+          smtp_port: String(u.smtp_port || ''),
+          smtp_email: String(u.smtp_email || ''),
+          smtp_password: String(u.smtp_password || ''),
+          company_name: String(u.company_name || ''),
+          contact_person_name: String(u.contact_person_name || ''),
+        });
       })
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, [router]);
 
@@ -78,7 +73,6 @@ export default function B2BProfilePage() {
   const saveProfile = async (e: FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    setMsg(null);
     const payload = {
       support_person_name: form.support_person_name.trim(),
       support_mobile: form.support_mobile.trim(),
@@ -93,15 +87,14 @@ export default function B2BProfilePage() {
       smtp_email: form.smtp_email.trim(),
       smtp_password: form.smtp_password,
     };
-    const res = await fetch(`${API}/api/B2bClients/${form.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', token: token() },
-      body: JSON.stringify(payload),
-    });
-    const d = await res.json();
-    setSaving(false);
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: 'Profile saved successfully.' });
+    try {
+      await apiFetch(`/api/B2bClients/${form.id}`, {
+        method: 'PUT',
+        tokenKey: 'b2b_token',
+        body: JSON.stringify(payload),
+        successMessage: 'Profile saved successfully.',
+        errorFallback: 'Failed to save profile.',
+      });
       const stored = getStoredUser('b2b_user') || {};
       localStorage.setItem(
         'b2b_user',
@@ -112,48 +105,50 @@ export default function B2BProfilePage() {
           email: stored.email,
         })
       );
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Failed to save profile.' });
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
   const changePassword = async (e: FormEvent) => {
     e.preventDefault();
-    setPwdMsg(null);
     if (!pwd.oldPassword || !pwd.newPassword || !pwd.confirmPassword) {
-      setPwdMsg({ type: 'error', text: 'All password fields are required.' });
+      toastApiError('All password fields are required.');
       return;
     }
     if (pwd.newPassword.length < 6) {
-      setPwdMsg({ type: 'error', text: 'New password must be at least 6 characters.' });
+      toastApiError('New password must be at least 6 characters.');
       return;
     }
     if (/[^a-zA-Z0-9@#]/.test(pwd.newPassword)) {
-      setPwdMsg({ type: 'error', text: 'Only @ # are allowed as special characters.' });
+      toastApiError('Only @ # are allowed as special characters.');
       return;
     }
     if (pwd.newPassword !== pwd.confirmPassword) {
-      setPwdMsg({ type: 'error', text: 'New password and confirm password do not match.' });
+      toastApiError('New password and confirm password do not match.');
       return;
     }
 
     setChangingPwd(true);
-    const res = await fetch(`${API}/api/B2bClients/changePassword`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: token() },
-      body: JSON.stringify({
-        userId: form.id,
-        oldPassword: pwd.oldPassword,
-        newPassword: pwd.newPassword,
-      }),
-    });
-    const d = await res.json();
-    setChangingPwd(false);
-    if (d.response_code === '200') {
-      setPwdMsg({ type: 'success', text: 'Password changed successfully.' });
+    try {
+      await apiFetch('/api/B2bClients/changePassword', {
+        method: 'POST',
+        tokenKey: 'b2b_token',
+        body: JSON.stringify({
+          userId: form.id,
+          oldPassword: pwd.oldPassword,
+          newPassword: pwd.newPassword,
+        }),
+        successMessage: 'Password changed successfully.',
+        errorFallback: 'Failed to change password.',
+      });
       setPwd({ oldPassword: '', newPassword: '', confirmPassword: '' });
-    } else {
-      setPwdMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Failed to change password.' });
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setChangingPwd(false);
     }
   };
 
@@ -190,22 +185,6 @@ export default function B2BProfilePage() {
                 <span className="card-title" style={{ color: 'var(--text)', fontWeight: 700 }}>Profile</span>
               </div>
               <div className="card-body">
-                {msg && (
-                  <div
-                    style={{
-                      background: msg.type === 'success' ? 'rgba(0,128,0,0.08)' : 'rgba(231,76,60,0.08)',
-                      border: `1px solid ${msg.type === 'success' ? 'rgba(0,128,0,0.25)' : 'rgba(231,76,60,0.25)'}`,
-                      borderRadius: 4,
-                      padding: '0.55rem 0.75rem',
-                      marginBottom: '1rem',
-                      fontSize: '0.82rem',
-                      color: msg.type === 'success' ? '#008000' : '#c0392b',
-                    }}
-                  >
-                    {msg.text}
-                  </div>
-                )}
-
                 <form onSubmit={saveProfile}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1.25rem' }}>
                     {field('support_person_name', 'Support Person Name', 'support_person_name')}
@@ -266,22 +245,6 @@ export default function B2BProfilePage() {
                 <span className="card-title" style={{ color: 'var(--text)', fontWeight: 700 }}>Change Password</span>
               </div>
               <div className="card-body">
-                {pwdMsg && (
-                  <div
-                    style={{
-                      background: pwdMsg.type === 'success' ? 'rgba(0,128,0,0.08)' : 'rgba(231,76,60,0.08)',
-                      border: `1px solid ${pwdMsg.type === 'success' ? 'rgba(0,128,0,0.25)' : 'rgba(231,76,60,0.25)'}`,
-                      borderRadius: 4,
-                      padding: '0.55rem 0.75rem',
-                      marginBottom: '1rem',
-                      fontSize: '0.82rem',
-                      color: pwdMsg.type === 'success' ? '#008000' : '#c0392b',
-                    }}
-                  >
-                    {pwdMsg.text}
-                  </div>
-                )}
-
                 <form onSubmit={changePassword}>
                   <div className="form-group">
                     <label htmlFor="old_password">Old Password</label>

@@ -1,12 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { MdClose, MdVisibility } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDate } from '../../../utils/dateFormat';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { apiFetch, handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
 
 interface Patient {
   id: number;
@@ -62,10 +61,7 @@ function formatMobile(mobile?: string | null): string {
 function HistoryEyeIcon({ onClick, title = 'View History' }: { onClick: () => void; title?: string }) {
   return (
     <button type="button" className="history-eye-btn" title={title} onClick={onClick} aria-label={title}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
+      <MdVisibility size={18} aria-hidden />
     </button>
   );
 }
@@ -78,30 +74,37 @@ export default function PatientListPage() {
   const [history, setHistory] = useState<TestHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [emailing, setEmailing] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    fetch(`${API}/api/Patient`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setPatients(d.obj || []); })
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const list = await apiFetch<Patient[]>('/api/Patient', {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load patients.',
+        });
+        setPatients(list || []);
+      } catch {
+        setPatients([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   const viewHistory = async (p: Patient) => {
     setSelected(p);
     setHistoryLoading(true);
     setHistory([]);
-    setMsg(null);
     try {
-      const res = await fetch(`${API}/api/WaitingList/patient/${p.id}/history`, { headers: { token: getToken() } });
-      const d = await res.json();
-      if (res.ok && d.response_code === '200') {
-        setHistory(d.obj || []);
-      } else {
-        setMsg({ type: 'error', text: String(d.obj || 'Unable to load patient test history.') });
-      }
+      const res = await fetch(`${API_BASE}/api/WaitingList/patient/${p.id}/history`, {
+        headers: { token: getToken('admin_token') },
+      });
+      const list = await handleApiResponse<TestHistoryEntry[]>(res, {
+        errorFallback: 'Unable to load patient test history.',
+      });
+      setHistory(list || []);
     } catch {
-      setMsg({ type: 'error', text: 'Unable to connect to the server while loading test history.' });
+      // Error toast handled by handleApiResponse
     } finally {
       setHistoryLoading(false);
     }
@@ -109,19 +112,13 @@ export default function PatientListPage() {
 
   const downloadReport = async (entry: TestHistoryEntry) => {
     if (!entry.report_id) return;
-    setMsg(null);
     try {
-      const res = await fetch(`${API}/api/LabTestCategoryReport/downloadLabTestCategoryReport`, {
+      const blob = await apiFetch<Blob>('/api/LabTestCategoryReport/downloadLabTestCategoryReport', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        tokenKey: 'admin_token',
         body: JSON.stringify({ id: entry.report_id }),
+        errorFallback: 'Report download failed.',
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        setMsg({ type: 'error', text: String(data?.obj || 'Report download failed.') });
-        return;
-      }
-      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -129,14 +126,14 @@ export default function PatientListPage() {
       link.click();
       URL.revokeObjectURL(url);
     } catch {
-      setMsg({ type: 'error', text: 'Unable to download the report. Please try again.' });
+      // Error toast handled by apiFetch
     }
   };
 
   const emailReport = async (entry: TestHistoryEntry) => {
     if (!entry.report_id || !selected || emailing) return;
     if (!selected.email?.trim()) {
-      setMsg({ type: 'error', text: 'No email address is available for this patient.' });
+      toastApiError('No email address is available for this patient.');
       return;
     }
 
@@ -149,21 +146,18 @@ export default function PatientListPage() {
     if (!confirmed) return;
 
     setEmailing(true);
-    setMsg(null);
     try {
-      const res = await fetch(`${API}/api/LabTestCategoryReport/emailLabTestCategoryReport`, {
+      const res = await fetch(`${API_BASE}/api/LabTestCategoryReport/emailLabTestCategoryReport`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify({ id: entry.report_id }),
       });
-      const data = await res.json();
-      if (res.ok && data.response_code === '200') {
-        setMsg({ type: 'success', text: `Report emailed successfully to ${data.obj?.email || selected.email}.` });
-      } else {
-        setMsg({ type: 'error', text: String(data.obj || 'Failed to send the report email.') });
-      }
+      const data = await handleApiResponse<{ email?: string }>(res, {
+        errorFallback: 'Failed to send the report email.',
+      });
+      toastApiSuccess(`Report emailed successfully to ${data?.email || selected.email}.`);
     } catch {
-      setMsg({ type: 'error', text: 'Unable to send the report email. Please try again.' });
+      // Error toast handled by handleApiResponse
     } finally {
       setEmailing(false);
     }
@@ -266,28 +260,11 @@ export default function PatientListPage() {
         )}
 
         <div style={{ padding: '1.25rem 1.5rem' }} className={emailing ? 'test-reports-page-busy' : undefined}>
-          {msg && (
-            <div
-              role="alert"
-              style={{
-                background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-                border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-                borderRadius: 8,
-                padding: '0.75rem 1rem',
-                marginBottom: '1rem',
-                fontSize: '0.875rem',
-                color: msg.type === 'success' ? '#10b981' : '#ef4444',
-              }}
-            >
-              {msg.text}
-            </div>
-          )}
-
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span className="card-title">Patient Info</span>
               <button type="button" className="btn btn-ghost" onClick={() => setSelected(null)}>
-                ✕ Close
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
               </button>
             </div>
             <div className="card-body">

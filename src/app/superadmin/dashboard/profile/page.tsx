@@ -1,11 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mail, Phone, User, Lock, Save, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { formatDate } from '../../../utils/dateFormat';
-
-const API = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000').replace(/\/+$/, '');
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch } from '../../../../lib/api';
 
 export default function SuperAdminProfilePage() {
   const [loading, setLoading] = useState(true);
@@ -16,22 +14,19 @@ export default function SuperAdminProfilePage() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
 
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string; section: 'profile' | 'password' } | null>(null);
-
   const loadProfile = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/SuperAdmin/getProfile`, {
+      const profile = await apiFetch<{ name?: string; email?: string; mobile?: string }>('/api/SuperAdmin/getProfile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify({}) // Backend uses req.user.id
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({}),
       });
-      const d = await res.json();
-      if (d.response_code === '200' && d.obj) {
-        setProfileForm({ name: d.obj.name || '', email: d.obj.email || '', mobile: d.obj.mobile || '' });
+      if (profile) {
+        setProfileForm({ name: profile.name || '', email: profile.email || '', mobile: profile.mobile || '' });
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      /* error toasted by apiFetch */
     } finally {
       setLoading(false);
     }
@@ -42,23 +37,20 @@ export default function SuperAdminProfilePage() {
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profileForm.name || !profileForm.email) {
-      setMsg({ type: 'error', text: 'Name and Email are required', section: 'profile' }); return;
+      toast.error('Name and Email are required');
+      return;
     }
-    setProfileSaving(true); setMsg(null);
+    setProfileSaving(true);
     try {
-      const res = await fetch(`${API}/api/SuperAdmin/updateProfile`, {
+      await apiFetch('/api/SuperAdmin/updateProfile', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify(profileForm)
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify(profileForm),
+        successMessage: 'Profile updated successfully!',
+        errorFallback: 'Failed to update profile',
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setMsg({ type: 'success', text: 'Profile updated successfully!', section: 'profile' });
-      } else {
-        setMsg({ type: 'error', text: d.obj || 'Failed to update profile', section: 'profile' });
-      }
-    } catch (err: any) {
-      setMsg({ type: 'error', text: err.message, section: 'profile' });
+    } catch {
+      /* error toasted by apiFetch */
     } finally {
       setProfileSaving(false);
     }
@@ -67,30 +59,28 @@ export default function SuperAdminProfilePage() {
   const handlePasswordSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setMsg({ type: 'error', text: 'New passwords do not match', section: 'password' }); return;
+      toast.error('New passwords do not match');
+      return;
     }
     if (passwordForm.newPassword.length < 6) {
-      setMsg({ type: 'error', text: 'Password must be at least 6 characters long', section: 'password' }); return;
+      toast.error('Password must be at least 6 characters long');
+      return;
     }
-    setPasswordSaving(true); setMsg(null);
+    setPasswordSaving(true);
     try {
-      const res = await fetch(`${API}/api/SuperAdmin/changePassword`, {
+      await apiFetch('/api/SuperAdmin/changePassword', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        tokenKey: 'superadmin_token',
         body: JSON.stringify({
           currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword
-        })
+          newPassword: passwordForm.newPassword,
+        }),
+        successMessage: 'Password changed successfully!',
+        errorFallback: 'Failed to change password',
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setMsg({ type: 'success', text: 'Password changed successfully!', section: 'password' });
-        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      } else {
-        setMsg({ type: 'error', text: d.obj || 'Failed to change password', section: 'password' });
-      }
-    } catch (err: any) {
-      setMsg({ type: 'error', text: err.message, section: 'password' });
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch {
+      /* error toasted by apiFetch */
     } finally {
       setPasswordSaving(false);
     }
@@ -126,12 +116,6 @@ export default function SuperAdminProfilePage() {
             </div>
             <div className="card-body">
               <form onSubmit={handleProfileSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {msg && msg.section === 'profile' && (
-                  <div className={`badge ${msg.type === 'error' ? 'badge-danger' : 'badge-success'}`} style={{ padding: '10px', display: 'block', marginBottom: '10px' }}>
-                    {msg.text}
-                  </div>
-                )}
-
                 <div className="form-group">
                   <label className="form-label">Name</label>
                   <input
@@ -183,12 +167,6 @@ export default function SuperAdminProfilePage() {
             </div>
             <div className="card-body">
               <form onSubmit={handlePasswordSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {msg && msg.section === 'password' && (
-                  <div className={`badge ${msg.type === 'error' ? 'badge-danger' : 'badge-success'}`} style={{ padding: '10px', display: 'block', marginBottom: '10px' }}>
-                    {msg.text}
-                  </div>
-                )}
-
                 <div className="form-group">
                   <label className="form-label">Old Password</label>
                   <input
