@@ -18,6 +18,8 @@ const adminNavItems: NavItem[] = [
   { href: '/testrequests', label: 'Manage Requests', icon: <MdScience size={18} />, section: 'Corporate' },
   { href: '/patient', label: 'Patient Demographic', icon: <MdLocalHospital size={18} />, section: 'Patients' },
   { href: '/patientList', label: 'Patient List', icon: <MdPeople size={18} />, section: 'Patients' },
+  { href: '/health-certificates', label: 'Health Certificates', icon: '📄', section: 'Patients' },
+  { href: '/physical-examinations', label: 'Physical Examinations', icon: '🩺', section: 'Patients' },
 ];
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
