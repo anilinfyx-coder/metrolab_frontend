@@ -5,9 +5,7 @@ import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDateTime } from '../../../utils/dateFormat';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { apiFetch, handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
 
 interface TestRequest {
   id: number;
@@ -39,13 +37,13 @@ export default function ManageRequestsPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API}/api/TestRequest`, { headers: { token: getToken() } });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setRequests(d.obj || []);
-      }
-    } catch (err) {
-      console.error(err);
+      const list = await apiFetch<TestRequest[]>('/api/TestRequest', {
+        tokenKey: 'admin_token',
+        errorFallback: 'Failed to load test requests.',
+      });
+      setRequests(list || []);
+    } catch {
+      setRequests([]);
     } finally {
       setLoading(false);
     }
@@ -62,35 +60,26 @@ export default function ManageRequestsPage() {
     });
     if (!ok) return;
     try {
-      const res = await fetch(`${API}/api/TestRequest/deleteTestRequest`, {
+      const res = await fetch(`${API_BASE}/api/TestRequest/deleteTestRequest`, {
         method: 'POST',
-        headers: { token: getToken(), 'Content-Type': 'application/json' },
+        headers: { token: getToken('admin_token'), 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        loadData();
-      } else {
-        alert(d.obj || 'Failed to delete');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Error deleting test request');
+      await handleApiResponse(res, { errorFallback: 'Failed to delete' });
+      loadData();
+    } catch {
+      // Error toast handled by handleApiResponse
     }
   };
 
   const handleDownload = async (id: number) => {
     try {
-      const res = await fetch(`${API}/api/TestRequest/downloadTestRequestReport`, {
+      const blob = await apiFetch<Blob>('/api/TestRequest/downloadTestRequestReport', {
         method: 'POST',
-        headers: { token: getToken(), 'Content-Type': 'application/json' },
+        tokenKey: 'admin_token',
         body: JSON.stringify({ id }),
+        errorFallback: 'Error downloading report',
       });
-      if (!res.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -99,9 +88,8 @@ export default function ManageRequestsPage() {
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert('Error downloading report');
+    } catch {
+      // Error toast handled by apiFetch
     }
   };
 

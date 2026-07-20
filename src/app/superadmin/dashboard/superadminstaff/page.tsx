@@ -1,11 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch } from '../../../../lib/api';
 
 interface Staff { id: number; email: string; name: string; mobile: string; role_id: number; status: boolean; }
 
@@ -22,18 +21,21 @@ export default function SuperAdminStaffPage() {
   const [errors, setErrors] = useState<StaffErrors>({});
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    fetch(`${API}/api/SuperAdmin`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setStaff(d.obj); })
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<Staff[]>('/api/SuperAdmin', { tokenKey: 'superadmin_token' });
+      setStaff(data || []);
+    } catch {
+      setStaff([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    void Promise.resolve().then(loadData);
+    void loadData();
   }, []);
 
   const updateField = <K extends StaffField>(field: K, value: StaffForm[K]) => {
@@ -44,7 +46,6 @@ export default function SuperAdminStaffPage() {
       delete next[field];
       return next;
     });
-    if (msg?.type === 'error') setMsg(null);
   };
 
   const validateForm = (): StaffErrors => {
@@ -73,7 +74,7 @@ export default function SuperAdminStaffPage() {
     const nextErrors = validateForm();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      setMsg({ type: 'error', text: 'Please correct the highlighted fields before saving.' });
+      toast.error('Please correct the highlighted fields before saving.');
       const firstInvalidField = Object.keys(nextErrors)[0];
       window.setTimeout(() => {
         const input = document.querySelector<HTMLElement>(`[data-staff-field="${firstInvalidField}"]`);
@@ -84,9 +85,8 @@ export default function SuperAdminStaffPage() {
     }
 
     setSaving(true);
-    setMsg(null);
     const method = editingId ? 'PUT' : 'POST';
-    const url = `${API}/api/SuperAdmin${editingId ? `/${editingId}` : ''}`;
+    const path = `/api/SuperAdmin${editingId ? `/${editingId}` : ''}`;
     const payload: Record<string, string | number> = {
       name: form.name.trim(),
       email: form.email.trim(),
@@ -96,23 +96,19 @@ export default function SuperAdminStaffPage() {
     if (form.password.trim()) payload.password = form.password.trim();
 
     try {
-      const res = await fetch(url, {
+      await apiFetch(path, {
         method,
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        tokenKey: 'superadmin_token',
         body: JSON.stringify(payload),
+        successMessage: `Staff member ${editingId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save staff. Please try again.',
       });
-      const d = await res.json();
-      if (res.ok && d.response_code === '200') {
-        setMsg({ type: 'success', text: `Staff member ${editingId ? 'updated' : 'added'} successfully.` });
-        setForm({ ...emptyStaff });
-        setErrors({});
-        setEditingId(null);
-        loadData();
-      } else {
-        setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Unable to save staff. Please try again.' });
-      }
+      setForm({ ...emptyStaff });
+      setErrors({});
+      setEditingId(null);
+      loadData();
     } catch {
-      setMsg({ type: 'error', text: 'Unable to connect to the server. Please check your connection and try again.' });
+      /* error toasted by apiFetch */
     } finally {
       setSaving(false);
     }
@@ -126,16 +122,25 @@ export default function SuperAdminStaffPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/SuperAdmin/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadData();
+    try {
+      await apiFetch(`/api/SuperAdmin/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      loadData();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const toggleStatus = async (s: Staff) => {
-    await fetch(`${API}/api/SuperAdmin/${s.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !s.status }),
-    });
-    loadData();
+    try {
+      await apiFetch(`/api/SuperAdmin/${s.id}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ status: !s.status }),
+      });
+      loadData();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const openEdit = (s: Staff) => {
@@ -148,7 +153,6 @@ export default function SuperAdminStaffPage() {
       password: '',
     });
     setErrors({});
-    setMsg(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -156,7 +160,6 @@ export default function SuperAdminStaffPage() {
     setEditingId(null);
     setForm({ ...emptyStaff });
     setErrors({});
-    setMsg(null);
   };
 
   const roleName = (roleId: number) => (
@@ -199,45 +202,6 @@ export default function SuperAdminStaffPage() {
     <div className="page-content">
       <TopNav title="Manage Super Admin Staff" />
       <div style={{ padding: '1.5rem' }}>
-        {msg && (
-          <div
-            role="alert"
-            style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              justifyContent: 'space-between',
-              gap: '0.75rem',
-              background: msg.type === 'success' ? '#ecfdf5' : '#fef2f2',
-              border: `1px solid ${msg.type === 'success' ? '#10b981' : '#ef4444'}`,
-              borderRadius: 8,
-              padding: '0.85rem 1rem',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-              color: msg.type === 'success' ? '#047857' : '#b91c1c',
-              fontWeight: 600,
-            }}
-          >
-            <span>{msg.type === 'success' ? '✓ ' : '⚠ '}{msg.text}</span>
-            <button
-              type="button"
-              onClick={() => setMsg(null)}
-              aria-label="Dismiss message"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'inherit',
-                cursor: 'pointer',
-                fontSize: '1rem',
-                lineHeight: 1,
-                padding: '0.1rem 0.25rem',
-                opacity: 0.8,
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
         <div className="superadmin-staff-split">
           <div className="card">
             <div className="card-header">

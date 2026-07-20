@@ -1,5 +1,17 @@
 'use client';
 import { useEffect, useState } from 'react';
+import {
+  MdAdd,
+  MdAssignment,
+  MdBarChart,
+  MdBiotech,
+  MdBusiness,
+  MdLocalHospital,
+  MdRocketLaunch,
+  MdScience,
+  MdVpnKey,
+  MdWavingHand,
+} from 'react-icons/md';
 import TopNav from '../../components/TopNav';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -27,10 +39,10 @@ export default function DashboardPage() {
   const { data: adminUsers, loading: l4 } = useApi('/api/AdminUsers');
 
   const stats = [
-    { label: 'Total Patients', value: patients.length, icon: '🧑‍⚕️', color: 'blue' },
-    { label: 'Lab Tests',      value: labTests.length,  icon: '🔬',  color: 'purple' },
-    { label: 'B2B Clients',    value: b2bClients.length, icon: '🏢', color: 'green' },
-    { label: 'Admin Users',    value: adminUsers.length, icon: '🔑', color: 'orange' },
+    { label: 'Total Patients', value: patients.length, icon: <MdLocalHospital size={24} />, color: 'blue' },
+    { label: 'Lab Tests',      value: labTests.length,  icon: <MdBiotech size={24} />,  color: 'purple' },
+    { label: 'B2B Clients',    value: b2bClients.length, icon: <MdBusiness size={24} />, color: 'green' },
+    { label: 'Admin Users',    value: adminUsers.length, icon: <MdVpnKey size={24} />, color: 'orange' },
   ];
 
   const loading = l1 || l2 || l3 || l4;
@@ -42,7 +54,7 @@ export default function DashboardPage() {
       <div className="page-content">
         <div className="page-header">
           <div>
-            <h2 className="page-title">Welcome back 👋</h2>
+            <h2 className="page-title">Welcome back <MdWavingHand size={22} style={{ verticalAlign: 'text-bottom' }} aria-hidden /></h2>
             <p className="page-subtitle">Here&apos;s what&apos;s happening in your lab today.</p>
           </div>
         </div>
@@ -64,18 +76,18 @@ export default function DashboardPage() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
           <div className="card">
             <div className="card-header">
-              <span className="card-title">🚀 Quick Actions</span>
+              <span className="card-title"><MdRocketLaunch size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Quick Actions</span>
             </div>
             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <a href="/admin/dashboard/patients" className="btn btn-primary" id="quick-add-patient">➕ Add New Patient</a>
-              <a href="/admin/dashboard/test-requests" className="btn btn-ghost" id="quick-test-request">🧪 New Test Request</a>
-              <a href="/admin/dashboard/waiting-list" className="btn btn-ghost" id="quick-waiting-list">📋 View Waiting List</a>
+              <a href="/admin/dashboard/patients" className="btn btn-primary" id="quick-add-patient"><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add New Patient</a>
+              <a href="/admin/dashboard/test-requests" className="btn btn-ghost" id="quick-test-request"><MdScience size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />New Test Request</a>
+              <a href="/admin/dashboard/waiting-list" className="btn btn-ghost" id="quick-waiting-list"><MdAssignment size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />View Waiting List</a>
             </div>
           </div>
 
           <div className="card">
             <div className="card-header">
-              <span className="card-title">📊 System Status</span>
+              <span className="card-title"><MdBarChart size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />System Status</span>
             </div>
             <div className="card-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { MdAdd, MdClose, MdDelete, MdEdit } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiFetch } from '../../../../lib/api';
 
 interface LabTest {
   id: number;
@@ -27,18 +27,17 @@ export default function LabTestsPage() {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
 
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
-  const headers = { 'Content-Type': 'application/json', token };
-
   const fetchTests = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/LabTests`, { headers });
-      const data = await res.json();
-      if (data.response_code === '200') setTests(data.obj);
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+      const data = await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' });
+      setTests(data || []);
+    } catch {
+      setTests([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => { fetchTests(); }, [fetchTests]);
 
@@ -54,13 +53,21 @@ export default function LabTestsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const url = editId ? `${API_BASE}/api/LabTests/${editId}` : `${API_BASE}/api/LabTests`;
+      const path = editId ? `/api/LabTests/${editId}` : '/api/LabTests';
       const method = editId ? 'PUT' : 'POST';
-      const res = await fetch(url, { method, headers, body: JSON.stringify(form) });
-      const data = await res.json();
-      if (data.response_code === '200') { setShowModal(false); fetchTests(); }
-    } catch { /* ignore */ }
-    finally { setSaving(false); }
+      await apiFetch(path, {
+        method,
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify(form),
+        errorFallback: 'Unable to save lab test.',
+      });
+      setShowModal(false);
+      fetchTests();
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: number) => {
@@ -71,14 +78,18 @@ export default function LabTestsPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API_BASE}/api/LabTests/${id}`, { method: 'DELETE', headers });
-    fetchTests();
+    try {
+      await apiFetch(`/api/LabTests/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      fetchTests();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   return (
     <>
       <TopNav title="Lab Tests">
-          <button id="add-labtest-btn" className="btn btn-primary" onClick={openAdd}>➕ Add Lab Test</button>
+          <button id="add-labtest-btn" className="btn btn-primary" onClick={openAdd}><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Lab Test</button>
         </TopNav>
 
       <div className="page-content">
@@ -120,8 +131,8 @@ export default function LabTestsPage() {
                     <td><span className={`badge ${t.status !== false ? 'badge-success' : 'badge-danger'}`}>{t.status !== false ? 'Active' : 'Inactive'}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn btn-ghost btn-sm" id={`edit-labtest-${t.id}`} onClick={() => openEdit(t)}>✏️ Edit</button>
-                        <button className="btn btn-danger btn-sm" id={`del-labtest-${t.id}`} onClick={() => handleDelete(t.id)}>🗑️</button>
+                        <button className="btn btn-ghost btn-sm" id={`edit-labtest-${t.id}`} onClick={() => openEdit(t)}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
+                        <button className="btn btn-danger btn-sm" id={`del-labtest-${t.id}`} onClick={() => handleDelete(t.id)}><MdDelete size={14} aria-hidden /></button>
                       </div>
                     </td>
                   </tr>
@@ -137,7 +148,7 @@ export default function LabTestsPage() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{editId ? 'Edit Lab Test' : 'Add Lab Test'}</h2>
-              <button className="btn btn-ghost btn-sm" id="close-labtest-modal" onClick={() => setShowModal(false)}>✕</button>
+              <button className="btn btn-ghost btn-sm" id="close-labtest-modal" onClick={() => setShowModal(false)}><MdClose size={16} aria-hidden /></button>
             </div>
             <form onSubmit={handleSave}>
               <div className="modal-body">

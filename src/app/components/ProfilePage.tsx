@@ -3,8 +3,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import TopNav from './TopNav';
 import { getPortalFromPath, getStoredUser } from './portalConfig';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiFetch, toastApiError } from '../../lib/api';
 
 export default function ProfilePage() {
   const pathname = usePathname();
@@ -12,7 +11,6 @@ export default function ProfilePage() {
   const portal = getPortalFromPath(pathname || '');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [form, setForm] = useState({
     id: 0,
     name: '',
@@ -29,30 +27,20 @@ export default function ProfilePage() {
       router.push(portal.loginPath);
       return;
     }
-    const token = localStorage.getItem(portal.tokenKey) || '';
-    fetch(`${API}${portal.apiPath}/${stored.id}`, { headers: { token } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200' && d.obj) {
-          const u = d.obj;
-          setForm({
-            id: u.id,
-            name: u.name || '',
-            email: u.email || '',
-            mobile: u.mobile || '',
-            password: '',
-            contact_person_name: u.contact_person_name || '',
-            company_name: u.company_name || '',
-          });
-        } else {
-          setForm(f => ({
-            ...f,
-            id: stored.id!,
-            name: stored.name || '',
-            email: stored.email || '',
-            company_name: stored.company_name || '',
-          }));
-        }
+    apiFetch<Record<string, string | number>>(`${portal.apiPath}/${stored.id}`, {
+      tokenKey: portal.tokenKey,
+      errorFallback: 'Unable to load profile.',
+    })
+      .then(u => {
+        setForm({
+          id: Number(u.id),
+          name: String(u.name || ''),
+          email: String(u.email || ''),
+          mobile: String(u.mobile || ''),
+          password: '',
+          contact_person_name: String(u.contact_person_name || ''),
+          company_name: String(u.company_name || ''),
+        });
       })
       .catch(() => {
         setForm(f => ({
@@ -60,6 +48,7 @@ export default function ProfilePage() {
           id: stored.id!,
           name: stored.name || '',
           email: stored.email || '',
+          company_name: stored.company_name || '',
         }));
       })
       .finally(() => setLoading(false));
@@ -68,12 +57,10 @@ export default function ProfilePage() {
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form.email.trim()) {
-      setMsg({ type: 'error', text: 'Email is required.' });
+      toastApiError('Email is required.');
       return;
     }
     setSaving(true);
-    setMsg(null);
-    const token = localStorage.getItem(portal.tokenKey) || '';
 
     const payload: Record<string, unknown> = {
       email: form.email.trim(),
@@ -91,15 +78,14 @@ export default function ProfilePage() {
       payload.password = form.password.trim();
     }
 
-    const res = await fetch(`${API}${portal.apiPath}/${form.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', token },
-      body: JSON.stringify(payload),
-    });
-    const d = await res.json();
-    setSaving(false);
-
-    if (d.response_code === '200') {
+    try {
+      const updated = await apiFetch<Record<string, unknown>>(`${portal.apiPath}/${form.id}`, {
+        method: 'PUT',
+        tokenKey: portal.tokenKey,
+        body: JSON.stringify(payload),
+        successMessage: 'Profile updated successfully.',
+        errorFallback: 'Update failed.',
+      });
       const displayName =
         portal.nameField === 'company_name'
           ? (form.company_name || form.name || form.email)
@@ -109,16 +95,17 @@ export default function ProfilePage() {
         portal.userKey,
         JSON.stringify({
           ...stored,
-          ...d.obj,
+          ...updated,
           id: form.id,
           name: displayName,
           email: form.email.trim(),
         })
       );
       setForm(f => ({ ...f, password: '' }));
-      setMsg({ type: 'success', text: 'Profile updated successfully.' });
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Update failed.' });
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -137,22 +124,6 @@ export default function ProfilePage() {
               <div style={{ color: 'var(--text-muted)' }}>Loading...</div>
             ) : (
               <form onSubmit={save}>
-                {msg && (
-                  <div
-                    style={{
-                      background: msg.type === 'success' ? 'rgba(0,128,0,0.08)' : 'rgba(231,76,60,0.08)',
-                      border: `1px solid ${msg.type === 'success' ? 'rgba(0,128,0,0.25)' : 'rgba(231,76,60,0.25)'}`,
-                      borderRadius: 4,
-                      padding: '0.55rem 0.75rem',
-                      marginBottom: '1rem',
-                      fontSize: '0.82rem',
-                      color: msg.type === 'success' ? '#008000' : '#c0392b',
-                    }}
-                  >
-                    {msg.text}
-                  </div>
-                )}
-
                 {isOrg ? (
                   <>
                     <div className="form-group">

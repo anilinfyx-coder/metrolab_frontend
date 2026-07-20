@@ -1,10 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { MdAccountBalanceWallet, MdAssignment, MdCheckCircle, MdWarning } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { formatDateTime } from '../../../utils/dateFormat';
+import { apiFetch } from '../../../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
 function getUser() {
   if (typeof window === 'undefined') return null;
   try { return JSON.parse(localStorage.getItem('b2b_user') || 'null'); } catch { return null; }
@@ -20,17 +20,27 @@ export default function WalletPage() {
     if (!user?.id) return;
 
     // Fetch balance and history in parallel
-    Promise.all([
-      fetch(`${API}/api/B2bClients/${user.id}`, { headers: { token: getToken() } }).then(r => r.json()),
-      fetch(`${API}/api/B2bClients/walletHistory/${user.id}`, { headers: { token: getToken() } }).then(r => r.json()),
-    ]).then(([clientData, historyData]) => {
-      if (clientData.response_code === '200') {
-        setBalance(parseFloat(clientData.obj?.wallet_balance || 0));
+    void (async () => {
+      try {
+        const clientData = await apiFetch<{ wallet_balance?: string | number }>(`/api/B2bClients/${user.id}`, {
+          tokenKey: 'b2b_token',
+          errorFallback: 'Unable to load wallet balance.',
+        });
+        setBalance(parseFloat(String(clientData?.wallet_balance || 0)));
+      } catch {
+        setBalance(0);
       }
-      if (historyData.response_code === '200') {
-        setHistory(historyData.obj || []);
+      try {
+        const historyData = await apiFetch<any[]>(`/api/B2bClients/walletHistory/${user.id}`, {
+          tokenKey: 'b2b_token',
+          errorFallback: 'Unable to load wallet history.',
+        });
+        setHistory(historyData || []);
+      } catch {
+        setHistory([]);
       }
-    }).finally(() => setLoading(false));
+      setLoading(false);
+    })();
   }, []);
 
   const totalCredits = history.filter(t => t.transaction_type === 'CREDIT').reduce((s, t) => s + parseFloat(t.amount), 0);
@@ -53,10 +63,14 @@ export default function WalletPage() {
                     <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.25rem' }}>Current Wallet Balance</div>
                     <div style={{ fontSize: '2.25rem', fontWeight: 700, color: '#fff' }}>${balance.toFixed(2)}</div>
                     <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.25rem' }}>
-                      {balance <= 0 ? '⚠️ Insufficient funds — contact admin to recharge' : '✅ Available for test deductions'}
+                      {balance <= 0 ? (
+                        <><MdWarning size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Insufficient funds — contact admin to recharge</>
+                      ) : (
+                        <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Available for test deductions</>
+                      )}
                     </div>
                   </div>
-                  <div style={{ fontSize: '2.5rem', opacity: 0.3 }}>💰</div>
+                  <div style={{ fontSize: '2.5rem', opacity: 0.3 }}><MdAccountBalanceWallet size={40} aria-hidden /></div>
                 </div>
               </div>
 
@@ -82,7 +96,7 @@ export default function WalletPage() {
             {/* Transaction History */}
             <div className="card">
               <div className="card-header">
-                <span className="card-title">📋 Transaction History</span>
+                <span className="card-title"><MdAssignment size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Transaction History</span>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{history.length} transactions</span>
               </div>
               <div className="card-body" style={{ padding: 0 }}>
@@ -137,7 +151,7 @@ export default function WalletPage() {
                 background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)',
                 display: 'flex', gap: '0.75rem', alignItems: 'flex-start'
               }}>
-                <div style={{ fontSize: '1.25rem' }}>⚠️</div>
+                <div style={{ fontSize: '1.25rem' }}><MdWarning size={20} aria-hidden /></div>
                 <div>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f59e0b', marginBottom: '0.25rem' }}>Low Wallet Balance</div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>

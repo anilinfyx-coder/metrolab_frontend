@@ -2,11 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import TopNav from '../../../../components/TopNav';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() {
-  return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : '';
-}
+import { handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../../lib/api';
 
 type LabTestFlags = Record<string, boolean | string | number | null | undefined> & {
   name?: string;
@@ -115,7 +111,7 @@ export default function EditTestReportPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [labTest, setLabTest] = useState<LabTestFlags | null>(null);
   const [specimens, setSpecimens] = useState<Specimen[]>([]);
   const [locked, setLocked] = useState(false);
@@ -130,18 +126,15 @@ export default function EditTestReportPage() {
     }
 
     setLoading(true);
-    fetch(`${API}/api/LabTestCategoryReport/getLabTestCategoryReportDetails`, {
+    fetch(`${API_BASE}/api/LabTestCategoryReport/getLabTestCategoryReportDetails`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
+      headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
       body: JSON.stringify({ id }),
     })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.response_code !== '200') {
-          setMsg({ type: 'error', text: String(d.obj || 'Failed to load report') });
-          return;
-        }
-        const report = d.obj;
+      .then(async (r) => {
+        const report = await handleApiResponse<any>(r, {
+          errorFallback: 'Failed to load report',
+        });
         const collected = splitTimestamp(report.collected_timestamp);
         const received = splitTimestamp(report.received_timestamp);
         const reported = splitTimestamp(report.reported_timestamp);
@@ -191,7 +184,7 @@ export default function EditTestReportPage() {
           })),
         });
       })
-      .catch((err) => setMsg({ type: 'error', text: err.message || 'Failed to load report' }))
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Failed to load report'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -220,25 +213,22 @@ export default function EditTestReportPage() {
   const save = async () => {
     if (!form) return;
     if (locked) {
-      setMsg({ type: 'error', text: 'This report is locked and cannot be edited.' });
+      toastApiError('This report is locked and cannot be edited.');
       return;
     }
     setSaving(true);
-    setMsg(null);
     try {
-      const res = await fetch(`${API}/api/LabTestCategoryReport/saveLabTestCategoryReport`, {
+      const res = await fetch(`${API_BASE}/api/LabTestCategoryReport/saveLabTestCategoryReport`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify(form),
       });
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setMsg({ type: 'success', text: 'Report updated successfully.' });
-      } else {
-        setMsg({ type: 'error', text: String(d.obj || 'Save failed') });
-      }
-    } catch (err: unknown) {
-      setMsg({ type: 'error', text: err instanceof Error ? err.message : 'Save failed' });
+      await handleApiResponse(res, {
+        successMessage: 'Report updated successfully.',
+        errorFallback: 'Save failed',
+      });
+    } catch {
+      // Error toast handled by handleApiResponse
     }
     setSaving(false);
     if (typeof window !== 'undefined') {
@@ -266,7 +256,9 @@ export default function EditTestReportPage() {
 
       <div className="report-edit-page">
         {loading || !form || !labTest ? (
-          <div className="report-edit-loading">Loading report...</div>
+          <div className="report-edit-loading">
+            {loadError || 'Loading report...'}
+          </div>
         ) : (
           <div className="card report-edit-card">
             <div className="report-edit-header">
@@ -277,12 +269,6 @@ export default function EditTestReportPage() {
             </div>
 
             <div className="report-edit-body">
-              {msg && (
-                <div className={`report-edit-msg ${msg.type === 'success' ? 'ok' : 'err'}`}>
-                  {msg.text}
-                </div>
-              )}
-
               {locked && (
                 <div className="report-edit-msg err">
                   This report is locked. Unlock it from the list to edit.

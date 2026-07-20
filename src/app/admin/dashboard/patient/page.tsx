@@ -1,9 +1,7 @@
 'use client';
 import { useState, useEffect, type InputHTMLAttributes } from 'react';
 import TopNav from '../../../components/TopNav';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { apiFetch, handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
 
 // US States for dropdown
 const US_STATES = [
@@ -44,7 +42,6 @@ export default function PatientDemographicPage() {
   const [reason, setReason] = useState('Other');
   const [customReason, setCustomReason] = useState('');
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
@@ -96,21 +93,32 @@ export default function PatientDemographicPage() {
   };
 
   useEffect(() => {
-    // Load available lab tests
-    fetch(`${API}/api/LabTests`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setLabTests(d.obj.map((t: LabTest) => ({ ...t, is_selected: false }))); });
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/LabTests`, { headers: { token: getToken('admin_token') } });
+        const list = await handleApiResponse<LabTest[]>(res, {
+          errorFallback: 'Failed to load lab tests.',
+        });
+        setLabTests(list.map((t: LabTest) => ({ ...t, is_selected: false })));
+      } catch {
+        setLabTests([]);
+      }
+    })();
   }, []);
 
   const searchPatient = async () => {
-    if (!filter.uid && !filter.mobile) { setMsg({ type: 'error', text: 'Please enter UID or Mobile to search.' }); return; }
-    setSearching(true); setMsg(null);
-    const res = await fetch(`${API}/api/Patient/search?uid=${filter.uid}&mobile=${filter.mobile}`, { headers: { token: getToken() } });
-    const d = await res.json();
-    setSearching(false);
-    if (d.response_code === '200' && d.obj) {
-      const p = d.obj;
-      // Parse dob: YYYY-MM-DD
+    if (!filter.uid && !filter.mobile) {
+      toastApiError('Please enter UID or Mobile to search.');
+      return;
+    }
+    setSearching(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/Patient/search?uid=${filter.uid}&mobile=${filter.mobile}`, {
+        headers: { token: getToken('admin_token') },
+      });
+      const p = await handleApiResponse<Patient>(res, {
+        errorFallback: 'Patient not found. Click "New Patient/Donor" to create one.',
+      });
       const dobParts = p.dob ? p.dob.split('T')[0].split('-') : ['', '1', '1'];
       setPatient({
         ...emptyPatient,
@@ -127,15 +135,16 @@ export default function PatientDemographicPage() {
       setShowDetails(true);
       setFieldErrors({});
       setSaveError(null);
-    } else {
-      setMsg({ type: 'error', text: 'Patient not found. Click "New Patient/Donor" to create one.' });
+    } catch {
+      // Error toast handled by handleApiResponse
+    } finally {
+      setSearching(false);
     }
   };
 
   const newPatient = () => {
     setPatient({ ...emptyPatient });
     setPatientId(null);
-    setMsg(null);
     setFieldErrors({});
     setSaveError(null);
     setLabTests(prev => prev.map(t => ({ ...t, is_selected: false })));
@@ -170,20 +179,22 @@ export default function PatientDemographicPage() {
         city: patient.city, state: patient.state, zipcode: patient.zipcode,
         email: patient.email, ssn: patient.ssn,
       };
-      
-      const patRes = await fetch(`${API}/api/Patient`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify(patientPayload)
-      });
-      const patD = await patRes.json();
-      if (patD.response_code !== '200') {
+
+      try {
+        const patRes = await fetch(`${API_BASE}/api/Patient`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+          body: JSON.stringify(patientPayload),
+        });
+        const created = await handleApiResponse<{ id: number; uid?: string }>(patRes, {
+          errorFallback: 'Failed to create patient.',
+        });
+        finalPatientId = created.id;
+        createdPatientUid = created.uid || '';
+      } catch {
         setSaving(false);
-        setSaveError(typeof patD.obj === 'string' ? patD.obj : 'Failed to create patient.');
         return;
       }
-      finalPatientId = patD.obj.id;
-      createdPatientUid = patD.obj.uid || '';
     }
 
     // Step 2: Add to Waiting List
@@ -193,32 +204,31 @@ export default function PatientDemographicPage() {
       reason_for_test: reasonForTest,
     };
 
-    const res = await fetch(`${API}/api/WaitingList`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(wlPayload)
-    });
-    const d = await res.json();
-    setSaving(false);
-
-    if (d.response_code === '200') {
+    try {
+      const res = await fetch(`${API_BASE}/api/WaitingList`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+        body: JSON.stringify(wlPayload),
+      });
+      await handleApiResponse(res, { errorFallback: 'Failed to save patient. Please try again.' });
       const savedUid = createdPatientUid ? ` (UID: ${createdPatientUid})` : '';
-      setMsg({ type: 'success', text: `Patient saved and added to Waiting List successfully!${savedUid}` });
+      toastApiSuccess(`Patient saved and added to Waiting List successfully!${savedUid}`);
       setFieldErrors({});
       setSaveError(null);
       setPatient({ ...emptyPatient });
       setPatientId(null);
       setLabTests(prev => prev.map(t => ({ ...t, is_selected: false })));
       setShowDetails(false);
-    } else {
-      setSaveError(typeof d.obj === 'string' ? d.obj : 'Failed to save patient. Please try again.');
+    } catch {
+      // Error toast handled by handleApiResponse
+    } finally {
+      setSaving(false);
     }
   };
 
   const resetForm = () => {
     setPatient({ ...emptyPatient });
     setPatientId(null);
-    setMsg(null);
     setFieldErrors({});
     setSaveError(null);
     setReason('Other');
@@ -263,15 +273,6 @@ export default function PatientDemographicPage() {
     <div className="page-content">
       <TopNav title="Patient Demographic" />
       <div style={{ padding: '1.5rem' }}>
-        {msg && (
-          <div style={{
-            background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-            border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-            borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem',
-            fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444'
-          }}>{msg.text}</div>
-        )}
-
         {/* ── Search Card ── */}
         <div className="card patient-search-card" style={{ marginBottom: '1.5rem' }}>
           <div className="card-header patient-search-card-header"><span className="card-title">Select Patient/Donor</span></div>

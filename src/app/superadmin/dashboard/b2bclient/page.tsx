@@ -1,12 +1,27 @@
 'use client';
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
+import {
+  MdAccountBalanceWallet,
+  MdAdd,
+  MdAssignment,
+  MdCheckCircle,
+  MdClose,
+  MdDelete,
+  MdDescription,
+  MdEdit,
+  MdHourglassEmpty,
+  MdPayment,
+  MdRefresh,
+  MdSave,
+  MdSettings,
+  MdVisibility,
+} from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface B2BClient {
@@ -34,19 +49,6 @@ const emptyClient = {
 
 type View = 'list' | 'form' | 'subscription' | 'labtestaccess' | 'documents' | 'wallet';
 
-// ─── Message Banner ───────────────────────────────────────────────────────────
-function MsgBanner({ msg }: { msg: { type: 'success' | 'error'; text: string } | null }) {
-  if (!msg) return null;
-  return (
-    <div style={{
-      background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-      border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-      borderRadius: 8, padding: '0.75rem 1rem', marginBottom: '1rem',
-      fontSize: '0.875rem', color: msg.type === 'success' ? '#10b981' : '#ef4444'
-    }}>{msg.text}</div>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function B2BClientsPage() {
   const confirmDialog = useConfirm();
@@ -57,7 +59,6 @@ export default function B2BClientsPage() {
   const [form, setForm] = useState<Record<string, string>>({ ...emptyClient });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [initViewHandled, setInitViewHandled] = useState(false);
 
   // Subscriptions
@@ -91,12 +92,16 @@ export default function B2BClientsPage() {
   const [medOfficerSigFile, setMedOfficerSigFile] = useState<File | null>(null);
   const [isApproval, setIsApproval] = useState(false);
 
-  const loadClients = () => {
+  const loadClients = async () => {
     setLoading(true);
-    fetch(`${API}/api/B2bClients`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setClients(d.obj || []); })
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<B2BClient[]>('/api/B2bClients', { tokenKey: 'superadmin_token' });
+      setClients(data || []);
+    } catch {
+      setClients([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadClients(); }, []);
@@ -133,7 +138,6 @@ export default function B2BClientsPage() {
   const openAdd = () => {
     setEditingId(null);
     setForm({ ...emptyClient, password: generatePassword() });
-    setMsg(null);
     setView('form');
   };
 
@@ -141,46 +145,50 @@ export default function B2BClientsPage() {
     setEditingId(c.id);
     setForm({ ...emptyClient, ...c as unknown as Record<string, string> });
     setIsApproval(!!(c as any).is_approval);
-    setMsg(null);
     setView('form');
   };
 
   const saveClient = async () => {
     if (!form.company_name || !form.email) {
-      setMsg({ type: 'error', text: 'Company Name and Login Email are required.' }); return;
+      toast.error('Company Name and Login Email are required.');
+      return;
     }
-    setSaving(true); setMsg(null);
+    setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
-    const url = `${API}/api/B2bClients${editingId ? `/${editingId}` : ''}`;
-
-    // Use FormData if any file is attached, otherwise JSON
+    const path = `/api/B2bClients${editingId ? `/${editingId}` : ''}`;
     const hasFiles = logoFile || reportHeaderFile || reportFooterFile || medOfficerSigFile;
-    let res: Response;
-    if (hasFiles) {
-      const fd = new FormData();
-      Object.entries({ ...form, role_id: '2', status: 'true', is_approval: String(isApproval) }).forEach(([k, v]) => fd.append(k, v as string));
-      if (logoFile) fd.append('logo_file', logoFile);
-      if (reportHeaderFile) fd.append('report_header_file', reportHeaderFile);
-      if (reportFooterFile) fd.append('report_footer_file', reportFooterFile);
-      if (medOfficerSigFile) fd.append('medical_officer_signature_file', medOfficerSigFile);
-      res = await fetch(url, { method, headers: { token: getToken() }, body: fd });
-    } else {
-      res = await fetch(url, {
-        method, headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify({ ...form, role_id: 2, status: true, deleted: false, is_approval: isApproval })
-      });
-    }
-
-    const d = await res.json();
-    setSaving(false);
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: `B2B Lab ${editingId ? 'updated' : 'added'} successfully.` });
+    try {
+      if (hasFiles) {
+        const fd = new FormData();
+        Object.entries({ ...form, role_id: '2', status: 'true', is_approval: String(isApproval) }).forEach(([k, v]) => fd.append(k, v as string));
+        if (logoFile) fd.append('logo_file', logoFile);
+        if (reportHeaderFile) fd.append('report_header_file', reportHeaderFile);
+        if (reportFooterFile) fd.append('report_footer_file', reportFooterFile);
+        if (medOfficerSigFile) fd.append('medical_officer_signature_file', medOfficerSigFile);
+        await apiFetch(path, {
+          method,
+          tokenKey: 'superadmin_token',
+          body: fd,
+          successMessage: `B2B Lab ${editingId ? 'updated' : 'added'} successfully.`,
+          errorFallback: 'Unable to save B2B Lab.',
+        });
+      } else {
+        await apiFetch(path, {
+          method,
+          tokenKey: 'superadmin_token',
+          body: JSON.stringify({ ...form, role_id: 2, status: true, deleted: false, is_approval: isApproval }),
+          successMessage: `B2B Lab ${editingId ? 'updated' : 'added'} successfully.`,
+          errorFallback: 'Unable to save B2B Lab.',
+        });
+      }
       setLogoFile(null); setReportHeaderFile(null); setReportFooterFile(null); setMedOfficerSigFile(null);
       setIsApproval(false);
       setView('list');
       loadClients();
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : JSON.stringify(d.obj) });
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -192,23 +200,35 @@ export default function B2BClientsPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/B2bClients/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadClients();
+    try {
+      await apiFetch(`/api/B2bClients/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      loadClients();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const toggleStatus = async (c: B2BClient) => {
-    await fetch(`${API}/api/B2bClients/${c.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !c.status })
-    });
-    loadClients();
+    try {
+      await apiFetch(`/api/B2bClients/${c.id}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ status: !c.status }),
+      });
+      loadClients();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   // ── Subscriptions ─────────────────────────────────────────────────────────
-  const loadSubscriptions = (clientId: number) => {
-    fetch(`${API}/api/B2bClientSubscription?b2b_client_id=${clientId}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setSubscriptions(d.obj || []); });
+  const loadSubscriptions = async (clientId: number) => {
+    try {
+      const data = await apiFetch<Subscription[]>(`/api/B2bClientSubscription?b2b_client_id=${clientId}`, { tokenKey: 'superadmin_token' });
+      setSubscriptions(data || []);
+    } catch {
+      setSubscriptions([]);
+    }
   };
 
   const openSubscription = (c: B2BClient) => {
@@ -221,23 +241,31 @@ export default function B2BClientsPage() {
 
   const saveSub = async () => {
     if (!subForm.start_date || !subForm.end_date || !subForm.amount) {
-      setMsg({ type: 'error', text: 'All fields are required.' }); return;
+      toast.error('All fields are required.');
+      return;
     }
     if (new Date(subForm.end_date) <= new Date(subForm.start_date)) {
-      setMsg({ type: 'error', text: 'End date must be after start date.' }); return;
+      toast.error('End date must be after start date.');
+      return;
     }
     if (isNaN(Number(subForm.amount)) || Number(subForm.amount) <= 0) {
-      setMsg({ type: 'error', text: 'Amount must be a positive number.' }); return;
+      toast.error('Amount must be a positive number.');
+      return;
     }
     const method = editingSubId ? 'PUT' : 'POST';
-    const url = `${API}/api/B2bClientSubscription${editingSubId ? `/${editingSubId}` : ''}`;
-    await fetch(url, {
-      method, headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ ...subForm, b2b_client_id: selectedClient?.id })
-    });
-    setSubForm({ start_date: '', end_date: '', amount: '' });
-    setEditingSubId(null);
-    if (selectedClient) loadSubscriptions(selectedClient.id);
+    const path = `/api/B2bClientSubscription${editingSubId ? `/${editingSubId}` : ''}`;
+    try {
+      await apiFetch(path, {
+        method,
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ ...subForm, b2b_client_id: selectedClient?.id }),
+      });
+      setSubForm({ start_date: '', end_date: '', amount: '' });
+      setEditingSubId(null);
+      if (selectedClient) loadSubscriptions(selectedClient.id);
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const deleteSub = async (id: number) => {
@@ -248,24 +276,35 @@ export default function B2BClientsPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/B2bClientSubscription/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    if (selectedClient) loadSubscriptions(selectedClient.id);
+    try {
+      await apiFetch(`/api/B2bClientSubscription/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      if (selectedClient) loadSubscriptions(selectedClient.id);
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   // ── Documents ─────────────────────────────────────────────────────────────
-  const loadDocTypes = () => {
-    fetch(`${API}/api/TypeData`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setDocTypes(d.obj || []); });
+  const loadDocTypes = async () => {
+    try {
+      const data = await apiFetch<{ id: number; name: string }[]>('/api/TypeData', { tokenKey: 'superadmin_token' });
+      setDocTypes(data || []);
+    } catch {
+      setDocTypes([]);
+    }
   };
 
-  const loadDocuments = (clientId: number) => {
-    fetch(`${API}/api/B2bClientDocument/getB2bClientDocumentList`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ b2b_client_id: clientId })
-    })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setDocuments(d.obj || []); });
+  const loadDocuments = async (clientId: number) => {
+    try {
+      const data = await apiFetch<B2BDocument[]>('/api/B2bClientDocument/getB2bClientDocumentList', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ b2b_client_id: clientId }),
+      });
+      setDocuments(data || []);
+    } catch {
+      setDocuments([]);
+    }
   };
 
   const openDocuments = (c: B2BClient) => {
@@ -278,7 +317,8 @@ export default function B2BClientsPage() {
 
   const saveDoc = async () => {
     if (!docForm.typeDataId || (!docForm.id && !docForm.file)) {
-      setMsg({ type: 'error', text: 'Document Type and File are required.' }); return;
+      toast.error('Document Type and File are required.');
+      return;
     }
     const formData = new FormData();
     formData.append('b2bClientId', String(selectedClient?.id));
@@ -287,13 +327,19 @@ export default function B2BClientsPage() {
     if (docForm.fileName) formData.append('fileName', docForm.fileName);
     if (docForm.file) formData.append('UploadFile', docForm.file);
 
-    await fetch(`${API}/api/B2bClientDocument/saveB2bClientDocument`, {
-      method: 'POST', headers: { token: getToken() },
-      body: formData
-    });
-    setMsg({ type: 'success', text: `Document ${docForm.id ? 'updated' : 'uploaded'} successfully.` });
-    setDocForm({ id: null, typeDataId: '', file: null, fileName: '' });
-    if (selectedClient) loadDocuments(selectedClient.id);
+    try {
+      await apiFetch('/api/B2bClientDocument/saveB2bClientDocument', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: formData,
+        successMessage: `Document ${docForm.id ? 'updated' : 'uploaded'} successfully.`,
+        errorFallback: 'Unable to save document.',
+      });
+      setDocForm({ id: null, typeDataId: '', file: null, fileName: '' });
+      if (selectedClient) loadDocuments(selectedClient.id);
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const deleteDoc = async (id: number) => {
@@ -304,79 +350,99 @@ export default function B2BClientsPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/B2bClientDocument/deleteB2bClientDocument`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id })
-    });
-    if (selectedClient) loadDocuments(selectedClient.id);
+    try {
+      await apiFetch('/api/B2bClientDocument/deleteB2bClientDocument', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ id }),
+      });
+      if (selectedClient) loadDocuments(selectedClient.id);
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   // ── Lab Test Access ───────────────────────────────────────────────────────
-  const openLabTestAccess = (c: B2BClient) => {
+  const openLabTestAccess = async (c: B2BClient) => {
     setSelectedClient(c);
-    fetch(`${API}/api/LabTests`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200') {
-          // Check which tests the B2B client already has access to
-          fetch(`${API}/api/B2bClientLabTestAccess?b2b_client_id=${c.id}`, { headers: { token: getToken() } })
-            .then(r2 => r2.json())
-            .then(d2 => {
-              const accessIds = new Set((d2.obj || []).map((a: { lab_test_id: number }) => a.lab_test_id));
-              setLabTests(d.obj.map((t: LabTest) => ({ ...t, is_selected: accessIds.has(t.id) })));
-            })
-            .catch(() => setLabTests(d.obj));
-        }
-      });
+    try {
+      const tests = await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' });
+      try {
+        const access = await apiFetch<{ lab_test_id: number }[]>(`/api/B2bClientLabTestAccess?b2b_client_id=${c.id}`, { tokenKey: 'superadmin_token' });
+        const accessIds = new Set((access || []).map((a: { lab_test_id: number }) => a.lab_test_id));
+        setLabTests((tests || []).map((t: LabTest) => ({ ...t, is_selected: accessIds.has(t.id) })));
+      } catch {
+        setLabTests(tests || []);
+      }
+    } catch {
+      setLabTests([]);
+    }
     setView('labtestaccess');
   };
 
   const saveLabTestAccess = async () => {
     const selected = labTests.filter(t => t.is_selected).map(t => t.id);
-    await fetch(`${API}/api/B2bClientLabTestAccess/bulk`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ b2b_client_id: selectedClient?.id, lab_test_ids: selected })
-    });
-    setMsg({ type: 'success', text: 'Lab Test Access saved successfully.' });
-    setView('list');
+    try {
+      await apiFetch('/api/B2bClientLabTestAccess/bulk', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ b2b_client_id: selectedClient?.id, lab_test_ids: selected }),
+        successMessage: 'Lab Test Access saved successfully.',
+        errorFallback: 'Unable to save lab test access.',
+      });
+      setView('list');
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   // ── Wallet ────────────────────────────────────────────────────────────────
-  const openWallet = (c: B2BClient) => {
+  const openWallet = async (c: B2BClient) => {
     setSelectedClient(c);
     setWalletBalance((c as any).wallet_balance || 0);
     setWalletForm({ amount: '', description: '' });
-    fetch(`${API}/api/B2bClients/walletHistory/${c.id}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setWalletHistory(d.obj || []); });
+    try {
+      const history = await apiFetch<any[]>(`/api/B2bClients/walletHistory/${c.id}`, { tokenKey: 'superadmin_token' });
+      setWalletHistory(history || []);
+    } catch {
+      setWalletHistory([]);
+    }
     setView('wallet');
   };
 
   const rechargeWallet = async () => {
     if (!walletForm.amount || isNaN(Number(walletForm.amount)) || Number(walletForm.amount) <= 0) {
-      setMsg({ type: 'error', text: 'Please enter a valid positive amount.' }); return;
+      toast.error('Please enter a valid positive amount.');
+      return;
     }
-    setWalletSaving(true); setMsg(null);
-    const res = await fetch(`${API}/api/B2bClients/rechargeWallet`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ b2b_client_id: selectedClient?.id, amount: Number(walletForm.amount), description: walletForm.description || 'Manual Recharge' })
-    });
-    const d = await res.json();
-    setWalletSaving(false);
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: `Wallet recharged successfully. New Balance: $${d.obj.newBalance}` });
-      setWalletBalance(d.obj.newBalance);
+    setWalletSaving(true);
+    try {
+      const result = await apiFetch<{ newBalance: number }>('/api/B2bClients/rechargeWallet', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({
+          b2b_client_id: selectedClient?.id,
+          amount: Number(walletForm.amount),
+          description: walletForm.description || 'Manual Recharge',
+        }),
+        errorFallback: 'Recharge failed.',
+      });
+      toastApiSuccess(`Wallet recharged successfully. New Balance: $${result.newBalance}`);
+      setWalletBalance(result.newBalance);
       setWalletForm({ amount: '', description: '' });
-      // Reload history
       if (selectedClient) {
-        fetch(`${API}/api/B2bClients/walletHistory/${selectedClient.id}`, { headers: { token: getToken() } })
-          .then(r => r.json())
-          .then(d2 => { if (d2.response_code === '200') setWalletHistory(d2.obj || []); });
+        try {
+          const history = await apiFetch<any[]>(`/api/B2bClients/walletHistory/${selectedClient.id}`, { tokenKey: 'superadmin_token' });
+          setWalletHistory(history || []);
+        } catch {
+          /* error toasted by apiFetch */
+        }
       }
-      loadClients(); // refresh wallet_balance column in list
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Recharge failed.' });
+      loadClients();
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setWalletSaving(false);
     }
   };
 
@@ -393,22 +459,16 @@ export default function B2BClientsPage() {
       render: client => (
         <div className="listing-actions">
           <button type="button" className="action-btn action-btn-download" title="Documents" onClick={() => openDocuments(client)}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm0 7V3.5L18.5 8H14z" />
-            </svg>
+            <MdDescription size={15} aria-hidden />
           </button>
           <button type="button" className="action-btn action-btn-status" title="Subscriptions" onClick={() => openSubscription(client)}>
             <span aria-hidden style={{ fontSize: '1rem', fontWeight: 700 }}>$</span>
           </button>
           <button type="button" className="action-btn b2b-config-settings" title="Lab Test Access" onClick={() => openLabTestAccess(client)}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.07-.94l2.03-1.58-1.92-3.32-2.39.96a7.1 7.1 0 0 0-1.62-.94L14.87 3h-3.84l-.36 2.18c-.58.24-1.12.55-1.62.94l-2.39-.96-1.92 3.32 2.03 1.58c-.05.31-.09.64-.09.94s.03.63.08.94l-2.02 1.58 1.92 3.32 2.39-.96c.5.39 1.04.71 1.62.94l.36 2.18h3.84l.36-2.18c.58-.24 1.12-.55 1.62-.94l2.39.96 1.92-3.32-2.02-1.58zM13 15.5A3.5 3.5 0 1 1 13 8a3.5 3.5 0 0 1 0 7.5z" />
-            </svg>
+            <MdSettings size={15} aria-hidden />
           </button>
           <button type="button" className="action-btn action-btn-wallet" title="Wallet" onClick={() => openWallet(client)}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-              <path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-1.5H13a2.5 2.5 0 0 1 0-5H21zm-8 1.5a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1h9V9h-9zm3 2.75a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
-            </svg>
+            <MdAccountBalanceWallet size={15} aria-hidden />
           </button>
         </div>
       ),
@@ -429,12 +489,11 @@ export default function B2BClientsPage() {
     return (
       <div className="page-content">
         <TopNav title="B2B Lab Details">
-          <button className="btn btn-ghost" onClick={() => setView('list')}>✕ Close</button>
+          <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
         <div style={{ padding: '1.5rem' }}>
-          <MsgBanner msg={msg} />
           <div className="card">
-            <div className="card-header"><span className="card-title">{editingId ? '✏️ Edit B2B Lab' : '➕ Add B2B Lab'}</span></div>
+            <div className="card-header"><span className="card-title">{editingId ? <><MdEdit size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Edit B2B Lab</> : <><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add B2B Lab</>}</span></div>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                 {inp('company_name', 'B2B Company Name', 'text', true)}
@@ -468,7 +527,7 @@ export default function B2BClientsPage() {
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
                     <input type="checkbox" checked={isApproval} onChange={e => setIsApproval(e.target.checked)}
                       style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
-                    <span style={{ fontSize: '0.875rem' }}>{isApproval ? '✅ Approval Required' : 'No Approval Required'}</span>
+                    <span style={{ fontSize: '0.875rem' }}>{isApproval ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Approval Required</> : 'No Approval Required'}</span>
                   </label>
                 </div>
 
@@ -502,9 +561,9 @@ export default function B2BClientsPage() {
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
                 <button className="btn btn-primary" onClick={saveClient} disabled={saving}>
-                  {saving ? '⏳ Saving...' : '💾 Save'}
+                  {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
                 </button>
-                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyClient }); setMsg(null); }}>🔄 Reset</button>
+                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyClient }); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
               </div>
             </div>
           </div>
@@ -520,14 +579,13 @@ export default function B2BClientsPage() {
     return (
       <div className="page-content">
         <TopNav title={`Subscriptions — ${selectedClient?.company_name || ''}`}>
-          <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+          <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
         <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
           {/* Form card */}
           <div className="card">
             <div className="card-header"><span className="card-title">Subscription Detail</span></div>
             <div className="card-body">
-              <MsgBanner msg={msg} />
               <div className="form-group">
                 <label>Start Date <span style={{ color: '#ef4444' }}>*</span></label>
                 <input type="date" value={subForm.start_date} onChange={e => setSubForm(p => ({ ...p, start_date: e.target.value }))} />
@@ -541,8 +599,8 @@ export default function B2BClientsPage() {
                 <input type="number" value={subForm.amount} onChange={e => setSubForm(p => ({ ...p, amount: e.target.value }))} placeholder="Enter Amount" />
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                <button className="btn btn-primary" onClick={saveSub}>💾 Save</button>
-                <button className="btn btn-ghost" onClick={() => { setSubForm({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}>🔄 Reset</button>
+                <button className="btn btn-primary" onClick={saveSub}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
+                <button className="btn btn-ghost" onClick={() => { setSubForm({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
               </div>
             </div>
           </div>
@@ -567,8 +625,8 @@ export default function B2BClientsPage() {
                       <td style={{ padding: '0.75rem 1rem' }}>USD {s.amount}</td>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', marginRight: '0.5rem' }}
-                          onClick={() => { setSubForm({ start_date: s.start_date?.slice(0, 10) || '', end_date: s.end_date?.slice(0, 10) || '', amount: String(s.amount) }); setEditingSubId(s.id); }}>✏️ Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => deleteSub(s.id)}>🗑 Delete</button>
+                          onClick={() => { setSubForm({ start_date: s.start_date?.slice(0, 10) || '', end_date: s.end_date?.slice(0, 10) || '', amount: String(s.amount) }); setEditingSubId(s.id); }}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
+                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => deleteSub(s.id)}><MdDelete size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Delete</button>
                       </td>
                     </tr>
                   ))}
@@ -602,7 +660,6 @@ export default function B2BClientsPage() {
         <TopNav title="Manage B2B Labs" />
         <div className="b2b-documents-split" style={{ padding: '1.5rem' }}>
           <div>
-            <MsgBanner msg={msg} />
             <div className="card">
               <div className="card-header">
                 <span className="card-title">{docForm.id ? 'Edit Document Detail' : 'Document Detail'}</span>
@@ -646,7 +703,7 @@ export default function B2BClientsPage() {
             rows={documents}
             emptyText="No documents found."
             headerActions={(
-              <button type="button" className="listing-header-link" onClick={() => { setView('list'); setMsg(null); }}>
+              <button type="button" className="listing-header-link" onClick={() => { setView('list'); }}>
                 Close
               </button>
             )}
@@ -659,12 +716,9 @@ export default function B2BClientsPage() {
                   type="button"
                   className="action-btn action-btn-view-eye"
                   title="View Document"
-                  onClick={() => window.open(`${API}/api/B2bClientDocument/file/${document.file_name}`, '_blank', 'noopener,noreferrer')}
+                  onClick={() => window.open(`${API_BASE}/api/B2bClientDocument/file/${document.file_name}`, '_blank', 'noopener,noreferrer')}
                 >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="12" cy="12" r="3" />
-                  </svg>
+                  <MdVisibility size={16} aria-hidden />
                 </button>
                 <button
                   type="button"
@@ -677,18 +731,13 @@ export default function B2BClientsPage() {
                       file: null,
                       fileName: document.file_name,
                     });
-                    setMsg(null);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z" />
-                  </svg>
+                  <MdEdit size={15} aria-hidden />
                 </button>
                 <button type="button" className="action-btn action-btn-delete" title="Delete Document" onClick={() => deleteDoc(document.id)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-                  </svg>
+                  <MdDelete size={14} aria-hidden />
                 </button>
               </div>
             )}
@@ -705,12 +754,11 @@ export default function B2BClientsPage() {
     return (
       <div className="page-content">
         <TopNav title={`Lab Test Access — ${selectedClient?.company_name || ''}`}>
-          <button className="btn btn-primary" onClick={saveLabTestAccess}>💾 Save</button>
-            <button className="btn btn-ghost" onClick={() => { if (selectedClient) openLabTestAccess(selectedClient); }}>🔄 Refresh</button>
-            <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+          <button className="btn btn-primary" onClick={saveLabTestAccess}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
+            <button className="btn btn-ghost" onClick={() => { if (selectedClient) openLabTestAccess(selectedClient); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Refresh</button>
+            <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
         <div style={{ padding: '1.5rem' }}>
-          <MsgBanner msg={msg} />
           <div className="card">
             <div className="card-header"><span className="card-title">List of Lab Test Access for &quot;{selectedClient?.company_name}&quot;</span></div>
             <div className="card-body" style={{ padding: 0 }}>
@@ -740,8 +788,8 @@ export default function B2BClientsPage() {
               </table>
             </div>
             <div className="card-footer" style={{ display: 'flex', gap: '0.75rem' }}>
-              <button className="btn btn-primary" onClick={saveLabTestAccess}>💾 Save</button>
-              <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+              <button className="btn btn-primary" onClick={saveLabTestAccess}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
+              <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
             </div>
           </div>
         </div>
@@ -756,10 +804,9 @@ export default function B2BClientsPage() {
     return (
       <div className="page-content">
         <TopNav title={`Wallet — ${selectedClient?.company_name}`}>
-          <button className="btn btn-ghost" onClick={() => { setView('list'); setMsg(null); }}>✕ Close</button>
+          <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
         <div style={{ padding: '1.5rem' }}>
-          <MsgBanner msg={msg} />
 
           {/* Balance Banner */}
           <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', border: 'none' }}>
@@ -769,13 +816,13 @@ export default function B2BClientsPage() {
                 <div style={{ fontSize: '2.5rem', fontWeight: 700, color: '#fff' }}>${parseFloat(String(walletBalance || 0)).toFixed(2)}</div>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>{selectedClient?.company_name}</div>
               </div>
-              <div style={{ fontSize: '3rem', opacity: 0.3 }}>💰</div>
+              <div style={{ fontSize: '3rem', opacity: 0.3 }}><MdAccountBalanceWallet size={48} aria-hidden /></div>
             </div>
           </div>
 
           {/* Recharge Form */}
           <div className="card" style={{ marginBottom: '1.5rem' }}>
-            <div className="card-header"><span className="card-title">➕ Add Funds</span></div>
+            <div className="card-header"><span className="card-title"><MdAdd size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Funds</span></div>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'flex-end' }}>
                 <div className="form-group" style={{ margin: 0 }}>
@@ -792,7 +839,7 @@ export default function B2BClientsPage() {
                 </div>
                 <button className="btn btn-primary" onClick={rechargeWallet} disabled={walletSaving}
                   style={{ whiteSpace: 'nowrap' }}>
-                  {walletSaving ? '⏳ Adding...' : '💳 Add Funds'}
+                  {walletSaving ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</> : <><MdPayment size={16} aria-hidden /> Add Funds</>}
                 </button>
               </div>
             </div>
@@ -800,7 +847,7 @@ export default function B2BClientsPage() {
 
           {/* Transaction History */}
           <div className="card">
-            <div className="card-header"><span className="card-title">📋 Transaction History</span></div>
+            <div className="card-header"><span className="card-title"><MdAssignment size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Transaction History</span></div>
             <div className="card-body" style={{ padding: 0 }}>
               {walletHistory.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No transactions yet.</div>

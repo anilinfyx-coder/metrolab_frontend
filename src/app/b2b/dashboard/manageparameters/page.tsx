@@ -1,11 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { MdHourglassEmpty, MdRefresh, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
   try { return JSON.parse(localStorage.getItem('b2b_user') || '{}'); } catch { return {}; }
@@ -62,23 +62,34 @@ export default function TestResultParameterPage() {
   const [errors, setErrors] = useState<ParamErrors>({});
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
     const user = getStoredUser();
     const query = user?.id ? `?b2b_client_id=${user.id}` : '';
-    fetch(`${API}/api/ReportRequestParameters${query}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setParams(d.obj || []); })
-      .catch(() => setParams([]))
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<TestResultParameter[]>(`/api/ReportRequestParameters${query}`, {
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to load parameters.',
+      });
+      setParams(data || []);
+    } catch {
+      setParams([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const loadLabTests = () => {
-    fetch(`${API}/api/LabTests`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setLabTests(d.obj || []); });
+  const loadLabTests = async () => {
+    try {
+      const data = await apiFetch<{ id: number; name: string }[]>('/api/LabTests', {
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to load lab tests.',
+      });
+      setLabTests(data || []);
+    } catch {
+      setLabTests([]);
+    }
   };
 
   useEffect(() => {
@@ -96,7 +107,6 @@ export default function TestResultParameterPage() {
       delete next[field];
       return next;
     });
-    if (msg?.type === 'error') setMsg(null);
   };
 
   const validateForm = (): ParamErrors => {
@@ -125,7 +135,7 @@ export default function TestResultParameterPage() {
     const nextErrors = validateForm();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
-      setMsg({ type: 'error', text: 'Please correct the highlighted fields before saving.' });
+      toastApiError('Please correct the highlighted fields before saving.');
       const firstInvalidField = Object.keys(nextErrors)[0];
       window.setTimeout(() => {
         const input = document.querySelector<HTMLElement>(`[data-param-field="${firstInvalidField}"]`);
@@ -136,14 +146,13 @@ export default function TestResultParameterPage() {
     }
 
     setSaving(true);
-    setMsg(null);
     const method = editingId ? 'PUT' : 'POST';
-    const url = `${API}/api/ReportRequestParameters${editingId ? `/${editingId}` : ''}`;
+    const path = `/api/ReportRequestParameters${editingId ? `/${editingId}` : ''}`;
     const user = getStoredUser();
     try {
-      const res = await fetch(url, {
+      await apiFetch(path, {
         method,
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        tokenKey: 'b2b_token',
         body: JSON.stringify({
           name: form.name.trim(),
           placeholder: form.placeholder.trim(),
@@ -159,19 +168,15 @@ export default function TestResultParameterPage() {
           b2b_client_id: user?.id,
           status: true,
         }),
+        successMessage: `Parameter ${editingId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save the parameter. Please try again.',
       });
-      const d = await res.json();
-      if (res.ok && d.response_code === '200') {
-        setMsg({ type: 'success', text: `Parameter ${editingId ? 'updated' : 'added'} successfully.` });
-        setForm({ ...emptyForm });
-        setErrors({});
-        setEditingId(null);
-        loadData();
-      } else {
-        setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Unable to save the parameter. Please try again.' });
-      }
+      setForm({ ...emptyForm });
+      setErrors({});
+      setEditingId(null);
+      loadData();
     } catch {
-      setMsg({ type: 'error', text: 'Unable to connect to the server. Please check your connection and try again.' });
+      /* toast handled by apiFetch */
     } finally {
       setSaving(false);
     }
@@ -185,16 +190,30 @@ export default function TestResultParameterPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/ReportRequestParameters/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadData();
+    try {
+      await apiFetch(`/api/ReportRequestParameters/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to delete parameter.',
+      });
+      loadData();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const toggleStatus = async (p: TestResultParameter) => {
-    await fetch(`${API}/api/ReportRequestParameters/${p.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !p.status }),
-    });
-    loadData();
+    try {
+      await apiFetch(`/api/ReportRequestParameters/${p.id}`, {
+        method: 'PUT',
+        tokenKey: 'b2b_token',
+        body: JSON.stringify({ status: !p.status }),
+        errorFallback: 'Unable to update parameter status.',
+      });
+      loadData();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const openEdit = (p: TestResultParameter) => {
@@ -213,7 +232,6 @@ export default function TestResultParameterPage() {
       lab_test_id: String(p.lab_test_id || ''),
     });
     setErrors({});
-    setMsg(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -221,7 +239,6 @@ export default function TestResultParameterPage() {
     setEditingId(null);
     setForm({ ...emptyForm });
     setErrors({});
-    setMsg(null);
   };
 
   const getInputTypeLabel = (val: number | string) => INPUT_TYPE_LABELS[String(val)] || String(val);
@@ -270,23 +287,6 @@ export default function TestResultParameterPage() {
     <div className="page-content">
       <TopNav title="Test Result Parameters" />
       <div style={{ padding: '1.5rem' }}>
-          {msg && (
-            <div
-              role="alert"
-              style={{
-                background: msg.type === 'success' ? '#ecfdf5' : '#fef2f2',
-                border: `1px solid ${msg.type === 'success' ? '#10b981' : '#ef4444'}`,
-                borderRadius: 8,
-                padding: '0.85rem 1rem',
-                marginBottom: '1rem',
-                fontSize: '0.875rem',
-                color: msg.type === 'success' ? '#047857' : '#b91c1c',
-                fontWeight: 600,
-              }}
-            >
-              {msg.type === 'success' ? '✓ ' : '⚠ '}{msg.text}
-            </div>
-          )}
         <div className="manage-parameters-split">
           <div className="card">
             <div className="card-header">
@@ -461,9 +461,9 @@ export default function TestResultParameterPage() {
 
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
                 <button className="btn btn-primary" onClick={save} disabled={saving}>
-                  {saving ? '⏳ Saving...' : '💾 Save'}
+                  {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
                 </button>
-                <button className="btn btn-ghost" onClick={resetForm} disabled={saving}>🔄 Reset</button>
+                <button className="btn btn-ghost" onClick={resetForm} disabled={saving}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
               </div>
             </div>
           </div>

@@ -1,11 +1,10 @@
 'use client';
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('superadmin_token') || '' : ''; }
+import { apiFetch } from '../../../../lib/api';
 
 interface DocumentType { id: number; name: string; description: string; status: boolean; }
 
@@ -19,45 +18,50 @@ export default function DocumentTypePage() {
   const [titleError, setTitleError] = useState('');
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    fetch(`${API}/api/TypeData`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setTypes(d.obj || []); })
-      .catch(() => setTypes([]))
-      .finally(() => setLoading(false));
+    try {
+      const data = await apiFetch<DocumentType[]>('/api/TypeData', { tokenKey: 'superadmin_token' });
+      setTypes(data || []);
+    } catch {
+      setTypes([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    void Promise.resolve().then(loadData);
+    void loadData();
   }, []);
 
   const save = async () => {
     if (!form.name.trim()) {
       setTitleError('Please enter the document type title.');
-      setMsg({ type: 'error', text: 'Please correct the highlighted field before saving.' });
+      toast.error('Please correct the highlighted field before saving.');
       window.setTimeout(() => document.getElementById('document-type-title')?.focus(), 0);
       return;
     }
-    setSaving(true); setMsg(null);
+    setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
-    const url = `${API}/api/TypeData${editingId ? `/${editingId}` : ''}`;
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(form)
-    });
-    const d = await res.json();
-    setSaving(false);
-    if (d.response_code === '200') {
-      setMsg({ type: 'success', text: `Document Type ${editingId ? 'updated' : 'added'}.` });
+    const path = `/api/TypeData${editingId ? `/${editingId}` : ''}`;
+    try {
+      await apiFetch(path, {
+        method,
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify(form),
+        successMessage: `Document Type ${editingId ? 'updated' : 'added'}.`,
+        errorFallback: 'Unable to save document type.',
+      });
       setForm({ ...emptyForm });
       setTitleError('');
       setEditingId(null);
       loadData();
-    } else { setMsg({ type: 'error', text: d.obj }); }
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (id: number) => {
@@ -68,23 +72,31 @@ export default function DocumentTypePage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/TypeData/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadData();
+    try {
+      await apiFetch(`/api/TypeData/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      loadData();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const toggleStatus = async (t: DocumentType) => {
-    await fetch(`${API}/api/TypeData/${t.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !t.status })
-    });
-    loadData();
+    try {
+      await apiFetch(`/api/TypeData/${t.id}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ status: !t.status }),
+      });
+      loadData();
+    } catch {
+      /* error toasted by apiFetch */
+    }
   };
 
   const openEdit = (t: DocumentType) => {
     setEditingId(t.id);
     setForm({ name: t.name || '', description: t.description || '' });
     setTitleError('');
-    setMsg(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -92,7 +104,6 @@ export default function DocumentTypePage() {
     setEditingId(null);
     setForm({ ...emptyForm });
     setTitleError('');
-    setMsg(null);
   };
 
   const columns: ListingColumn<DocumentType>[] = [
@@ -103,36 +114,6 @@ export default function DocumentTypePage() {
     <div className="page-content">
       <TopNav title="Manage Document Type" />
       <div style={{ padding: '1.5rem' }}>
-        {msg && (
-          <div
-            role="alert"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '0.75rem',
-              background: msg.type === 'success' ? '#ecfdf5' : '#fef2f2',
-              border: `1px solid ${msg.type === 'success' ? '#10b981' : '#ef4444'}`,
-              borderRadius: 8,
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-              color: msg.type === 'success' ? '#047857' : '#b91c1c',
-              fontWeight: 600,
-            }}
-          >
-            <span>{msg.type === 'success' ? '✓ ' : '⚠ '}{msg.text}</span>
-            <button
-              type="button"
-              aria-label="Dismiss message"
-              onClick={() => setMsg(null)}
-              style={{ border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: '1rem' }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
         <div className="document-type-split">
           <div className="card">
             <div className="card-header">
@@ -152,7 +133,6 @@ export default function DocumentTypePage() {
                     onChange={e => {
                       setForm(previous => ({ ...previous, name: e.target.value }));
                       if (titleError) setTitleError('');
-                      if (msg?.type === 'error') setMsg(null);
                     }}
                     style={{
                       borderColor: titleError ? '#ef4444' : undefined,

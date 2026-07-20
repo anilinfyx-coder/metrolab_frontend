@@ -3,9 +3,8 @@ import { useState, useEffect, useMemo } from 'react';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingHeaderActions, ListingColumn } from '../../../components/ListingTable';
+import { apiFetch, toastApiError } from '../../../../lib/api';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('b2b_token') || '' : ''; }
 function getUser() { return typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('b2b_user') || '{}') : {}; }
 
 interface CorporateClient {
@@ -13,6 +12,7 @@ interface CorporateClient {
   email: string; mobile: string; status: boolean; address?: string;
   country_id?: number | string | null; state_id?: number | string | null;
   city_id?: number | string | null; pincode?: string; password?: string;
+  b2b_client_id?: number | string | null;
 }
 
 interface GeoItem { id: number; name: string; country_id?: number; state_id?: number; }
@@ -56,30 +56,37 @@ export default function CorporateClientPage() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...emptyClient, id: null as number | null });
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [countries, setCountries] = useState<GeoItem[]>([]);
   const [states, setStates] = useState<GeoItem[]>([]);
   const [cities, setCities] = useState<GeoItem[]>([]);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    fetch(`${API}/api/CorporateClients`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => {
-        if (d.response_code === '200') {
-          const b2bId = getUser().id;
-          const all = d.obj || [];
-          setClients(b2bId ? all.filter((c: any) => Number(c.b2b_client_id) === Number(b2bId)) : all);
-        }
-      })
-      .finally(() => setLoading(false));
+    try {
+      const all = await apiFetch<CorporateClient[]>('/api/CorporateClients', {
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to load corporate clients.',
+      });
+      const b2bId = getUser().id;
+      setClients(b2bId ? (all || []).filter((c) => Number(c.b2b_client_id) === Number(b2bId)) : (all || []));
+    } catch {
+      setClients([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const loadCountries = () => {
-    fetch(`${API}/api/Country`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setCountries(d.obj || []); });
+  const loadCountries = async () => {
+    try {
+      const data = await apiFetch<GeoItem[]>('/api/Country', {
+        tokenKey: 'b2b_token',
+        errorFallback: 'Unable to load countries.',
+      });
+      setCountries(data || []);
+    } catch {
+      setCountries([]);
+    }
   };
 
   useEffect(() => {
@@ -92,9 +99,12 @@ export default function CorporateClientPage() {
       setStates([]);
       return;
     }
-    fetch(`${API}/api/State?country_id=${form.country_id}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setStates(d.obj || []); });
+    apiFetch<GeoItem[]>(`/api/State?country_id=${form.country_id}`, {
+      tokenKey: 'b2b_token',
+      errorFallback: 'Unable to load states.',
+    })
+      .then(data => setStates(data || []))
+      .catch(() => setStates([]));
   }, [form.country_id]);
 
   useEffect(() => {
@@ -102,9 +112,12 @@ export default function CorporateClientPage() {
       setCities([]);
       return;
     }
-    fetch(`${API}/api/City?state_id=${form.state_id}`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setCities(d.obj || []); });
+    apiFetch<GeoItem[]>(`/api/City?state_id=${form.state_id}`, {
+      tokenKey: 'b2b_token',
+      errorFallback: 'Unable to load cities.',
+    })
+      .then(data => setCities(data || []))
+      .catch(() => setCities([]));
   }, [form.state_id]);
 
   const filteredStates = useMemo(
@@ -125,7 +138,6 @@ export default function CorporateClientPage() {
 
   const openAdd = () => {
     setForm({ ...emptyClient, id: null, password: generatePassword() });
-    setMsg(null);
     setView('form');
   };
 
@@ -143,14 +155,12 @@ export default function CorporateClientPage() {
       password: '',
       id: c.id,
     });
-    setMsg(null);
     setView('form');
   };
 
   const closeForm = () => {
     setView('list');
     setForm({ ...emptyClient, id: null });
-    setMsg(null);
   };
 
   const resetForm = () => {
@@ -161,31 +171,29 @@ export default function CorporateClientPage() {
     } else {
       setForm({ ...emptyClient, id: null });
     }
-    setMsg(null);
   };
 
   const save = async () => {
     if (!form.company_name.trim() || !form.contact_person_name.trim() || !form.mobile.trim() ||
         !form.email.trim() || !form.address.trim() || !form.country_id || !form.state_id || !form.city_id) {
-      setMsg({ type: 'error', text: 'Please fill all required fields.' });
+      toastApiError('Please fill all required fields.');
       return;
     }
     if (!form.id && !form.password.trim()) {
-      setMsg({ type: 'error', text: 'Password is required for new corporate clients.' });
+      toastApiError('Password is required for new corporate clients.');
       return;
     }
     if (!form.id || form.password.trim()) {
       const pwdError = validatePassword(form.password);
       if (pwdError) {
-        setMsg({ type: 'error', text: pwdError });
+        toastApiError(pwdError);
         return;
       }
     }
 
     setSaving(true);
-    setMsg(null);
     const method = form.id ? 'PUT' : 'POST';
-    const url = `${API}/api/CorporateClients${form.id ? `/${form.id}` : ''}`;
+    const path = `/api/CorporateClients${form.id ? `/${form.id}` : ''}`;
 
     const payload: Record<string, unknown> = {
       company_name: form.company_name.trim(),
@@ -201,28 +209,34 @@ export default function CorporateClientPage() {
     };
     if (form.password.trim()) payload.password = form.password.trim();
 
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify(payload),
-    });
-    const d = await res.json();
-    setSaving(false);
-
-    if (d.response_code === '200') {
+    try {
+      await apiFetch(path, {
+        method,
+        tokenKey: 'b2b_token',
+        body: JSON.stringify(payload),
+        errorFallback: 'Failed to save corporate client.',
+      });
       closeForm();
       loadData();
-    } else {
-      setMsg({ type: 'error', text: typeof d.obj === 'string' ? d.obj : 'Failed to save corporate client.' });
+    } catch {
+      /* toast handled by apiFetch */
+    } finally {
+      setSaving(false);
     }
   };
 
   const toggleStatus = async (c: CorporateClient) => {
-    await fetch(`${API}/api/CorporateClients/${c.id}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ status: !c.status }),
-    });
-    loadData();
+    try {
+      await apiFetch(`/api/CorporateClients/${c.id}`, {
+        method: 'PUT',
+        tokenKey: 'b2b_token',
+        body: JSON.stringify({ status: !c.status }),
+        errorFallback: 'Failed to update corporate client status.',
+      });
+      loadData();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   const remove = async (id: number) => {
@@ -233,8 +247,16 @@ export default function CorporateClientPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/CorporateClients/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadData();
+    try {
+      await apiFetch(`/api/CorporateClients/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'b2b_token',
+        errorFallback: 'Failed to delete corporate client.',
+      });
+      loadData();
+    } catch {
+      /* toast handled by apiFetch */
+    }
   };
 
   if (view === 'form') {
@@ -248,22 +270,6 @@ export default function CorporateClientPage() {
               <button type="button" className="listing-header-link" onClick={closeForm}>Close</button>
             </div>
             <div className="card-body">
-              {msg && (
-                <div
-                  style={{
-                    background: msg.type === 'success' ? 'rgba(0,128,0,0.08)' : 'rgba(231,76,60,0.08)',
-                    border: `1px solid ${msg.type === 'success' ? 'rgba(0,128,0,0.25)' : 'rgba(231,76,60,0.25)'}`,
-                    borderRadius: 4,
-                    padding: '0.55rem 0.75rem',
-                    marginBottom: '1rem',
-                    fontSize: '0.82rem',
-                    color: msg.type === 'success' ? '#008000' : '#c0392b',
-                  }}
-                >
-                  {msg.text}
-                </div>
-              )}
-
               <div className="detail-form-grid">
                 <div className="form-group">
                   <label>Company Name<span className="required-star">*</span></label>

@@ -1,13 +1,12 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { MdLock } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDateTime } from '../../../utils/dateFormat';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { apiFetch, handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
 
 interface TestReport {
   id: number;
@@ -34,40 +33,30 @@ export default function TestsReportsPage() {
   const [selectedTestId, setSelectedTestId] = useState('');
   const [loading, setLoading] = useState(false);
   const [testsLoading, setTestsLoading] = useState(true);
-  const [drugTestAccept, setDrugTestAccept] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [emailing, setEmailing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setTestsLoading(true);
-    setMsg(null);
 
-    fetch(`${API}/api/LabTests`, { headers: { token: getToken() } })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`Lab tests request failed (${r.status})`);
-        return r.json();
-      })
-      .then((ltD) => {
-        if (cancelled) return;
-        if (ltD.response_code === '200') {
-          setLabTests(ltD.obj || []);
-        } else {
-          setLabTests([]);
-          setMsg({ type: 'error', text: String(ltD.obj || 'Failed to load lab tests') });
-        }
-      })
-      .catch((err) => {
+    (async () => {
+      try {
+        const list = await apiFetch<{ id: number; name: string }[]>('/api/LabTests', {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load lab tests',
+        });
+        if (!cancelled) setLabTests(list || []);
+      } catch (err: unknown) {
         if (cancelled) return;
         setLabTests([]);
-        setMsg({
-          type: 'error',
-          text: `Cannot reach API at ${API}. Make sure the backend is running. (${err instanceof Error ? err.message : 'Failed to fetch'})`,
-        });
-      })
-      .finally(() => {
+        toastApiError(
+          err,
+          `Cannot reach API at ${API_BASE}. Make sure the backend is running.`,
+        );
+      } finally {
         if (!cancelled) setTestsLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
@@ -82,21 +71,19 @@ export default function TestsReportsPage() {
     }
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API}/api/LabTestCategoryReport?lab_test_id=${encodeURIComponent(labTestId)}`,
-        { headers: { token: getToken() } }
+      const list = await apiFetch<TestReport[]>(
+        `/api/LabTestCategoryReport?lab_test_id=${encodeURIComponent(labTestId)}`,
+        {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load test reports.',
+        },
       );
-      const d = await res.json();
-      if (d.response_code === '200') {
-        setReports(
-          (d.obj || []).map((r: TestReport) => ({
-            ...r,
-            patient_name: r.patient_name || (r.patient_id ? `Patient #${r.patient_id}` : '—'),
-          }))
-        );
-      } else {
-        setReports([]);
-      }
+      setReports(
+        (list || []).map((r: TestReport) => ({
+          ...r,
+          patient_name: r.patient_name || (r.patient_id ? `Patient #${r.patient_id}` : '—'),
+        })),
+      );
     } catch {
       setReports([]);
     } finally {
@@ -106,7 +93,6 @@ export default function TestsReportsPage() {
 
   const onTestChange = (value: string) => {
     setSelectedTestId(value);
-    setMsg(null);
     loadReports(value);
   };
 
@@ -124,32 +110,27 @@ export default function TestsReportsPage() {
       if (!ok) return;
     }
 
-    const res = await fetch(`${API}/api/LabTestCategoryReport/changeLabTestCategoryReportStatus`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', token: getToken() },
-      body: JSON.stringify({ id: report.id, status: newStatus }),
-    });
-    const data = await res.json();
-    if (data.response_code === '200') {
+    try {
+      const res = await fetch(`${API_BASE}/api/LabTestCategoryReport/changeLabTestCategoryReportStatus`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+        body: JSON.stringify({ id: report.id, status: newStatus }),
+      });
+      await handleApiResponse(res, { errorFallback: 'Error changing lock status' });
       loadReports(selectedTestId);
-    } else {
-      alert('Error changing lock status: ' + data.obj);
+    } catch {
+      // Error toast handled by handleApiResponse
     }
   };
 
   const downloadReport = async (report: TestReport) => {
     try {
-      const res = await fetch(`${API}/api/LabTestCategoryReport/downloadLabTestCategoryReport`, {
+      const blob = await apiFetch<Blob>('/api/LabTestCategoryReport/downloadLabTestCategoryReport', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        tokenKey: 'admin_token',
         body: JSON.stringify({ id: report.id }),
+        errorFallback: 'Download failed',
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        alert(err?.obj || 'Download failed');
-        return;
-      }
-      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -157,7 +138,7 @@ export default function TestsReportsPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert('Error downloading report');
+      // Error toast handled by apiFetch
     }
   };
 
@@ -166,7 +147,7 @@ export default function TestsReportsPage() {
 
     const email = (report.patient_email || '').trim();
     if (!email) {
-      setMsg({ type: 'error', text: 'No email address found for this patient.' });
+      toastApiError('No email address found for this patient.');
       return;
     }
 
@@ -179,27 +160,18 @@ export default function TestsReportsPage() {
     if (!ok) return;
 
     setEmailing(true);
-    setMsg(null);
     try {
-      const res = await fetch(`${API}/api/LabTestCategoryReport/emailLabTestCategoryReport`, {
+      const res = await fetch(`${API_BASE}/api/LabTestCategoryReport/emailLabTestCategoryReport`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
+        headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify({ id: report.id }),
       });
-      const data = await res.json();
-      if (data.response_code === '200') {
-        setMsg({
-          type: 'success',
-          text: `Report emailed successfully to ${data.obj?.email || email}.`,
-        });
-      } else {
-        setMsg({ type: 'error', text: String(data.obj || 'Failed to send email') });
-      }
-    } catch (err: unknown) {
-      setMsg({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to send email',
+      const data = await handleApiResponse<{ email?: string }>(res, {
+        errorFallback: 'Failed to send email',
       });
+      toastApiSuccess(`Report emailed successfully to ${data?.email || email}.`);
+    } catch {
+      // Error toast handled by handleApiResponse
     } finally {
       setEmailing(false);
       if (typeof window !== 'undefined') {
@@ -257,22 +229,6 @@ export default function TestsReportsPage() {
       )}
 
       <div style={{ padding: '1.5rem 1.75rem' }} className={emailing ? 'test-reports-page-busy' : undefined}>
-        {msg && (
-          <div
-            style={{
-              background: msg.type === 'success' ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
-              border: `1px solid ${msg.type === 'success' ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
-              borderRadius: 8,
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-              fontSize: '0.875rem',
-              color: msg.type === 'success' ? '#10b981' : '#ef4444',
-            }}
-          >
-            {msg.text}
-          </div>
-        )}
-
         <ListingTable
           className="test-reports-table"
           title="List of Test Reports"
@@ -304,9 +260,7 @@ export default function TestsReportsPage() {
           rowActions={(r) =>
             r.status ? (
               <span className="report-locked-label" title="This report is locked">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm3 8H9V6a3 3 0 0 1 6 0v3z" />
-                </svg>
+                <MdLock size={14} aria-hidden />
                 Locked
               </span>
             ) : (

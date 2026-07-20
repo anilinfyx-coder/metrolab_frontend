@@ -1,10 +1,21 @@
 'use client';
 import { useEffect, useState } from 'react';
+import {
+  MdAdd,
+  MdAssignment,
+  MdBarChart,
+  MdBiotech,
+  MdBusiness,
+  MdLocalHospital,
+  MdRocketLaunch,
+  MdScience,
+  MdVpnKey,
+  MdWavingHand,
+} from 'react-icons/md';
 import Link from 'next/link';
 import TopNav from '../../components/TopNav';
 import { formatDate } from '../../utils/dateFormat';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { apiFetch } from '../../../lib/api';
 
 function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('corporate_token') || '' : ''; }
 function getUser() { 

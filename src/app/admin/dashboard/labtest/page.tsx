@@ -5,9 +5,7 @@ import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { formatDateTime } from '../../../utils/dateFormat';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../../lib/api';
 
 interface WaitingEntry {
   id: number;
@@ -77,12 +75,19 @@ export default function WaitingListPage() {
   const [entries, setEntries] = useState<WaitingEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadData = () => {
+  const loadData = async () => {
     setLoading(true);
-    fetch(`${API}/api/WaitingList`, { headers: { token: getToken() } })
-      .then(r => r.json())
-      .then(d => { if (d.response_code === '200') setEntries(d.obj || []); })
-      .finally(() => setLoading(false));
+    try {
+      const list = await apiFetch<WaitingEntry[]>('/api/WaitingList', {
+        tokenKey: 'admin_token',
+        errorFallback: 'Failed to load waiting list.',
+      });
+      setEntries(list || []);
+    } catch {
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadData(); }, []);
@@ -95,8 +100,16 @@ export default function WaitingListPage() {
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
-    await fetch(`${API}/api/WaitingList/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-    loadData();
+    try {
+      const res = await fetch(`${API_BASE}/api/WaitingList/${id}`, {
+        method: 'DELETE',
+        headers: { token: getToken('admin_token') },
+      });
+      await handleApiResponse(res, { errorFallback: 'Failed to delete waiting list entry.' });
+      loadData();
+    } catch {
+      // Error toast handled by handleApiResponse
+    }
   };
 
   return (

@@ -3,15 +3,23 @@ import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  MdAccountBalanceWallet,
+  MdAssignment,
+  MdBusiness,
+  MdComputer,
+  MdPeople,
+  MdSettings,
+} from 'react-icons/md';
 
 const b2bNavItems: NavItem[] = [
   { href: '', label: 'Dashboard', icon: '📊', section: 'Overview' },
-  { href: '/admindashboard', label: 'Admin Dashboard', icon: '🖥️', section: 'Lab Admin' },
-  { href: '/users', label: 'Manage Staff Users', icon: '👥', section: 'Lab Admin' },
-  { href: '/assigntestcategory', label: 'Assigned Test Category', icon: '📋', section: 'Lab Admin' },
-  { href: '/manageparameters', label: 'Manage Parameters', icon: '⚙️', section: 'Lab Admin' },
-  { href: '/corporateclient', label: 'Corporate Client', icon: '🏢', section: 'Lab Admin' },
-  { href: '/wallet', label: 'Wallet & Transactions', icon: '💰', section: 'Billing' },
+  { href: '/admindashboard', label: 'Admin Dashboard', icon: <MdComputer size={18} />, section: 'Lab Admin' },
+  { href: '/users', label: 'Manage Staff Users', icon: <MdPeople size={18} />, section: 'Lab Admin' },
+  { href: '/assigntestcategory', label: 'Assigned Test Category', icon: <MdAssignment size={18} />, section: 'Lab Admin' },
+  { href: '/manageparameters', label: 'Manage Parameters', icon: <MdSettings size={18} />, section: 'Lab Admin' },
+  { href: '/corporateclient', label: 'Corporate Client', icon: <MdBusiness size={18} />, section: 'Lab Admin' },
+  { href: '/wallet', label: 'Wallet & Transactions', icon: <MdAccountBalanceWallet size={18} />, section: 'Billing' },
 ];
 
 export default function B2bDashboardLayout({ children }: { children: React.ReactNode }) {
