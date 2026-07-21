@@ -395,16 +395,18 @@ export default function EditTestReportPage() {
                       />
                     </div>
                   )}
-                  <div className="form-group">
-                    <label>Reason for Test:</label>
-                    <input
-                      type="text"
-                      className="form-input report-edit-input"
-                      placeholder="Enter Reason For Test"
-                      value={form.reason_for_test}
-                      onChange={(e) => setField('reason_for_test', e.target.value)}
-                    />
-                  </div>
+                  {show('show_reason_for_test') && (
+                    <div className="form-group">
+                      <label>Reason for Test:</label>
+                      <input
+                        type="text"
+                        className="form-input report-edit-input"
+                        placeholder="Enter Reason For Test"
+                        value={form.reason_for_test}
+                        onChange={(e) => setField('reason_for_test', e.target.value)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {show('show_report_status') && (

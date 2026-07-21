@@ -7,6 +7,8 @@ const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 type Props = {
   labTestId: number;
   token: string;
+  /** When set, loads B2B-specific display options and related config */
+  b2bClientId?: number;
 };
 
 const FIELD_LABELS: { key: string; label: string; type?: string }[] = [
@@ -37,7 +39,7 @@ const FIELD_LABELS: { key: string; label: string; type?: string }[] = [
   { key: 'show_final_remark', label: 'Final Remark' },
 ];
 
-export default function ViewLabTestForm({ labTestId, token }: Props) {
+export default function ViewLabTestForm({ labTestId, token, b2bClientId }: Props) {
   const [loading, setLoading] = useState(true);
   const [test, setTest] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -46,11 +48,17 @@ export default function ViewLabTestForm({ labTestId, token }: Props) {
 
   useEffect(() => {
     setLoading(true);
+
+    const b2bQuery = b2bClientId ? `&b2b_client_id=${b2bClientId}` : '';
+    const testUrl = b2bClientId
+      ? `${API}/api/B2bClientLabTestAccess/display-options?b2b_client_id=${b2bClientId}&lab_test_id=${labTestId}`
+      : `${API}/api/LabTests/${labTestId}`;
+
     Promise.all([
-      fetch(`${API}/api/LabTests/${labTestId}`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/ReportQuestions?lab_test_id=${labTestId}&status=true`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/ReportRequestParameters?lab_test_id=${labTestId}&status=true`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/SpecimenTypeDrugLinking?lab_test_id=${labTestId}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(testUrl, { headers: { token } }).then(r => r.json()),
+      fetch(`${API}/api/ReportQuestions?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${API}/api/ReportRequestParameters?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${API}/api/SpecimenTypeDrugLinking?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
     ])
       .then(([testRes, qRes, pRes, sRes]) => {
         if (testRes.response_code === '200') setTest(testRes.obj);
@@ -65,7 +73,7 @@ export default function ViewLabTestForm({ labTestId, token }: Props) {
         }
       })
       .finally(() => setLoading(false));
-  }, [labTestId, token]);
+  }, [labTestId, token, b2bClientId]);
 
   const visibleFields = FIELD_LABELS.filter(f => test?.[f.key]);
 
