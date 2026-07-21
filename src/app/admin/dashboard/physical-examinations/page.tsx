@@ -263,7 +263,7 @@ export default function PhysicalExaminationsPage() {
     const ok = await confirmDialog({
       title: 'Send certificate by email?',
       message: email
-        ? `Email the password-protected Physical Examination Certificate to ${email}? The patient will need their birthdate digits (MMDD) to open the PDF.`
+        ? `Email the Physical Examination Certificate to ${email}?`
         : 'Send Physical Examination Certificate to patient via email?',
       cancelText: 'Cancel',
       confirmText: 'Send Email',
