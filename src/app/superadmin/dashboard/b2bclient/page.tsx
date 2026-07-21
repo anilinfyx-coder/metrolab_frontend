@@ -25,7 +25,7 @@ import PasswordInput from '../../../components/PasswordInput';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
 import {
   b2bClientFormSchema,
   b2bDocumentSchema,
@@ -594,16 +594,9 @@ export default function B2BClientsPage() {
   });
 
   // ── B2B Client CRUD ──────────────────────────────────────────────────────
-  const generatePassword = () => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$&*";
-    let pass = "";
-    for (let i = 0; i < 10; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
-    return pass;
-  };
-
   const openAdd = () => {
     setEditingId(null);
-    resetClient({ ...emptyClient, password: generatePassword() });
+    resetClient({ ...emptyClient, password: generateAutoPassword() });
     setIsApproval(false);
     setIsFixedPrice(false);
     setView('form');
