@@ -3447,6 +3447,50 @@ tbody td {
    ============================ */
 .form-group { margin-bottom: 1rem; }
 
+.wallet-funds-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(240px, 2fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.wallet-banner-close {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+}
+
+.wallet-banner-close:hover {
+  background: #fff;
+  color: #4f46e5;
+  border-color: #fff;
+}
+
+.wallet-funds-row .form-group {
+  margin-bottom: 0;
+}
+
+.wallet-funds-action-label {
+  display: block;
+  visibility: hidden;
+  user-select: none;
+}
+
+.wallet-funds-submit {
+  white-space: nowrap;
+  width: 100%;
+  justify-content: center;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .wallet-funds-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 label {
   display: block;
   font-size: var(--font-label);
