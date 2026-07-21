@@ -64,10 +64,14 @@ export default function B2BClientsPage() {
   const [saving, setSaving] = useState(false);
   const [initViewHandled, setInitViewHandled] = useState(false);
 
-  // Subscriptions
+  // Subscriptions & Custom Pricing
+  const [pricingMode, setPricingMode] = useState<'subscription' | 'custom'>('subscription');
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [subForm, setSubForm] = useState({ start_date: '', end_date: '', amount: '' });
   const [editingSubId, setEditingSubId] = useState<number | null>(null);
+  const [customPrices, setCustomPrices] = useState<{ lab_test_id: number; custom_price: string }[]>([]);
+  const [globalLabTests, setGlobalLabTests] = useState<LabTest[]>([]);
+  const [pricingSaving, setPricingSaving] = useState(false);
 
   // Documents
   const [documents, setDocuments] = useState<B2BDocument[]>([]);
@@ -239,11 +243,33 @@ export default function B2BClientsPage() {
     }
   };
 
-  const openSubscription = (c: B2BClient) => {
+  const loadCustomPrices = async (clientId: number) => {
+    try {
+      const data = await apiFetch<any[]>(`/api/B2bClientCustomPrices?b2b_client_id=${clientId}`, { tokenKey: 'superadmin_token' });
+      setCustomPrices(data || []);
+    } catch {
+      setCustomPrices([]);
+    }
+  };
+
+  const openSubscription = async (c: B2BClient) => {
     setSelectedClient(c);
+    setPricingMode('subscription');
     setSubForm({ start_date: '', end_date: '', amount: '' });
     setEditingSubId(null);
+    setIsFixedPrice(!!c.is_fixed_price);
+    setForm(p => ({ ...p, fixed_price_amount: c.fixed_price_amount as string || '' }));
+    
+    // Load Global Tests to display table
+    try {
+      const tests = await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' });
+      setGlobalLabTests(tests || []);
+    } catch {
+      setGlobalLabTests([]);
+    }
+
     loadSubscriptions(c.id);
+    loadCustomPrices(c.id);
     setView('subscription');
   };
 
@@ -289,6 +315,38 @@ export default function B2BClientsPage() {
       if (selectedClient) loadSubscriptions(selectedClient.id);
     } catch {
       /* error toasted by apiFetch */
+    }
+  };
+
+  const saveCustomPricing = async () => {
+    if (!selectedClient) return;
+    setPricingSaving(true);
+    try {
+      // 1. Save fixed price info to B2bClients
+      await apiFetch(`/api/B2bClients/${selectedClient.id}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ is_fixed_price: isFixedPrice, fixed_price_amount: form.fixed_price_amount }),
+      });
+
+      // 2. Save test-wise custom pricing
+      if (!isFixedPrice) {
+        await apiFetch('/api/B2bClientCustomPrices/bulk', {
+          method: 'POST',
+          tokenKey: 'superadmin_token',
+          body: JSON.stringify({
+            b2b_client_id: selectedClient.id,
+            custom_prices: customPrices
+          }),
+        });
+      }
+      
+      toast.success('Custom Pricing saved successfully');
+      loadClients();
+    } catch {
+      /* error toasted by apiFetch */
+    } finally {
+      setPricingSaving(false);
     }
   };
 
@@ -539,17 +597,7 @@ export default function B2BClientsPage() {
                   </label>
                 </div>
 
-                {/* Fixed Price Toggle */}
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  <label style={{ marginBottom: '0.5rem' }}>Fixed Price Per Report</label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
-                    <input type="checkbox" checked={isFixedPrice} onChange={e => setIsFixedPrice(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
-                    <span style={{ fontSize: '0.875rem' }}>{isFixedPrice ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Yes, Fixed Price</> : 'No, Use Global Setting'}</span>
-                  </label>
-                </div>
 
-                {isFixedPrice && inp('fixed_price_amount', 'Fixed Price Amount ($)', 'number', true)}
 
                 {inp('approval_note', 'Approval Note')}
 
@@ -598,65 +646,149 @@ export default function B2BClientsPage() {
   if (view === 'subscription') {
     return (
       <div className="page-content">
-        <TopNav title={`Subscriptions — ${selectedClient?.company_name || ''}`}>
+        <TopNav title={`Pricing & Subscription — ${selectedClient?.company_name || ''}`}>
           <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
-        <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
-          {/* Form card */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">Subscription Detail</span></div>
-            <div className="card-body">
-              <div className="form-group">
-                <label>Start Date <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="date" value={subForm.start_date} onChange={e => setSubForm(p => ({ ...p, start_date: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label>End Date <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="date" value={subForm.end_date} onChange={e => setSubForm(p => ({ ...p, end_date: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label>Amount <span style={{ color: '#ef4444' }}>*</span></label>
-                <input type="number" value={subForm.amount} onChange={e => setSubForm(p => ({ ...p, amount: e.target.value }))} placeholder="Enter Amount" />
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                <button className="btn btn-primary" onClick={saveSub}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
-                <button className="btn btn-ghost" onClick={() => { setSubForm({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
-              </div>
-            </div>
+        <div style={{ padding: '1.5rem' }}>
+          {/* Mode Toggle */}
+          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+              <input type="radio" checked={pricingMode === 'subscription'} onChange={() => setPricingMode('subscription')} style={{ width: 18, height: 18, accentColor: '#6366f1' }} />
+              Subscription (Time-Based)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+              <input type="radio" checked={pricingMode === 'custom'} onChange={() => setPricingMode('custom')} style={{ width: 18, height: 18, accentColor: '#6366f1' }} />
+              Custom Pricing (Wallet Deduction)
+            </label>
           </div>
 
-          {/* List card */}
-          <div className="card">
-            <div className="card-header"><span className="card-title">List of Subscriptions for &quot;{selectedClient?.company_name}&quot;</span></div>
-            <div className="card-body" style={{ padding: 0 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    {['Start Date', 'End Date', 'Amount', 'Actions'].map(h => (
-                      <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {subscriptions.map(s => (
-                    <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.75rem 1rem' }}>{formatDate(s.start_date)}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>{formatDate(s.end_date)}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>USD {s.amount}</td>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', marginRight: '0.5rem' }}
-                          onClick={() => { setSubForm({ start_date: s.start_date?.slice(0, 10) || '', end_date: s.end_date?.slice(0, 10) || '', amount: String(s.amount) }); setEditingSubId(s.id); }}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => deleteSub(s.id)}><MdDelete size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {subscriptions.length === 0 && (
-                    <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No subscriptions found.</td></tr>
-                  )}
-                </tbody>
-              </table>
+          {pricingMode === 'subscription' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+              {/* Form card */}
+              <div className="card">
+                <div className="card-header"><span className="card-title">Subscription Detail</span></div>
+                <div className="card-body">
+                  <div className="form-group">
+                    <label>Start Date <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input type="date" value={subForm.start_date} onChange={e => setSubForm(p => ({ ...p, start_date: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label>End Date <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input type="date" value={subForm.end_date} onChange={e => setSubForm(p => ({ ...p, end_date: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label>Amount <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input type="number" value={subForm.amount} onChange={e => setSubForm(p => ({ ...p, amount: e.target.value }))} placeholder="Enter Amount" />
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                    <button className="btn btn-primary" onClick={saveSub}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
+                    <button className="btn btn-ghost" onClick={() => { setSubForm({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* List card */}
+              <div className="card">
+                <div className="card-header"><span className="card-title">List of Subscriptions for &quot;{selectedClient?.company_name}&quot;</span></div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        {['Start Date', 'End Date', 'Amount', 'Actions'].map(h => (
+                          <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {subscriptions.map(s => (
+                        <tr key={s.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.75rem 1rem' }}>{formatDate(s.start_date)}</td>
+                          <td style={{ padding: '0.75rem 1rem' }}>{formatDate(s.end_date)}</td>
+                          <td style={{ padding: '0.75rem 1rem' }}>USD {s.amount}</td>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', marginRight: '0.5rem' }}
+                              onClick={() => { setSubForm({ start_date: s.start_date?.slice(0, 10) || '', end_date: s.end_date?.slice(0, 10) || '', amount: String(s.amount) }); setEditingSubId(s.id); }}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
+                            <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => deleteSub(s.id)}><MdDelete size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                      {subscriptions.length === 0 && (
+                        <tr><td colSpan={4} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No subscriptions found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {pricingMode === 'custom' && (
+            <div className="card">
+              <div className="card-header"><span className="card-title">Custom Wallet Deduction Pricing</span></div>
+              <div className="card-body">
+                <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: '400px' }}>
+                  <label style={{ marginBottom: '0.5rem' }}>Fixed Price Per Report</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
+                    <input type="checkbox" checked={isFixedPrice} onChange={e => setIsFixedPrice(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: '0.875rem' }}>{isFixedPrice ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Yes, Fixed Price</> : 'No, Use Test-Wise Pricing'}</span>
+                  </label>
+                </div>
+                
+                {isFixedPrice && (
+                  <div className="form-group" style={{ maxWidth: '400px' }}>
+                    <label>Fixed Price Amount ($)</label>
+                    <input type="number" value={form.fixed_price_amount || ''} onChange={e => setForm(p => ({ ...p, fixed_price_amount: e.target.value }))} placeholder="Enter Fixed Amount" />
+                  </div>
+                )}
+
+                {!isFixedPrice && (
+                  <div style={{ marginTop: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>Test-Wise Custom Pricing</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                          <th style={{ padding: '0.75rem', textAlign: 'left' }}>Lab Test</th>
+                          <th style={{ padding: '0.75rem', textAlign: 'left', width: '250px' }}>Custom Price ($)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {globalLabTests.map(test => {
+                           const cp = customPrices.find(c => c.lab_test_id === test.id);
+                           const priceStr = cp ? cp.custom_price : '';
+                           return (
+                             <tr key={test.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                               <td style={{ padding: '0.75rem' }}>{test.name}</td>
+                               <td style={{ padding: '0.75rem' }}>
+                                 <input type="number" value={priceStr} placeholder="Free (0) if blank"
+                                   onChange={e => {
+                                     const val = e.target.value;
+                                     setCustomPrices(prev => {
+                                       const filtered = prev.filter(x => x.lab_test_id !== test.id);
+                                       if (val === '') return filtered;
+                                       return [...filtered, { lab_test_id: test.id, custom_price: val }];
+                                     });
+                                   }}
+                                 />
+                               </td>
+                             </tr>
+                           );
+                        })}
+                        {globalLabTests.length === 0 && (
+                          <tr><td colSpan={2} style={{ padding: '1rem', textAlign: 'center' }}>No Lab Tests found.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2rem' }}>
+                  <button className="btn btn-primary" onClick={saveCustomPricing} disabled={pricingSaving}>
+                    {pricingSaving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing Details</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
