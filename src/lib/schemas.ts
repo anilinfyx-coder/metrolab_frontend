@@ -41,16 +41,6 @@ export const forgotPasswordSchema = yup.object({
 
 export type ForgotPasswordFormValues = yup.InferType<typeof forgotPasswordSchema>;
 
-export const resetPasswordSchema = yup.object({
-  password: yup.string().required('Password is required.'),
-  confirmPassword: yup
-    .string()
-    .required('Please confirm your password.')
-    .oneOf([yup.ref('password')], 'Passwords do not match.'),
-});
-
-export type ResetPasswordFormValues = yup.InferType<typeof resetPasswordSchema>;
-
 /** Matches existing app password rule: min 6, only @# as special characters. */
 export const appPasswordSchema = yup
   .string()
@@ -70,6 +60,16 @@ export const optionalAppPasswordSchema = yup
     'Password can only contain letters, numbers, and @# special characters.',
     value => !value || !/[^a-zA-Z0-9@#]/.test(value),
   );
+
+export const resetPasswordSchema = yup.object({
+  password: appPasswordSchema,
+  confirmPassword: yup
+    .string()
+    .required('Please confirm your password.')
+    .oneOf([yup.ref('password')], 'Passwords do not match.'),
+});
+
+export type ResetPasswordFormValues = yup.InferType<typeof resetPasswordSchema>;
 
 /** Super admin staff keeps the legacy rule: min 6 when a new password is entered. */
 export const optionalLegacyPasswordSchema = yup

@@ -1,174 +1,45 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
-import Link from 'next/link';
-import { useForm, type SubmitErrorHandler } from 'react-hook-form';
-import { useMutation } from '@tanstack/react-query';
-import { MdCheckCircle } from 'react-icons/md';
-import { focusFirstInvalidField, formResolver } from '../../lib/formHelpers';
-import { FieldError } from '../components/FormField';
-import PasswordInput from '../components/PasswordInput';
-import { apiFetch } from '../../lib/api';
-import { resetPasswordSchema, type ResetPasswordFormValues } from '../../lib/schemas';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import PageLoader from '../components/PageLoader';
-import styles from '../page.module.css';
 
-function ResetPasswordForm() {
+/**
+ * Legacy query-string links (?token=&email=) redirect to the path-based reset page.
+ * Gmail often wraps links; path-based URLs are more reliable.
+ */
+export default function ResetPasswordLegacyPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const token = searchParams.get('token');
-  const emailParam = searchParams.get('email');
-  const [success, setSuccess] = useState(false);
-  const [tokenError, setTokenError] = useState('');
-
-  const { register, handleSubmit, formState: { errors } } = useForm<ResetPasswordFormValues>({
-    resolver: formResolver<ResetPasswordFormValues>(resetPasswordSchema),
-    defaultValues: { password: '', confirmPassword: '' },
-  });
 
   useEffect(() => {
-    if (!token || !emailParam) {
-      setTokenError('Invalid or missing reset token.');
-    }
-  }, [token, emailParam]);
+    if (typeof window === 'undefined') return;
 
-  const mutation = useMutation({
-    mutationFn: async (values: ResetPasswordFormValues) => {
-      if (!token || !emailParam) {
-        throw new Error('Invalid reset token.');
+    const params = new URLSearchParams(window.location.search);
+    let token = (params.get('token') || '').trim();
+
+    // Recover mangled Gmail links where & became literal text in the path
+    if (!token && window.location.href.includes('token=')) {
+      const match = window.location.href.match(/[?&]token=([^&]+)/i);
+      if (match?.[1]) {
+        try {
+          token = decodeURIComponent(match[1]).trim();
+        } catch {
+          token = match[1].trim();
+        }
       }
-      return apiFetch('/api/Auth/reset-password', {
-        method: 'POST',
-        skipAuth: true,
-        acceptHttpOk: true,
-        errorFallback: 'Error resetting password',
-        successMessage: 'Your password has been successfully reset.',
-        body: JSON.stringify({
-          email: emailParam,
-          token,
-          newPassword: values.password,
-        }),
-      });
-    },
-    onSuccess: () => setSuccess(true),
-  });
+    }
 
-  const handleInvalid: SubmitErrorHandler<ResetPasswordFormValues> = formErrors => {
-    focusFirstInvalidField(formErrors);
-  };
+    if (token) {
+      router.replace(`/reset-password/${encodeURIComponent(token)}`);
+      return;
+    }
+
+    router.replace('/forgot-password');
+  }, [router]);
 
   return (
-    <main className={styles.page}>
-      <div className={styles.container}>
-        <div className={styles.logoWrap}>
-          <Image
-            src="/login-logo.png"
-            alt="Metro Lab"
-            width={280}
-            height={250}
-            priority
-            className={styles.logo}
-          />
-        </div>
-
-        <p className={styles.tagline}>
-          Precision is our Home Mark
-        </p>
-
-        <div className={styles.formWrap}>
-          <p className={styles.heading}>Reset Password</p>
-          <p className={styles.subtext}>
-            Enter your new password below to complete the reset.
-          </p>
-
-          {success ? (
-            <div>
-              <div className={styles.successBox}>
-                <MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />
-                Your password has been successfully reset.
-              </div>
-              <button
-                type="button"
-                onClick={() => router.push('/')}
-                className={styles.submit}
-              >
-                Go to Login
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit(values => mutation.mutate(values), handleInvalid)} noValidate>
-              {tokenError && (
-                <div
-                  role="alert"
-                  style={{
-                    marginBottom: '0.85rem',
-                    padding: '0.75rem 0.9rem',
-                    border: '1px solid rgba(239,68,68,0.35)',
-                    borderRadius: 4,
-                    background: 'rgba(239,68,68,0.08)',
-                    color: '#b91c1c',
-                    fontSize: '0.82rem',
-                  }}
-                >
-                  {tokenError}
-                </div>
-              )}
-
-              <div className={styles.field}>
-                <div className={styles.labelRow}>
-                  <label className={styles.label} htmlFor="rp-password">New Password</label>
-                </div>
-                <PasswordInput
-                  id="rp-password"
-                  placeholder="Enter new password"
-                  data-field="password"
-                  aria-invalid={!!errors.password}
-                  className={styles.input}
-                  {...register('password')}
-                />
-                <FieldError message={errors.password?.message} />
-              </div>
-
-              <div className={styles.field}>
-                <div className={styles.labelRow}>
-                  <label className={styles.label} htmlFor="rp-confirm">Confirm New Password</label>
-                </div>
-                <PasswordInput
-                  id="rp-confirm"
-                  placeholder="Confirm new password"
-                  data-field="confirmPassword"
-                  aria-invalid={!!errors.confirmPassword}
-                  className={styles.input}
-                  {...register('confirmPassword')}
-                />
-                <FieldError message={errors.confirmPassword?.message} />
-              </div>
-
-              <button
-                type="submit"
-                disabled={mutation.isPending || !token}
-                className={styles.submit}
-              >
-                {mutation.isPending ? 'Resetting…' : 'Reset Password'}
-              </button>
-
-              <Link href="/" className={styles.backLink}>
-                ← Back to Login
-              </Link>
-            </form>
-          )}
-        </div>
-      </div>
-    </main>
-  );
-}
-
-export default function ResetPasswordPage() {
-  return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><PageLoader message="Loading..." size="lg" /></div>}>
-      <ResetPasswordForm />
-    </Suspense>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <PageLoader message="Opening reset page..." size="lg" />
+    </div>
   );
 }
