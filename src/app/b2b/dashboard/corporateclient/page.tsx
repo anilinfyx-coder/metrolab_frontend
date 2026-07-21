@@ -7,7 +7,7 @@ import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import ListingTable, { ActionIcons, ListingHeaderActions, ListingColumn } from '../../../components/ListingTable';
 import { apiFetch } from '../../../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
 import {
   corporateClientFormSchema,
   PASSWORD_HELPER_TEXT,
@@ -146,16 +146,9 @@ export default function CorporateClientPage() {
     [cities, stateId]
   );
 
-  const generatePassword = () => {
-    const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#";
-    let pass = "";
-    for (let i = 0; i < 10; i++) pass += chars.charAt(Math.floor(Math.random() * chars.length));
-    return pass;
-  };
-
   const openAdd = () => {
     setEditingId(null);
-    reset({ ...emptyClient, password: generatePassword() });
+    reset({ ...emptyClient, password: generateAutoPassword() });
     setView('form');
   };
 
@@ -189,7 +182,7 @@ export default function CorporateClientPage() {
       if (existing) openEdit(existing);
       else reset({ ...emptyClient, id: editingId });
     } else {
-      reset({ ...emptyClient, password: generatePassword() });
+      reset({ ...emptyClient, password: generateAutoPassword() });
     }
   };
 

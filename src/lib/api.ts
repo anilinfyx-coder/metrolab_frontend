@@ -2,15 +2,30 @@ import toast from 'react-hot-toast';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+/**
+ * Public URL for an uploaded file stored in GCS.
+ * Hits the backend file endpoint which redirects to a short-lived signed URL.
+ */
 export function getUploadUrl(
   filename: string | null | undefined,
-  folder = 'b2bClients',
+  folder: 'b2bClients' | 'b2bDocuments' | string = 'b2bClients',
 ): string {
   if (!filename) return '';
   if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
-  const normalized = filename.replace(/^\/+/, '');
-  const path = normalized.includes('/') ? normalized : `${folder}/${normalized}`;
-  return `${API_BASE}/uploads/${path}`;
+
+  const baseName = filename.replace(/^\/+/, '').split('/').pop() || '';
+  if (!baseName) return '';
+
+  const isDocument =
+    folder === 'b2bDocuments' ||
+    folder === 'b2b-client-documents' ||
+    folder === 'documents';
+
+  const endpoint = isDocument
+    ? `/api/B2bClientDocument/file/${encodeURIComponent(baseName)}`
+    : `/api/B2bClients/file/${encodeURIComponent(baseName)}`;
+
+  return `${API_BASE}${endpoint}`;
 }
 
 export type ApiEnvelope<T = unknown> = {
