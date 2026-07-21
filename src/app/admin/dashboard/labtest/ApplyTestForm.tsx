@@ -139,7 +139,7 @@ export default function ApplyTestForm({
       const payload = {
         waiting_list_id: waitingListId,
         lab_test_id: test.id,
-        b2b_client_id: data.b2b_client_id,
+        b2b_client_id: data.resolved_b2b_client_id || data.b2b_client_id || test.resolved_b2b_client_id || null,
         ...form
       };
       await apiFetch('/api/LabTestReport', {
@@ -309,10 +309,12 @@ export default function ApplyTestForm({
                     <input type="text" className="form-input" placeholder="Enter Test Performed By" value={form.testPerformedBy} onChange={e => handleFormChange('testPerformedBy', e.target.value)} />
                   </div>
                 )}
-                <div className="form-group">
-                  <label>Reason for Test</label>
-                  <input type="text" className="form-input" placeholder="Enter Reason For Test" value={form.reasonForTest} onChange={e => handleFormChange('reasonForTest', e.target.value)} />
-                </div>
+                {test.show_reason_for_test && (
+                  <div className="form-group">
+                    <label>Reason for Test</label>
+                    <input type="text" className="form-input" placeholder="Enter Reason For Test" value={form.reasonForTest} onChange={e => handleFormChange('reasonForTest', e.target.value)} />
+                  </div>
+                )}
               </div>
 
               {test.show_report_status && (
