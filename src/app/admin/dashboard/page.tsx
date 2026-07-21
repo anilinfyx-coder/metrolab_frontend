@@ -1,7 +1,20 @@
 'use client';
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import {
+  MdAdd,
+  MdAssignment,
+  MdDescription,
+  MdHealthAndSafety,
+  MdHourglassEmpty,
+  MdLocalHospital,
+  MdMail,
+  MdMedicalServices,
+  MdPeople,
+  MdScience,
+} from 'react-icons/md';
 import TopNav from '../../components/TopNav';
+import PageLoader from '../../components/PageLoader';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
@@ -112,90 +125,74 @@ export default function AdminDashboardPage() {
   const pendingWaiting = waitingList.filter((row) => (row.test_count || 0) > 0).length;
 
   return (
-    <>
+    <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Dashboard" />
 
-      <div className="page-content" style={{ backgroundColor: '#f0f4f8', minHeight: 'calc(100vh - 70px)', padding: '24px' }}>
+      <div className="page-body admin-dashboard-body">
         {loading ? (
-          <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading dashboard...</div>
+          <PageLoader message="Loading dashboard..." size="lg" />
         ) : (
-          <div style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-            <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '1.8rem', color: '#0f172a', margin: '0 0 8px 0' }}>
-                Welcome back, {user?.name || 'Admin'} 👋
-              </h2>
-              <p style={{ color: '#64748b', margin: 0 }}>
+          <div className="admin-dashboard-inner">
+            <div className="admin-dashboard-welcome">
+              <h2>Welcome back, {user?.name || 'Admin'}</h2>
+              <p>
                 Here is an overview of patients, waiting list, test reports, and corporate requests in your lab today.
               </p>
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '20px',
-                marginBottom: '30px',
-              }}
-            >
+            <div className="admin-dashboard-cards">
               <DashboardCard
                 title="Total Patients"
                 value={patients.length}
-                icon="🏥"
+                icon={<MdPeople size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)"
                 link="/admin/dashboard/patientList"
               />
               <DashboardCard
                 title="Waiting List"
                 value={waitingList.length}
-                icon="📋"
+                icon={<MdAssignment size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)"
                 link="/admin/dashboard/labtest"
               />
               <DashboardCard
                 title="Pending Tests"
                 value={pendingWaiting}
-                icon="⏳"
+                icon={<MdHourglassEmpty size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)"
                 link="/admin/dashboard/labtest"
               />
               <DashboardCard
                 title="Test Reports"
                 value={testReports.length}
-                icon="🧪"
+                icon={<MdDescription size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)"
                 link="/admin/dashboard/manageothertest"
               />
               <DashboardCard
                 title="Manage Requests"
                 value={testRequests.length}
-                icon="📨"
+                icon={<MdScience size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
                 link="/admin/dashboard/testrequests"
               />
               <DashboardCard
                 title="Health Certificates"
                 value={healthCertificates.length}
-                icon="📄"
+                icon={<MdHealthAndSafety size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
                 link="/admin/dashboard/health-certificates"
               />
               <DashboardCard
                 title="Physical Exams"
                 value={physicalExams.length}
-                icon="🩺"
+                icon={<MdMedicalServices size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #ec4899 0%, #db2777 100%)"
                 link="/admin/dashboard/physical-examinations"
               />
             </div>
 
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
-                gap: '24px',
-                marginBottom: '24px',
-              }}
-            >
+            <div className="admin-dashboard-tables">
               <DashboardTableCard
                 title="Recent Waiting List"
                 viewHref="/admin/dashboard/labtest"
@@ -266,41 +263,45 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            <div className="card" style={cardStyle}>
-              <div className="card-header" style={cardHeaderStyle}>
-                <h3 className="card-title" style={cardTitleStyle}>🚀 Quick Actions</h3>
+            <div className="card admin-dashboard-quick">
+              <div className="card-header admin-dashboard-quick-header">
+                <h3 className="card-title">Quick Actions</h3>
               </div>
-              <div className="card-body" style={{ padding: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                <Link href="/admin/dashboard/patient" style={quickActionStyle('#e0f2fe', '#0284c7')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>➕</span>
-                  <span style={{ fontWeight: 600 }}>Add Patient</span>
+              <div className="card-body admin-dashboard-quick-body">
+                <Link href="/admin/dashboard/patient" className="admin-quick-action admin-quick-action-blue">
+                  <MdAdd size={28} aria-hidden />
+                  <span>Add Patient</span>
                 </Link>
-                <Link href="/admin/dashboard/labtest" style={quickActionStyle('#ede9fe', '#7c3aed')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>📋</span>
-                  <span style={{ fontWeight: 600 }}>Waiting List</span>
+                <Link href="/admin/dashboard/labtest" className="admin-quick-action admin-quick-action-purple">
+                  <MdAssignment size={28} aria-hidden />
+                  <span>Waiting List</span>
                 </Link>
-                <Link href="/admin/dashboard/manageothertest" style={quickActionStyle('#fee2e2', '#dc2626')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🧪</span>
-                  <span style={{ fontWeight: 600 }}>Test Reports</span>
+                <Link href="/admin/dashboard/manageothertest" className="admin-quick-action admin-quick-action-red">
+                  <MdDescription size={28} aria-hidden />
+                  <span>Test Reports</span>
                 </Link>
-                <Link href="/admin/dashboard/testrequests" style={quickActionStyle('#dcfce7', '#16a34a')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>📨</span>
-                  <span style={{ fontWeight: 600 }}>Manage Requests</span>
+                <Link href="/admin/dashboard/testrequests" className="admin-quick-action admin-quick-action-green">
+                  <MdMail size={28} aria-hidden />
+                  <span>Manage Requests</span>
                 </Link>
-                <Link href="/admin/dashboard/health-certificates" style={quickActionStyle('#dbeafe', '#2563eb')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>📄</span>
-                  <span style={{ fontWeight: 600 }}>Health Certificates</span>
+                <Link href="/admin/dashboard/health-certificates" className="admin-quick-action admin-quick-action-indigo">
+                  <MdHealthAndSafety size={28} aria-hidden />
+                  <span>Health Certificates</span>
                 </Link>
-                <Link href="/admin/dashboard/physical-examinations" style={quickActionStyle('#fce7f3', '#db2777')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🩺</span>
-                  <span style={{ fontWeight: 600 }}>Physical Examinations</span>
+                <Link href="/admin/dashboard/physical-examinations" className="admin-quick-action admin-quick-action-pink">
+                  <MdMedicalServices size={28} aria-hidden />
+                  <span>Physical Examinations</span>
+                </Link>
+                <Link href="/admin/dashboard/patientList" className="admin-quick-action admin-quick-action-orange">
+                  <MdLocalHospital size={28} aria-hidden />
+                  <span>Patient List</span>
                 </Link>
               </div>
             </div>
           </div>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -313,83 +314,32 @@ function DashboardCard({
 }: {
   title: string;
   value: string | number;
-  icon: string;
+  icon: ReactNode;
   gradient: string;
   link?: string;
 }) {
-  const CardWrapper = link ? Link : 'div';
-  const wrapperProps = link ? { href: link, style: { textDecoration: 'none' } } : {};
-
-  return (
-    <CardWrapper {...wrapperProps}>
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: '16px',
-          padding: '24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-          transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-          cursor: link ? 'pointer' : 'default',
-          position: 'relative',
-          overflow: 'hidden',
-          height: '100%',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'translateY(-5px)';
-          e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.03)';
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '4px',
-            background: gradient,
-          }}
-        />
-        <div>
-          <div
-            style={{
-              color: '#64748b',
-              fontSize: '0.9rem',
-              fontWeight: 600,
-              marginBottom: '8px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-            }}
-          >
-            {title}
-          </div>
-          <div style={{ color: '#0f172a', fontSize: '2rem', fontWeight: 800, lineHeight: 1 }}>{value}</div>
-        </div>
-        <div
-          style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '12px',
-            background: gradient,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.8rem',
-            color: '#fff',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-          }}
-        >
-          {icon}
-        </div>
+  const cardContent = (
+    <div className="admin-stat-card">
+      <div className="admin-stat-card-bar" style={{ background: gradient }} />
+      <div>
+        <div className="admin-stat-card-title">{title}</div>
+        <div className="admin-stat-card-value">{value}</div>
       </div>
-    </CardWrapper>
+      <div className="admin-stat-card-icon" style={{ background: gradient }}>
+        {icon}
+      </div>
+    </div>
   );
+
+  if (link) {
+    return (
+      <Link href={link} className="admin-stat-card-link">
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return cardContent;
 }
 
 function DashboardTableCard({
@@ -406,33 +356,33 @@ function DashboardTableCard({
   emptyText: string;
 }) {
   return (
-    <div className="card" style={cardStyle}>
-      <div className="card-header" style={cardHeaderStyle}>
-        <h3 className="card-title" style={cardTitleStyle}>{title}</h3>
-        <Link href={viewHref} style={linkStyle}>
+    <div className="card admin-dashboard-table-card">
+      <div className="card-header admin-dashboard-table-header">
+        <h3 className="card-title">{title}</h3>
+        <Link href={viewHref} className="admin-dashboard-view-all">
           View All →
         </Link>
       </div>
       <div className="card-body" style={{ padding: 0 }}>
         <div style={{ overflowX: 'auto' }}>
-          <table style={tableStyle}>
+          <table className="admin-dashboard-table">
             <thead>
-              <tr style={tableHeaderStyle}>
+              <tr>
                 {headers.map((header) => (
-                  <th key={header} style={thStyle}>{header}</th>
+                  <th key={header}>{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={headers.length} style={emptyTdStyle}>{emptyText}</td>
+                  <td colSpan={headers.length} className="admin-dashboard-empty">{emptyText}</td>
                 </tr>
               ) : (
                 rows.map((cells, rowIndex) => (
-                  <tr key={rowIndex} style={trStyle}>
+                  <tr key={rowIndex}>
                     {cells.map((cell, cellIndex) => (
-                      <td key={cellIndex} style={tdStyle}>{cell}</td>
+                      <td key={cellIndex}>{cell}</td>
                     ))}
                   </tr>
                 ))
@@ -444,81 +394,3 @@ function DashboardTableCard({
     </div>
   );
 }
-
-const cardStyle: React.CSSProperties = {
-  borderRadius: '12px',
-  border: 'none',
-  boxShadow: '0 10px 30px rgba(0,0,0,0.05)',
-  backgroundColor: '#fff',
-};
-
-const cardHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  borderBottom: '1px solid #edf2f9',
-  borderRadius: '12px 12px 0 0',
-  padding: '20px',
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  margin: 0,
-  fontSize: '1.1rem',
-  color: '#1e293b',
-};
-
-const linkStyle: React.CSSProperties = {
-  fontSize: '0.85rem',
-  color: '#3b82f6',
-  textDecoration: 'none',
-  fontWeight: 600,
-};
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: '0.9rem',
-};
-
-const tableHeaderStyle: React.CSSProperties = {
-  backgroundColor: '#f8fafc',
-  color: '#64748b',
-  textAlign: 'left',
-};
-
-const thStyle: React.CSSProperties = {
-  padding: '12px 20px',
-  fontWeight: 600,
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '16px 20px',
-  color: '#64748b',
-};
-
-const trStyle: React.CSSProperties = {
-  borderBottom: '1px solid #edf2f9',
-  transition: 'background-color 0.2s',
-};
-
-const emptyTdStyle: React.CSSProperties = {
-  padding: '20px',
-  textAlign: 'center',
-  color: '#94a3b8',
-};
-
-const quickActionStyle = (bg: string, color: string): React.CSSProperties => ({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '24px',
-  backgroundColor: bg,
-  color,
-  borderRadius: '12px',
-  textDecoration: 'none',
-  minWidth: '180px',
-  flex: '1 1 auto',
-  transition: 'transform 0.2s',
-  border: `1px solid ${color}33`,
-});

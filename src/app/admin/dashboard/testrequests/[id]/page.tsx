@@ -1,8 +1,9 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MdBlock, MdForward } from 'react-icons/md';
+import { MdArrowDownward, MdArrowUpward, MdBlock, MdForward, MdUnfoldMore } from 'react-icons/md';
 import TopNav from '../../../../components/TopNav';
+import PageLoader from '../../../../components/PageLoader';
 import { useConfirm } from '../../../../components/ConfirmModal';
 import { formatDateTime } from '../../../../utils/dateFormat';
 import { handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../../lib/api';
@@ -188,6 +189,13 @@ export default function TestRequestDetailPage() {
 
   const rejectRequest = async () => {
     if (!detail) return;
+    const ok = await confirmDialog({
+      title: 'Reject this request?',
+      message: 'This test request will be marked as rejected / inactive.',
+      cancelText: 'Cancel',
+      confirmText: 'Reject',
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`${API_BASE}/api/TestRequest/changeTestRequestStatus`, {
         method: 'POST',
@@ -206,6 +214,13 @@ export default function TestRequestDetailPage() {
 
   const approveRequest = async () => {
     if (!detail) return;
+    const ok = await confirmDialog({
+      title: 'Approve this request?',
+      message: 'This test request will be marked as approved / active.',
+      cancelText: 'Cancel',
+      confirmText: 'Approve',
+    });
+    if (!ok) return;
     try {
       const res = await fetch(`${API_BASE}/api/TestRequest/changeTestRequestStatus`, {
         method: 'POST',
@@ -356,7 +371,7 @@ export default function TestRequestDetailPage() {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
         <TopNav title="Manage Test Requests" />
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
           <p>Invalid test request.</p>
           <button type="button" className="btn btn-primary" onClick={goBack}>Back</button>
         </div>
@@ -370,7 +385,7 @@ export default function TestRequestDetailPage() {
 
       <div className="tr-detail-page">
         {loading ? (
-          <div className="tr-detail-loading">Loading request details...</div>
+          <PageLoader message="Loading request details..." size="lg" />
         ) : !detail ? (
           <div className="card tr-detail-card">
             <div className="tr-detail-body">
@@ -474,13 +489,19 @@ export default function TestRequestDetailPage() {
                         ['department', 'Department'],
                       ] as const).map(([key, label]) => (
                         <th key={key}>
-                          <button type="button" className="th-sort-btn" onClick={() => toggleSort(key)}>
-                            {label}
-                            {sortKey === key ? (
-                              <span aria-hidden>{sortAsc ? '▲' : '▼'}</span>
-                            ) : (
-                              <span className="th-sort-hint" aria-hidden>⇅</span>
-                            )}
+                          <button type="button" className="th-sort-btn" onClick={() => toggleSort(key)} aria-label={`Sort by ${label}`}>
+                            <span className="th-sort-label">{label}</span>
+                            <span className="th-sort-icon-wrap" aria-hidden>
+                              {sortKey === key ? (
+                                sortAsc ? (
+                                  <MdArrowUpward size={15} className="th-sort-icon active" />
+                                ) : (
+                                  <MdArrowDownward size={15} className="th-sort-icon active" />
+                                )
+                              ) : (
+                                <MdUnfoldMore size={15} className="th-sort-hint" />
+                              )}
+                            </span>
                           </button>
                         </th>
                       ))}
@@ -609,7 +630,7 @@ export default function TestRequestDetailPage() {
                 </select>
               </div>
               {cancelLoading && (
-                <p className="tr-cancel-loading">Loading alternate employees...</p>
+                <PageLoader message="Loading alternate employees..." size="sm" />
               )}
             </div>
             <div className="tr-cancel-footer">

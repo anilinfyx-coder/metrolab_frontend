@@ -30,7 +30,7 @@ export default function AssignedTestCategoryPage() {
     const b2bId = getUser().id;
     setLoading(true);
     try {
-      const allTests = await apiFetch<LabTest[]>('/api/LabTests', {
+      const allTests = await apiFetch<LabTest[]>('/api/LabTests?status=true', {
         tokenKey: 'b2b_token',
         errorFallback: 'Unable to load lab tests.',
       });
@@ -38,7 +38,7 @@ export default function AssignedTestCategoryPage() {
       if (b2bId) {
         try {
           access = await apiFetch<{ lab_test_id: number }[]>(
-            `/api/B2bClientLabTestAccess?b2b_client_id=${b2bId}`,
+            `/api/B2bClientLabTestAccess?b2b_client_id=${b2bId}&status=true`,
             {
               tokenKey: 'b2b_token',
               errorFallback: 'Unable to load test access.',
@@ -78,7 +78,7 @@ export default function AssignedTestCategoryPage() {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
         <TopNav title="Manage Assign Test Categories" />
-        <div style={{ padding: '1.25rem 1.5rem' }}>
+        <div className="page-body">
           <div className="card">
             <div className="listing-card-header">
               <h2 className="listing-card-title"><MdVisibility size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />View Form — {viewTestName}</h2>
@@ -97,7 +97,7 @@ export default function AssignedTestCategoryPage() {
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Assign Test Categories" />
 
-      <div style={{ padding: '1.25rem 1.5rem' }}>
+      <div className="page-body">
         <ListingTable
           title="List of Assign Test Categories"
           columns={columns}

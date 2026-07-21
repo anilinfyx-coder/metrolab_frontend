@@ -40,7 +40,7 @@ export default function TestsReportsPage() {
 
     (async () => {
       try {
-        const list = await apiFetch<{ id: number; name: string }[]>('/api/LabTests', {
+        const list = await apiFetch<{ id: number; name: string }[]>('/api/LabTests?status=true', {
           tokenKey: 'admin_token',
           errorFallback: 'Failed to load lab tests',
         });
@@ -97,17 +97,17 @@ export default function TestsReportsPage() {
 
   const toggleLock = async (report: TestReport) => {
     const newStatus = !report.status;
+    const locking = newStatus;
 
-    if (newStatus) {
-      const ok = await confirmDialog({
-        title: 'Lock this report?',
-        message:
-          'Once locked, this report cannot be edited. Only the email action will remain available. Continue?',
-        cancelText: 'Cancel',
-        confirmText: 'Lock',
-      });
-      if (!ok) return;
-    }
+    const ok = await confirmDialog({
+      title: locking ? 'Lock this report?' : 'Unlock this report?',
+      message: locking
+        ? 'Once locked, this report cannot be edited. Only the email action will remain available. Continue?'
+        : 'Unlocking will allow this report to be edited again. Continue?',
+      cancelText: 'Cancel',
+      confirmText: locking ? 'Lock' : 'Unlock',
+    });
+    if (!ok) return;
 
     try {
       const res = await fetch(`${API_BASE}/api/LabTestCategoryReport/changeLabTestCategoryReportStatus`, {
@@ -115,7 +115,10 @@ export default function TestsReportsPage() {
         headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify({ id: report.id, status: newStatus }),
       });
-      await handleApiResponse(res, { errorFallback: 'Error changing lock status' });
+      await handleApiResponse(res, {
+        successMessage: newStatus ? 'Report locked successfully.' : 'Report unlocked successfully.',
+        errorFallback: 'Error changing lock status',
+      });
       loadReports(selectedTestId);
     } catch {
       // Error toast handled by handleApiResponse
@@ -227,7 +230,7 @@ export default function TestsReportsPage() {
         </div>
       )}
 
-      <div style={{ padding: '1.5rem 1.75rem' }} className={emailing ? 'test-reports-page-busy' : undefined}>
+      <div className={`page-body${emailing ? ' test-reports-page-busy' : ''}`}>
         <ListingTable
           className="test-reports-table"
           title="List of Test Reports"

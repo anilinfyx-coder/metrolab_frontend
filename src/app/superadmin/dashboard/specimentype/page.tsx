@@ -1,22 +1,36 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { useForm } from 'react-hook-form';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
-import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
+import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { namedEntityWithIdSchema, type NamedEntityWithIdFormValues } from '../../../../lib/schemas';
 
 interface SpecimenType { id: number; name: string; description: string; status: boolean; }
 
-const emptyForm = { name: '', description: '', id: null as number | null };
+const emptyForm: NamedEntityWithIdFormValues = { name: '', description: '', id: null };
 
 export default function SpecimenTypePage() {
   const confirmDialog = useConfirm();
   const [types, setTypes] = useState<SpecimenType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ ...emptyForm });
-  const [nameError, setNameError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm<NamedEntityWithIdFormValues>({
+    resolver: formResolver<NamedEntityWithIdFormValues>(namedEntityWithIdSchema),
+    defaultValues: emptyForm,
+  });
+
+  const editingId = watch('id');
 
   const loadData = async () => {
     setLoading(true);
@@ -34,33 +48,30 @@ export default function SpecimenTypePage() {
     void loadData();
   }, []);
 
-  const save = async () => {
-    if (!form.name.trim()) {
-      setNameError('Please enter the specimen type name.');
-      toast.error('Please correct the highlighted field before saving.');
-      window.setTimeout(() => document.getElementById('specimen-type-name')?.focus(), 0);
-      return;
-    }
+  const resetForm = () => {
+    reset(emptyForm);
+  };
+
+  const save = handleSubmit(async values => {
     setSaving(true);
-    const method = form.id ? 'PUT' : 'POST';
-    const path = `/api/SpecimenType${form.id ? `/${form.id}` : ''}`;
+    const method = values.id ? 'PUT' : 'POST';
+    const path = `/api/SpecimenType${values.id ? `/${values.id}` : ''}`;
     try {
       await apiFetch(path, {
         method,
         tokenKey: 'superadmin_token',
-        body: JSON.stringify({ name: form.name.trim(), description: form.description.trim() }),
-        successMessage: `Specimen Type ${form.id ? 'updated' : 'added'} successfully.`,
+        body: JSON.stringify({ name: values.name.trim(), description: values.description.trim() }),
+        successMessage: `Specimen type ${values.id ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save specimen type.',
       });
-      setForm({ ...emptyForm });
-      setNameError('');
+      resetForm();
       loadData();
     } catch {
       /* error toasted by apiFetch */
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<NamedEntityWithIdFormValues>());
 
   const remove = async (id: number) => {
     const ok = await confirmDialog({
@@ -71,7 +82,13 @@ export default function SpecimenTypePage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/SpecimenType/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/SpecimenType/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Specimen type deleted successfully.',
+        errorFallback: 'Unable to delete specimen type.',
+      });
+      if (editingId === id) resetForm();
       loadData();
     } catch {
       /* error toasted by apiFetch */
@@ -79,11 +96,23 @@ export default function SpecimenTypePage() {
   };
 
   const toggleStatus = async (t: SpecimenType) => {
+    const enabling = !t.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Specimen Type?' : 'Disable Specimen Type?',
+      message: enabling
+        ? 'This Specimen Type will become active and available for use.'
+        : 'This Specimen Type will become inactive. You can enable it again later.',
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/SpecimenType/${t.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: !t.status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
       });
       loadData();
     } catch {
@@ -92,14 +121,12 @@ export default function SpecimenTypePage() {
   };
 
   const openEdit = (specimenType: SpecimenType) => {
-    setForm({ name: specimenType.name || '', description: specimenType.description || '', id: specimenType.id });
-    setNameError('');
+    reset({
+      name: specimenType.name || '',
+      description: specimenType.description || '',
+      id: specimenType.id,
+    });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const resetForm = () => {
-    setForm({ ...emptyForm });
-    setNameError('');
   };
 
   const columns: ListingColumn<SpecimenType>[] = [
@@ -107,52 +134,47 @@ export default function SpecimenTypePage() {
   ];
 
   return (
-    <div className="page-content">
+    <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Specimen Type" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         <div className="specimen-type-split">
           <div className="card">
             <div className="card-header">
-              <span className="card-title">{form.id ? 'Edit Specimen Type Detail' : 'Specimen Type Detail'}</span>
+              <span className="card-title">{editingId ? 'Edit Specimen Type Detail' : 'Specimen Type Detail'}</span>
             </div>
-            <div className="card-body">
-                <div className="form-group">
-                  <label htmlFor="specimen-type-name">Name<span className="required-star">*</span></label>
+            <form onSubmit={save} noValidate>
+              <div className="card-body">
+                <FormGroup label="Name" htmlFor="specimen-type-name" required error={errors.name?.message}>
                   <input
                     id="specimen-type-name"
                     type="text"
                     placeholder="Enter Name"
-                    value={form.name}
-                    aria-invalid={!!nameError}
-                    onChange={e => {
-                      setForm(previous => ({ ...previous, name: e.target.value }));
-                      if (nameError) setNameError('');
-                    }}
-                    style={{
-                      borderColor: nameError ? '#ef4444' : undefined,
-                      boxShadow: nameError ? '0 0 0 1px rgba(239,68,68,0.15)' : undefined,
-                    }}
+                    data-field="name"
+                    aria-invalid={!!errors.name}
+                    style={fieldStyle(!!errors.name)}
+                    {...register('name')}
                   />
-                  {nameError && (
-                    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>
-                      {nameError}
-                    </div>
-                  )}
-                </div>
-                <div className="form-group">
-                  <label htmlFor="specimen-type-description">Description</label>
-                  <textarea id="specimen-type-description" rows={4} value={form.description || ''} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                      style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical' }} />
-                </div>
-            </div>
-            <div className="specimen-type-form-actions">
-              <button className="btn btn-primary" onClick={save} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}>
-                Reset Data
-              </button>
-            </div>
+                </FormGroup>
+                <FormGroup label="Description" htmlFor="specimen-type-description" required error={errors.description?.message}>
+                  <textarea
+                    id="specimen-type-description"
+                    rows={4}
+                    data-field="description"
+                    aria-invalid={!!errors.description}
+                    style={{ ...fieldStyle(!!errors.description), resize: 'vertical' }}
+                    {...register('description')}
+                  />
+                </FormGroup>
+              </div>
+              <div className="specimen-type-form-actions">
+                <button type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}>
+                  Reset Data
+                </button>
+              </div>
+            </form>
           </div>
 
           <ListingTable
@@ -161,7 +183,6 @@ export default function SpecimenTypePage() {
             rows={types}
             loading={loading}
             emptyText="No specimen types found."
-            headerActions={<ListingHeaderActions onRefresh={loadData} />}
             actionsLabel="Actions"
             actionsWidth={150}
             defaultPageSize={10}

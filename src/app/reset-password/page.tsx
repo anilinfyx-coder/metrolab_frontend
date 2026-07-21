@@ -2,14 +2,18 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
 import { useForm, type SubmitErrorHandler } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
 import { useMutation } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { MdCheckCircle } from 'react-icons/md';
+import { focusFirstInvalidField, formResolver } from '../../lib/formHelpers';
+import { FieldError } from '../components/FormField';
+import PasswordInput from '../components/PasswordInput';
 import { apiFetch } from '../../lib/api';
 import { resetPasswordSchema, type ResetPasswordFormValues } from '../../lib/schemas';
-import { MdCheckCircle, MdHourglassEmpty, MdVpnKey } from 'react-icons/md';
+import PageLoader from '../components/PageLoader';
+import styles from '../page.module.css';
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -17,24 +21,23 @@ function ResetPasswordForm() {
   const token = searchParams.get('token');
   const emailParam = searchParams.get('email');
   const [success, setSuccess] = useState(false);
+  const [tokenError, setTokenError] = useState('');
 
-  const { register, handleSubmit } = useForm<ResetPasswordFormValues>({
-    resolver: yupResolver(resetPasswordSchema),
+  const { register, handleSubmit, formState: { errors } } = useForm<ResetPasswordFormValues>({
+    resolver: formResolver<ResetPasswordFormValues>(resetPasswordSchema),
     defaultValues: { password: '', confirmPassword: '' },
   });
 
   useEffect(() => {
     if (!token || !emailParam) {
-      toast.error('Invalid or missing reset token.');
+      setTokenError('Invalid or missing reset token.');
     }
   }, [token, emailParam]);
 
   const mutation = useMutation({
     mutationFn: async (values: ResetPasswordFormValues) => {
       if (!token || !emailParam) {
-        const message = 'Invalid reset token.';
-        toast.error(message);
-        throw new Error(message);
+        throw new Error('Invalid reset token.');
       }
       return apiFetch('/api/Auth/reset-password', {
         method: 'POST',
@@ -52,89 +55,119 @@ function ResetPasswordForm() {
     onSuccess: () => setSuccess(true),
   });
 
-  const handleInvalid: SubmitErrorHandler<ResetPasswordFormValues> = errors => {
-    const firstError = Object.values(errors)[0];
-    if (firstError?.message) toast.error(firstError.message);
+  const handleInvalid: SubmitErrorHandler<ResetPasswordFormValues> = formErrors => {
+    focusFirstInvalidField(formErrors);
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#f4f6f8_0%,#dde3ea_100%)] p-4">
-      <div className="w-full max-w-[420px] rounded-xl border border-[#e6e9ed] bg-white p-10 shadow-[0_8px_32px_rgba(0,0,0,0.1)]">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#18BADD] text-[1.75rem] font-bold text-white shadow-[0_6px_20px_rgba(24,186,221,0.4)]">
-            ML
-          </div>
-          <h1 className="mb-[0.3rem] text-[1.35rem] font-bold text-[#2c3e50]">Reset Password</h1>
-          <p className="text-[0.85rem] text-[#7f8c9a]">Enter your new password below</p>
+    <main className={styles.page}>
+      <div className={styles.container}>
+        <div className={styles.logoWrap}>
+          <Image
+            src="/login-logo.png"
+            alt="Metro Lab"
+            width={280}
+            height={250}
+            priority
+            className={styles.logo}
+          />
         </div>
 
-        {success ? (
-          <div className="text-center">
-            <div className="mb-6 rounded-md border border-[rgba(46,204,113,0.3)] bg-[rgba(46,204,113,0.1)] p-4 text-[0.9rem] text-[#27ae60]">
-              <MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />
-              Your password has been successfully reset.
-            </div>
-            <button
-              type="button"
-              onClick={() => router.push('/')}
-              className="w-full cursor-pointer rounded-md bg-[#18BADD] p-[0.7rem] text-[0.9rem] font-semibold text-white transition-colors hover:bg-[#12a0be]"
-            >
-              Go to Login
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit(values => mutation.mutate(values), handleInvalid)} noValidate>
-            <div className="mb-5">
-              <label className="mb-[0.35rem] block text-[0.82rem] font-medium text-[#2c3e50]">
-                New Password
-              </label>
-              <input
-                type="password"
-                placeholder="Enter new password"
-                className="w-full rounded-md border border-[#e6e9ed] bg-white px-[0.9rem] py-[0.6rem] text-[0.875rem] text-[#2c3e50] outline-none transition-colors focus:border-[#18BADD]"
-                {...register('password')}
-              />
-            </div>
+        <p className={styles.tagline}>
+          Precision is our Home Mark
+        </p>
 
-            <div className="mb-6">
-              <label className="mb-[0.35rem] block text-[0.82rem] font-medium text-[#2c3e50]">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                placeholder="Confirm new password"
-                className="w-full rounded-md border border-[#e6e9ed] bg-white px-[0.9rem] py-[0.6rem] text-[0.875rem] text-[#2c3e50] outline-none transition-colors focus:border-[#18BADD]"
-                {...register('confirmPassword')}
-              />
-            </div>
+        <div className={styles.formWrap}>
+          <p className={styles.heading}>Reset Password</p>
+          <p className={styles.subtext}>
+            Enter your new password below to complete the reset.
+          </p>
 
-            <button
-              type="submit"
-              disabled={mutation.isPending || !token}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#18BADD] p-[0.7rem] text-[0.9rem] font-semibold text-white transition-colors hover:bg-[#12a0be] disabled:cursor-not-allowed disabled:bg-[#a0d4e0]"
-            >
-              {mutation.isPending ? (
-                <><MdHourglassEmpty size={16} aria-hidden /> Resetting...</>
-              ) : (
-                <><MdVpnKey size={16} aria-hidden /> Reset Password</>
+          {success ? (
+            <div>
+              <div className={styles.successBox}>
+                <MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />
+                Your password has been successfully reset.
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push('/')}
+                className={styles.submit}
+              >
+                Go to Login
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit(values => mutation.mutate(values), handleInvalid)} noValidate>
+              {tokenError && (
+                <div
+                  role="alert"
+                  style={{
+                    marginBottom: '0.85rem',
+                    padding: '0.75rem 0.9rem',
+                    border: '1px solid rgba(239,68,68,0.35)',
+                    borderRadius: 4,
+                    background: 'rgba(239,68,68,0.08)',
+                    color: '#b91c1c',
+                    fontSize: '0.82rem',
+                  }}
+                >
+                  {tokenError}
+                </div>
               )}
-            </button>
 
-            <div className="mt-5 text-center">
-              <Link href="/" className="text-[0.85rem] text-[#7f8c9a] no-underline">
-                Back to Login
+              <div className={styles.field}>
+                <div className={styles.labelRow}>
+                  <label className={styles.label} htmlFor="rp-password">New Password</label>
+                </div>
+                <PasswordInput
+                  id="rp-password"
+                  placeholder="Enter new password"
+                  data-field="password"
+                  aria-invalid={!!errors.password}
+                  className={styles.input}
+                  {...register('password')}
+                />
+                <FieldError message={errors.password?.message} />
+              </div>
+
+              <div className={styles.field}>
+                <div className={styles.labelRow}>
+                  <label className={styles.label} htmlFor="rp-confirm">Confirm New Password</label>
+                </div>
+                <PasswordInput
+                  id="rp-confirm"
+                  placeholder="Confirm new password"
+                  data-field="confirmPassword"
+                  aria-invalid={!!errors.confirmPassword}
+                  className={styles.input}
+                  {...register('confirmPassword')}
+                />
+                <FieldError message={errors.confirmPassword?.message} />
+              </div>
+
+              <button
+                type="submit"
+                disabled={mutation.isPending || !token}
+                className={styles.submit}
+              >
+                {mutation.isPending ? 'Resetting…' : 'Reset Password'}
+              </button>
+
+              <Link href="/" className={styles.backLink}>
+                ← Back to Login
               </Link>
-            </div>
-          </form>
-        )}
+            </form>
+          )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center">Loading...</div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><PageLoader message="Loading..." size="lg" /></div>}>
       <ResetPasswordForm />
     </Suspense>
   );

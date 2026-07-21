@@ -1,7 +1,15 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, ReactNode } from 'react';
 import Link from 'next/link';
+import {
+  MdBiotech,
+  MdBusiness,
+  MdGroups,
+  MdHandshake,
+  MdLocalHospital,
+} from 'react-icons/md';
 import TopNav from '../../components/TopNav';
+import PageLoader from '../../components/PageLoader';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
@@ -46,47 +54,49 @@ export default function SuperAdminDashboard() {
     <>
       <TopNav title="Dashboard" />
 
-      <div className="page-content" style={{ backgroundColor: '#f0f4f8' }}>
+      <div className="page-content" style={{ backgroundColor: '#f0f4f8', width: '100%' }}>
         {loading ? (
-          <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading dashboard...</div>
+          <div className="page-body">
+            <PageLoader message="Loading dashboard..." size="lg" />
+          </div>
         ) : (
-          <div style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+          <div className="page-body">
             
             {/* KPI Cards section */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
               gap: '20px', 
               marginBottom: '30px' 
             }}>
               <DashboardCard 
                 title="Total Staff" 
                 value={stats?.total_staff || 0} 
-                icon="👥" 
+                icon={<MdGroups size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)" 
               />
               <DashboardCard 
                 title="B2B Clients" 
                 value={stats?.total_b2b_clients || 0} 
-                icon="🏢" 
+                icon={<MdBusiness size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)" 
               />
               <DashboardCard 
                 title="Corporate Clients" 
                 value={stats?.total_corporate_clients || 0} 
-                icon="🤝" 
+                icon={<MdHandshake size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)" 
               />
               <DashboardCard 
                 title="Lab Tests" 
                 value={stats?.total_lab_tests || 0} 
-                icon="🧪" 
+                icon={<MdBiotech size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)" 
               />
               <DashboardCard 
                 title="Total Patients" 
                 value={stats?.total_patients || 0} 
-                icon="🏥" 
+                icon={<MdLocalHospital size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)" 
               />
             </div>
@@ -94,7 +104,7 @@ export default function SuperAdminDashboard() {
             {/* Tables Section */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 480px), 1fr))', 
               gap: '24px' 
             }}>
               
@@ -250,7 +260,7 @@ export default function SuperAdminDashboard() {
   );
 }
 
-function DashboardCard({ title, value, icon, gradient }: { title: string, value: number, icon: string, gradient: string }) {
+function DashboardCard({ title, value, icon, gradient }: { title: string, value: number, icon: ReactNode, gradient: string }) {
   return (
     <div style={{
       background: '#fff',
@@ -292,9 +302,9 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
         borderRadius: '12px',
         background: gradient,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1.8rem',
         color: '#fff',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        flexShrink: 0,
       }}>
         {icon}
       </div>

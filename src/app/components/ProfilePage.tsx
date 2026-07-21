@@ -1,24 +1,45 @@
 'use client';
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { usePathname, useRouter } from 'next/navigation';
 import TopNav from './TopNav';
+import PageLoader from './PageLoader';
+import { FormGroup } from './FormField';
+import PasswordInput from './PasswordInput';
 import { getPortalFromPath, getStoredUser } from './portalConfig';
-import { apiFetch, toastApiError } from '../../lib/api';
+import { apiFetch } from '../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../lib/formHelpers';
+import { profileSchemaForPortal, type ProfilePortalFormValues } from '../../lib/schemas';
+
+const emptyProfile: ProfilePortalFormValues = {
+  id: 0,
+  name: '',
+  email: '',
+  mobile: '',
+  password: '',
+  contact_person_name: '',
+  company_name: '',
+};
 
 export default function ProfilePage() {
   const pathname = usePathname();
   const router = useRouter();
   const portal = getPortalFromPath(pathname || '');
+  const isOrg = portal.nameField === 'company_name';
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    id: 0,
-    name: '',
-    email: '',
-    mobile: '',
-    password: '',
-    contact_person_name: '',
-    company_name: '',
+
+  const schema = useMemo(() => profileSchemaForPortal(isOrg), [isOrg]);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors },
+  } = useForm<ProfilePortalFormValues>({
+    resolver: formResolver<ProfilePortalFormValues>(schema),
+    defaultValues: emptyProfile,
   });
 
   useEffect(() => {
@@ -32,7 +53,7 @@ export default function ProfilePage() {
       errorFallback: 'Unable to load profile.',
     })
       .then(u => {
-        setForm({
+        reset({
           id: Number(u.id),
           name: String(u.name || ''),
           email: String(u.email || ''),
@@ -43,43 +64,38 @@ export default function ProfilePage() {
         });
       })
       .catch(() => {
-        setForm(f => ({
-          ...f,
+        reset({
+          ...emptyProfile,
           id: stored.id!,
           name: stored.name || '',
           email: stored.email || '',
           company_name: stored.company_name || '',
-        }));
+        });
       })
       .finally(() => setLoading(false));
-  }, [portal, router]);
+  }, [portal, router, reset]);
 
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!form.email.trim()) {
-      toastApiError('Email is required.');
-      return;
-    }
+  const save = handleSubmit(async values => {
     setSaving(true);
 
     const payload: Record<string, unknown> = {
-      email: form.email.trim(),
-      mobile: form.mobile.trim() || null,
+      email: values.email.trim(),
+      mobile: (values.mobile || '').trim() || null,
     };
 
     if (portal.nameField === 'company_name') {
-      payload.company_name = form.company_name.trim() || form.name.trim();
-      if (portal.key === 'b2b') payload.contact_person_name = form.contact_person_name.trim() || null;
+      payload.company_name = (values.company_name || '').trim() || (values.name || '').trim();
+      if (portal.key === 'b2b') payload.contact_person_name = (values.contact_person_name || '').trim() || null;
     } else {
-      payload.name = form.name.trim();
+      payload.name = (values.name || '').trim();
     }
 
-    if (form.password.trim()) {
-      payload.password = form.password.trim();
+    if (values.password?.trim()) {
+      payload.password = values.password.trim();
     }
 
     try {
-      const updated = await apiFetch<Record<string, unknown>>(`${portal.apiPath}/${form.id}`, {
+      const updated = await apiFetch<Record<string, unknown>>(`${portal.apiPath}/${values.id}`, {
         method: 'PUT',
         tokenKey: portal.tokenKey,
         body: JSON.stringify(payload),
@@ -88,28 +104,26 @@ export default function ProfilePage() {
       });
       const displayName =
         portal.nameField === 'company_name'
-          ? (form.company_name || form.name || form.email)
-          : (form.name || form.email);
+          ? (values.company_name || values.name || values.email)
+          : (values.name || values.email);
       const stored = getStoredUser(portal.userKey) || {};
       localStorage.setItem(
         portal.userKey,
         JSON.stringify({
           ...stored,
           ...updated,
-          id: form.id,
+          id: values.id,
           name: displayName,
-          email: form.email.trim(),
+          email: values.email.trim(),
         })
       );
-      setForm(f => ({ ...f, password: '' }));
+      setValue('password', '');
     } catch {
       /* toast handled by apiFetch */
     } finally {
       setSaving(false);
     }
-  };
-
-  const isOrg = portal.nameField === 'company_name';
+  }, createInvalidHandler<ProfilePortalFormValues>());
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
@@ -121,79 +135,93 @@ export default function ProfilePage() {
           </div>
           <div className="card-body">
             {loading ? (
-              <div style={{ color: 'var(--text-muted)' }}>Loading...</div>
+              <PageLoader message="Loading profile..." />
             ) : (
-              <form onSubmit={save}>
+              <form onSubmit={save} noValidate>
                 {isOrg ? (
                   <>
-                    <div className="form-group">
-                      <label htmlFor="profile-company">Company / Lab Name<span className="required-star">*</span></label>
+                    <FormGroup
+                      label="Company / Lab Name"
+                      htmlFor="profile-company"
+                      required
+                      error={errors.company_name?.message}
+                    >
                       <input
                         id="profile-company"
-                        value={form.company_name || form.name}
-                        onChange={e => setForm(p => ({ ...p, company_name: e.target.value, name: e.target.value }))}
-                        required
+                        data-field="company_name"
+                        aria-invalid={!!errors.company_name}
+                        style={fieldStyle(!!errors.company_name)}
+                        {...register('company_name', {
+                          onChange: e => {
+                            setValue('name', e.target.value);
+                          },
+                        })}
                       />
-                    </div>
+                    </FormGroup>
                     {portal.key === 'b2b' && (
-                      <div className="form-group">
-                        <label htmlFor="profile-contact">Contact Person</label>
+                      <FormGroup
+                        label="Contact Person"
+                        htmlFor="profile-contact"
+                        error={errors.contact_person_name?.message}
+                      >
                         <input
                           id="profile-contact"
-                          value={form.contact_person_name}
-                          onChange={e => setForm(p => ({ ...p, contact_person_name: e.target.value }))}
+                          data-field="contact_person_name"
+                          aria-invalid={!!errors.contact_person_name}
+                          style={fieldStyle(!!errors.contact_person_name)}
+                          {...register('contact_person_name')}
                         />
-                      </div>
+                      </FormGroup>
                     )}
                   </>
                 ) : (
-                  <div className="form-group">
-                    <label htmlFor="profile-name">Name<span className="required-star">*</span></label>
+                  <FormGroup label="Name" htmlFor="profile-name" required error={errors.name?.message}>
                     <input
                       id="profile-name"
-                      value={form.name}
-                      onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                      required
+                      data-field="name"
+                      aria-invalid={!!errors.name}
+                      style={fieldStyle(!!errors.name)}
+                      {...register('name')}
                     />
-                  </div>
+                  </FormGroup>
                 )}
 
-                <div className="form-group">
-                  <label htmlFor="profile-email">Email<span className="required-star">*</span></label>
+                <FormGroup label="Email" htmlFor="profile-email" required error={errors.email?.message}>
                   <input
                     id="profile-email"
                     type="email"
-                    value={form.email}
-                    onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                    required
+                    data-field="email"
+                    aria-invalid={!!errors.email}
+                    style={fieldStyle(!!errors.email)}
+                    {...register('email')}
                   />
-                </div>
+                </FormGroup>
 
-                <div className="form-group">
-                  <label htmlFor="profile-mobile">Mobile</label>
+                <FormGroup label="Mobile" htmlFor="profile-mobile" error={errors.mobile?.message}>
                   <input
                     id="profile-mobile"
-                    value={form.mobile}
-                    onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
+                    inputMode="numeric"
+                    data-field="mobile"
+                    aria-invalid={!!errors.mobile}
+                    style={fieldStyle(!!errors.mobile)}
+                    {...register('mobile')}
                   />
-                </div>
+                </FormGroup>
 
-                <div className="form-group">
-                  <label htmlFor="profile-password">
-                    New Password
-                    <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                      {' '}(leave blank to keep current)
-                    </span>
-                  </label>
-                  <input
+                <FormGroup label="New Password" htmlFor="profile-password" error={errors.password?.message}>
+                  <PasswordInput
                     id="profile-password"
-                    type="password"
-                    value={form.password}
-                    onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                    data-field="password"
+                    aria-invalid={!!errors.password}
+                    style={fieldStyle(!!errors.password)}
                     autoComplete="new-password"
                     placeholder="Leave blank to keep current"
+                    {...register('password')}
                   />
-                </div>
+                  <div style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
+                    (leave blank to keep current)
+                  </div>
+                </FormGroup>
 
                 <div style={{ display: 'flex', gap: '0.65rem' }}>
                   <button type="submit" className="btn btn-primary" disabled={saving}>

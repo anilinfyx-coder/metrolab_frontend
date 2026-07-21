@@ -259,7 +259,7 @@ export default function PatientListPage() {
           </div>
         )}
 
-        <div style={{ padding: '1.25rem 1.5rem' }} className={emailing ? 'test-reports-page-busy' : undefined}>
+        <div className={`page-body${emailing ? ' test-reports-page-busy' : ''}`}>
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span className="card-title">Patient Info</span>
@@ -317,7 +317,7 @@ export default function PatientListPage() {
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Patients" />
 
-      <div style={{ padding: '1.5rem 1.75rem' }}>
+      <div className="page-body">
         <ListingTable
           className="patient-list-table"
           title="List of Patients"

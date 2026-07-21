@@ -1,9 +1,14 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdAdd, MdClose, MdDelete, MdEdit } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { labTestFormSchema, type LabTestFormValues } from '../../../../lib/schemas';
 
 interface LabTest {
   id: number;
@@ -13,9 +18,18 @@ interface LabTest {
   deleted: boolean | null;
   showCollectedDate?: boolean | null;
   showReportStatus?: boolean | null;
+  showSpecimen?: boolean | null;
+  showFinalResult?: boolean | null;
 }
 
-const emptyTest: Partial<LabTest> = { name: '', description: '' };
+const emptyTest: LabTestFormValues = {
+  name: '',
+  description: '',
+  showCollectedDate: false,
+  showReportStatus: false,
+  showSpecimen: false,
+  showFinalResult: false,
+};
 
 export default function LabTestsPage() {
   const confirmDialog = useConfirm();
@@ -23,9 +37,19 @@ export default function LabTestsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<Partial<LabTest>>(emptyTest);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [editMeta, setEditMeta] = useState<Partial<LabTest> | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<LabTestFormValues>({
+    resolver: formResolver<LabTestFormValues>(labTestFormSchema),
+    defaultValues: emptyTest,
+  });
 
   const fetchTests = useCallback(async () => {
     setLoading(true);
@@ -46,29 +70,59 @@ export default function LabTestsPage() {
     t.description?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openAdd = () => { setForm(emptyTest); setEditId(null); setShowModal(true); };
-  const openEdit = (t: LabTest) => { setForm(t); setEditId(t.id); setShowModal(true); };
+  const openAdd = () => {
+    reset(emptyTest);
+    setEditId(null);
+    setEditMeta(null);
+    setShowModal(true);
+  };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openEdit = (t: LabTest) => {
+    reset({
+      name: t.name || '',
+      description: t.description || '',
+      showCollectedDate: !!t.showCollectedDate,
+      showReportStatus: !!t.showReportStatus,
+      showSpecimen: !!t.showSpecimen,
+      showFinalResult: !!t.showFinalResult,
+    });
+    setEditId(t.id);
+    setEditMeta(t);
+    setShowModal(true);
+  };
+
+  const handleSave = handleSubmit(async values => {
     setSaving(true);
     try {
       const path = editId ? `/api/LabTests/${editId}` : '/api/LabTests';
       const method = editId ? 'PUT' : 'POST';
+      const payload = {
+        ...(editMeta || {}),
+        name: values.name.trim(),
+        description: values.description || '',
+        showCollectedDate: !!values.showCollectedDate,
+        showReportStatus: !!values.showReportStatus,
+        showSpecimen: !!values.showSpecimen,
+        showFinalResult: !!values.showFinalResult,
+      };
       await apiFetch(path, {
         method,
         tokenKey: 'superadmin_token',
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
+        successMessage: `Lab test ${editId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save lab test.',
       });
       setShowModal(false);
+      reset(emptyTest);
+      setEditId(null);
+      setEditMeta(null);
       fetchTests();
     } catch {
       /* error toasted by apiFetch */
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<LabTestFormValues>());
 
   const handleDelete = async (id: number) => {
     const ok = await confirmDialog({
@@ -79,7 +133,12 @@ export default function LabTestsPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/LabTests/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/LabTests/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Lab test deleted successfully.',
+        errorFallback: 'Unable to delete lab test.',
+      });
       fetchTests();
     } catch {
       /* error toasted by apiFetch */
@@ -119,7 +178,7 @@ export default function LabTestsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading...</td></tr>
+                  <tr><td colSpan={6}><PageLoader message="Loading lab tests..." /></td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No lab tests found</td></tr>
                 ) : filtered.map(t => (
@@ -150,25 +209,37 @@ export default function LabTestsPage() {
               <h2>{editId ? 'Edit Lab Test' : 'Add Lab Test'}</h2>
               <button className="btn btn-ghost btn-sm" id="close-labtest-modal" onClick={() => setShowModal(false)}><MdClose size={16} aria-hidden /></button>
             </div>
-            <form onSubmit={handleSave}>
+            <form onSubmit={handleSave} noValidate>
               <div className="modal-body">
-                <div className="form-group">
-                  <label>Test Name *</label>
-                  <input id="labtest-name" required value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Drug Screen 10-Panel" />
-                </div>
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea id="labtest-desc" rows={3} value={form.description || ''} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Enter test description..." style={{ resize: 'vertical' }} />
-                </div>
+                <FormGroup label="Test Name" htmlFor="labtest-name" required error={errors.name?.message}>
+                  <input
+                    id="labtest-name"
+                    placeholder="e.g. Drug Screen 10-Panel"
+                    data-field="name"
+                    aria-invalid={!!errors.name}
+                    style={fieldStyle(!!errors.name)}
+                    {...register('name')}
+                  />
+                </FormGroup>
+                <FormGroup label="Description" htmlFor="labtest-desc" error={errors.description?.message}>
+                  <textarea
+                    id="labtest-desc"
+                    rows={3}
+                    placeholder="Enter test description..."
+                    data-field="description"
+                    style={{ ...fieldStyle(!!errors.description), resize: 'vertical' }}
+                    {...register('description')}
+                  />
+                </FormGroup>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                   {[
-                    { key: 'showCollectedDate', label: 'Show Collected Date' },
-                    { key: 'showReportStatus', label: 'Show Report Status' },
-                    { key: 'showSpecimen', label: 'Show Specimen' },
-                    { key: 'showFinalResult', label: 'Show Final Result' },
+                    { key: 'showCollectedDate' as const, label: 'Show Collected Date' },
+                    { key: 'showReportStatus' as const, label: 'Show Report Status' },
+                    { key: 'showSpecimen' as const, label: 'Show Specimen' },
+                    { key: 'showFinalResult' as const, label: 'Show Final Result' },
                   ].map(opt => (
                     <label key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                      <input type="checkbox" id={`labtest-${opt.key}`} checked={!!(form as Record<string, unknown>)[opt.key]} onChange={e => setForm({ ...form, [opt.key]: e.target.checked })} style={{ width: 'auto' }} />
+                      <input type="checkbox" id={`labtest-${opt.key}`} {...register(opt.key)} style={{ width: 'auto' }} />
                       <span style={{ fontSize: '0.875rem', color: 'var(--text)' }}>{opt.label}</span>
                     </label>
                   ))}

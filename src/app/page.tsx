@@ -1,17 +1,17 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useForm, type SubmitErrorHandler } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
 import { useMutation } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { focusFirstInvalidField, formResolver } from '../lib/formHelpers';
+import { FieldError } from './components/FormField';
+import PasswordInput from './components/PasswordInput';
 import { apiFetch } from '../lib/api';
 import { loginSchema, type LoginFormValues } from '../lib/schemas';
 import { useAppDispatch } from '../store/hooks';
 import { clearCredentials, setCredentials, type AuthUser, type Portal } from '../store/authSlice';
-import { MdVisibility, MdVisibilityOff } from 'react-icons/md';
 import styles from './page.module.css';
 
 const portalConfig: Record<Portal, { tokenKey: string; userKey: string; path: string }> = {
@@ -24,9 +24,8 @@ const portalConfig: Record<Portal, { tokenKey: string; userKey: string; path: st
 export default function UnifiedLoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const [showPassword, setShowPassword] = useState(false);
-  const { register, handleSubmit } = useForm<LoginFormValues>({
-    resolver: yupResolver(loginSchema),
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
+    resolver: formResolver<LoginFormValues>(loginSchema),
     defaultValues: { username: '', password: '' },
   });
 
@@ -48,15 +47,9 @@ export default function UnifiedLoginPage() {
         body: JSON.stringify(values),
       }),
     onSuccess: user => {
-      if (!user.portal) {
-        toast.error('Unknown portal role');
-        return;
-      }
+      if (!user.portal) return;
       const config = portalConfig[user.portal];
-      if (!config) {
-        toast.error('Unknown portal role');
-        return;
-      }
+      if (!config) return;
 
       localStorage.setItem(config.tokenKey, user.token);
       localStorage.setItem(config.userKey, JSON.stringify(user));
@@ -66,8 +59,7 @@ export default function UnifiedLoginPage() {
   });
 
   const handleInvalid: SubmitErrorHandler<LoginFormValues> = errors => {
-    const firstError = Object.values(errors)[0];
-    if (firstError?.message) toast.error(firstError.message);
+    focusFirstInvalidField(errors);
   };
 
   return (
@@ -104,10 +96,13 @@ export default function UnifiedLoginPage() {
                   type="text"
                   placeholder="superadmin@gmail.com"
                   autoComplete="username"
+                  data-field="username"
+                  aria-invalid={!!errors.username}
                   className={styles.input}
                   {...register('username')}
                 />
               </div>
+              <FieldError message={errors.username?.message} />
             </div>
 
             <div className={styles.field}>
@@ -117,29 +112,16 @@ export default function UnifiedLoginPage() {
                   Forgot password
                 </a>
               </div>
-              <div className={styles.inputWrap}>
-                <input
-                  id="ml-password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••"
-                  autoComplete="current-password"
-                  className={`${styles.input} ${styles.passwordInput}`}
-                  {...register('password')}
-                />
-                <button
-                  type="button"
-                  className={styles.eye}
-                  onClick={() => setShowPassword(value => !value)}
-                  tabIndex={-1}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  {showPassword ? (
-                    <MdVisibilityOff size={16} aria-hidden />
-                  ) : (
-                    <MdVisibility size={16} aria-hidden />
-                  )}
-                </button>
-              </div>
+              <PasswordInput
+                id="ml-password"
+                placeholder="••••••"
+                autoComplete="current-password"
+                data-field="password"
+                aria-invalid={!!errors.password}
+                className={styles.input}
+                {...register('password')}
+              />
+              <FieldError message={errors.password?.message} />
             </div>
 
             <button

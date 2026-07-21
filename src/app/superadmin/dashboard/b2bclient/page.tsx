@@ -1,6 +1,7 @@
-'use client';
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+﻿'use client';
+import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   MdAccountBalanceWallet,
   MdAdd,
@@ -19,9 +20,22 @@ import {
 } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-import { apiFetch, toastApiSuccess, API_BASE, getToken } from '../../../../lib/api';
+import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  b2bClientFormSchema,
+  b2bDocumentSchema,
+  b2bSubscriptionSchema,
+  walletRechargeSchema,
+  type B2bClientFormValues,
+  type B2bDocumentFormValues,
+  type B2bSubscriptionFormValues,
+  type WalletRechargeFormValues,
+} from '../../../../lib/schemas';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface B2BClient {
@@ -35,10 +49,20 @@ interface B2BClient {
   password?: string;
   is_fixed_price?: boolean;
   fixed_price_amount?: number | string;
+  is_approval?: boolean;
+  wallet_balance?: number;
 }
 interface Subscription { id: number; start_date: string; end_date: string; amount: number; b2b_client_id: number; }
 interface LabTest { id: number; name: string; description: string; b2b_client_lab_test_access_id?: number; is_selected?: boolean; }
 interface B2BDocument { id: number; type_data_id: number; typeData: string; file_name: string; }
+interface WalletTransaction {
+  id: number;
+  creation_timestamp: string;
+  transaction_type: string;
+  amount: string | number;
+  closing_balance: string | number;
+  description?: string;
+}
 
 const emptyClient = {
   company_name: '', contact_person_name: '', mobile: '', email: '', address: '',
@@ -52,45 +76,93 @@ const emptyClient = {
 
 type View = 'list' | 'form' | 'subscription' | 'labtestaccess' | 'documents' | 'wallet';
 
+const B2B_CLIENTS_KEY = ['b2bClients'] as const;
+const LAB_TESTS_ALL_KEY = ['labTests', 'all'] as const;
+const LAB_TESTS_ACTIVE_KEY = ['labTests', 'active'] as const;
+const B2B_DOC_TYPES_KEY = ['typeData', 'active'] as const;
+const b2bSubscriptionsKey = (clientId: number) => ['b2bSubscriptions', clientId] as const;
+const b2bCustomPricesKey = (clientId: number) => ['b2bCustomPrices', clientId] as const;
+const b2bDocumentsKey = (clientId: number) => ['b2bDocuments', clientId] as const;
+const b2bLabTestAccessKey = (clientId: number) => ['b2bLabTestAccess', clientId] as const;
+const b2bWalletHistoryKey = (clientId: number) => ['b2bWalletHistory', clientId] as const;
+
+type SaveClientPayload = {
+  values: B2bClientFormValues;
+  editingId: number | null;
+  isApproval: boolean;
+  isFixedPrice: boolean;
+  logoFile: File | null;
+  reportHeaderFile: File | null;
+  reportFooterFile: File | null;
+  medOfficerSigFile: File | null;
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function B2BClientsPage() {
   const confirmDialog = useConfirm();
-  const [clients, setClients] = useState<B2BClient[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [view, setView] = useState<View>('list');
   const [selectedClient, setSelectedClient] = useState<B2BClient | null>(null);
-  const [form, setForm] = useState<Record<string, string>>({ ...emptyClient });
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
   const [initViewHandled, setInitViewHandled] = useState(false);
+  const selectedClientId = selectedClient?.id;
+
+  const clientSchema = useMemo(() => b2bClientFormSchema(!!editingId), [editingId]);
+
+  const {
+    register: registerClient,
+    handleSubmit: handleClientSubmit,
+    reset: resetClient,
+    getValues: getClientValues,
+    formState: { errors: clientErrors },
+  } = useForm<B2bClientFormValues>({
+    resolver: formResolver<B2bClientFormValues>(clientSchema),
+    defaultValues: { ...emptyClient },
+  });
+
+  const {
+    register: registerSub,
+    handleSubmit: handleSubSubmit,
+    reset: resetSub,
+    formState: { errors: subErrors },
+  } = useForm<B2bSubscriptionFormValues>({
+    resolver: formResolver<B2bSubscriptionFormValues>(b2bSubscriptionSchema),
+    defaultValues: { start_date: '', end_date: '', amount: '' },
+  });
+
+  const {
+    register: registerWallet,
+    handleSubmit: handleWalletSubmit,
+    reset: resetWallet,
+    formState: { errors: walletErrors },
+  } = useForm<WalletRechargeFormValues>({
+    resolver: formResolver<WalletRechargeFormValues>(walletRechargeSchema),
+    defaultValues: { amount: '', description: '' },
+  });
+
+  const {
+    register: registerDoc,
+    handleSubmit: handleDocSubmit,
+    reset: resetDocForm,
+    formState: { errors: docErrors },
+  } = useForm<B2bDocumentFormValues>({
+    resolver: formResolver<B2bDocumentFormValues>(b2bDocumentSchema),
+    defaultValues: { typeDataId: '' },
+  });
 
   // Subscriptions & Custom Pricing
   const [pricingMode, setPricingMode] = useState<'subscription' | 'custom'>('subscription');
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [subForm, setSubForm] = useState({ start_date: '', end_date: '', amount: '' });
   const [editingSubId, setEditingSubId] = useState<number | null>(null);
-  const [customPrices, setCustomPrices] = useState<{ lab_test_id: number; custom_price: string }[]>([]);
-  const [globalLabTests, setGlobalLabTests] = useState<LabTest[]>([]);
-  const [pricingSaving, setPricingSaving] = useState(false);
+  const [draftCustomPrices, setDraftCustomPrices] = useState<{ lab_test_id: number; custom_price: string }[] | null>(null);
+  const [draftSelectedIds, setDraftSelectedIds] = useState<Set<number> | null>(null);
 
   // Documents
-  const [documents, setDocuments] = useState<B2BDocument[]>([]);
-  const [docTypes, setDocTypes] = useState<{id: number, name: string}[]>([]);
-  const [docForm, setDocForm] = useState<{ id: number | null; typeDataId: string; file: File | null; fileName: string }>({
+  const [docFormMeta, setDocFormMeta] = useState<{ id: number | null; file: File | null; fileName: string }>({
     id: null,
-    typeDataId: '',
     file: null,
     fileName: '',
   });
-
-  // Lab Test Access
-  const [labTests, setLabTests] = useState<LabTest[]>([]);
-
-  // Wallet
-  const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [walletHistory, setWalletHistory] = useState<any[]>([]);
-  const [walletForm, setWalletForm] = useState({ amount: '', description: '' });
-  const [walletSaving, setWalletSaving] = useState(false);
+  const [docFileError, setDocFileError] = useState('');
 
   // File uploads for B2B Client
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -99,41 +171,364 @@ export default function B2BClientsPage() {
   const [medOfficerSigFile, setMedOfficerSigFile] = useState<File | null>(null);
   const [isApproval, setIsApproval] = useState(false);
   const [isFixedPrice, setIsFixedPrice] = useState(false);
+  const [fixedPriceAmount, setFixedPriceAmount] = useState('');
+  const [walletBalanceOverride, setWalletBalanceOverride] = useState<number | null>(null);
 
-  const loadClients = async () => {
-    setLoading(true);
-    try {
-      const data = await apiFetch<B2BClient[]>('/api/B2bClients', { tokenKey: 'superadmin_token' });
-      setClients(data || []);
-    } catch {
-      setClients([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const invalidateClients = () => queryClient.invalidateQueries({ queryKey: B2B_CLIENTS_KEY });
 
-  useEffect(() => { loadClients(); }, []);
-
-  useEffect(() => {
-    if (clients.length > 0 && !initViewHandled && typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const v = urlParams.get('view');
-      const cid = urlParams.get('clientId');
-      if (v === 'wallet' && cid) {
-         const c = clients.find(x => x.id.toString() === cid);
-         if (c) {
-           setSelectedClient(c);
-           setWalletBalance((c as any).wallet_balance || 0);
-           setWalletForm({ amount: '', description: '' });
-           fetch(`${API_BASE}/api/B2bClients/walletHistory/${c.id}`, { headers: { token: getToken() } })
-             .then(r => r.json())
-             .then(d => { if (d.response_code === '200') setWalletHistory(d.obj || []); });
-           setView('wallet');
-         }
+  const { data: clients = [], isLoading: loading } = useQuery({
+    queryKey: B2B_CLIENTS_KEY,
+    queryFn: async () => {
+      try {
+        return await apiFetch<B2BClient[]>('/api/B2bClients', { tokenKey: 'superadmin_token' }) || [];
+      } catch {
+        return [];
       }
-      setInitViewHandled(true);
+    },
+  });
+
+  const { data: subscriptions = [] } = useQuery({
+    queryKey: b2bSubscriptionsKey(selectedClientId ?? 0),
+    enabled: view === 'subscription' && !!selectedClientId,
+    queryFn: async () => {
+      try {
+        return await apiFetch<Subscription[]>(
+          `/api/B2bClientSubscription?b2b_client_id=${selectedClientId}`,
+          { tokenKey: 'superadmin_token' },
+        ) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: customPricesData = [] } = useQuery({
+    queryKey: b2bCustomPricesKey(selectedClientId ?? 0),
+    enabled: view === 'subscription' && !!selectedClientId,
+    queryFn: async () => {
+      try {
+        return await apiFetch<{ lab_test_id: number; custom_price: string }[]>(
+          `/api/B2bClientCustomPrices?b2b_client_id=${selectedClientId}`,
+          { tokenKey: 'superadmin_token' },
+        ) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: globalLabTests = [] } = useQuery({
+    queryKey: LAB_TESTS_ALL_KEY,
+    enabled: view === 'subscription',
+    queryFn: async () => {
+      try {
+        return await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' }) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: accessLabTests = [] } = useQuery({
+    queryKey: LAB_TESTS_ACTIVE_KEY,
+    enabled: view === 'labtestaccess',
+    queryFn: async () => {
+      try {
+        return await apiFetch<LabTest[]>('/api/LabTests?status=true', { tokenKey: 'superadmin_token' }) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: docTypes = [] } = useQuery({
+    queryKey: B2B_DOC_TYPES_KEY,
+    enabled: view === 'documents',
+    queryFn: async () => {
+      try {
+        return await apiFetch<{ id: number; name: string }[]>('/api/TypeData?status=true', {
+          tokenKey: 'superadmin_token',
+        }) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: documents = [] } = useQuery({
+    queryKey: b2bDocumentsKey(selectedClientId ?? 0),
+    enabled: view === 'documents' && !!selectedClientId,
+    queryFn: async () => {
+      try {
+        return await apiFetch<B2BDocument[]>('/api/B2bClientDocument/getB2bClientDocumentList', {
+          method: 'POST',
+          tokenKey: 'superadmin_token',
+          body: JSON.stringify({ b2b_client_id: selectedClientId }),
+        }) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: accessList = [] } = useQuery({
+    queryKey: b2bLabTestAccessKey(selectedClientId ?? 0),
+    enabled: view === 'labtestaccess' && !!selectedClientId,
+    queryFn: async () => {
+      try {
+        return await apiFetch<{ lab_test_id: number }[]>(
+          `/api/B2bClientLabTestAccess?b2b_client_id=${selectedClientId}`,
+          { tokenKey: 'superadmin_token' },
+        ) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const { data: walletHistory = [] } = useQuery({
+    queryKey: b2bWalletHistoryKey(selectedClientId ?? 0),
+    enabled: view === 'wallet' && !!selectedClientId,
+    queryFn: async () => {
+      try {
+        return await apiFetch<WalletTransaction[]>(
+          `/api/B2bClients/walletHistory/${selectedClientId}`,
+          { tokenKey: 'superadmin_token' },
+        ) || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const customPrices = draftCustomPrices ?? customPricesData;
+
+  const selectedTestIds = useMemo(
+    () => draftSelectedIds ?? new Set(accessList.map(a => a.lab_test_id)),
+    [draftSelectedIds, accessList],
+  );
+
+  const labTests = useMemo(
+    () => accessLabTests.map(t => ({ ...t, is_selected: selectedTestIds.has(t.id) })),
+    [accessLabTests, selectedTestIds],
+  );
+
+  const walletBalance = useMemo(() => {
+    if (walletBalanceOverride != null) return walletBalanceOverride;
+    const fromList = clients.find(c => c.id === selectedClientId);
+    if (fromList?.wallet_balance != null) return Number(fromList.wallet_balance);
+    if (selectedClient?.wallet_balance != null) return Number(selectedClient.wallet_balance);
+    if (walletHistory.length > 0) return Number(walletHistory[0].closing_balance) || 0;
+    return 0;
+  }, [walletBalanceOverride, clients, selectedClientId, selectedClient, walletHistory]);
+
+  // Deep-link: ?view=wallet&clientId=… opens wallet once client list is loaded.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => {
+    if (clients.length === 0 || initViewHandled || typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const v = urlParams.get('view');
+    const cid = urlParams.get('clientId');
+    if (v === 'wallet' && cid) {
+      const c = clients.find(x => x.id.toString() === cid);
+      if (c) {
+        setSelectedClient(c);
+        setWalletBalanceOverride(
+          c.wallet_balance != null ? Number(c.wallet_balance) : 0,
+        );
+        resetWallet({ amount: '', description: '' });
+        setView('wallet');
+      }
     }
-  }, [clients, initViewHandled]);
+    setInitViewHandled(true);
+  }, [clients, initViewHandled, resetWallet]);
+
+  const saveClientMutation = useMutation({
+    mutationFn: async ({
+      values,
+      editingId: editId,
+      isApproval: approval,
+      isFixedPrice: fixedPrice,
+      logoFile: logo,
+      reportHeaderFile: header,
+      reportFooterFile: footer,
+      medOfficerSigFile: sig,
+    }: SaveClientPayload) => {
+      const method = editId ? 'PUT' : 'POST';
+      const path = `/api/B2bClients${editId ? `/${editId}` : ''}`;
+      const hasFiles = logo || header || footer || sig;
+      if (hasFiles) {
+        const fd = new FormData();
+        Object.entries({
+          ...values,
+          role_id: '2',
+          status: 'true',
+          is_approval: String(approval),
+          is_fixed_price: String(fixedPrice),
+        }).forEach(([k, v]) => fd.append(k, v as string));
+        if (logo) fd.append('logo_file', logo);
+        if (header) fd.append('report_header_file', header);
+        if (footer) fd.append('report_footer_file', footer);
+        if (sig) fd.append('medical_officer_signature_file', sig);
+        return apiFetch(path, {
+          method,
+          tokenKey: 'superadmin_token',
+          body: fd,
+          successMessage: `B2B Lab ${editId ? 'updated' : 'added'} successfully.`,
+          errorFallback: 'Unable to save B2B Lab.',
+        });
+      }
+      return apiFetch(path, {
+        method,
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({
+          ...values,
+          role_id: 2,
+          status: true,
+          deleted: false,
+          is_approval: approval,
+          is_fixed_price: fixedPrice,
+        }),
+        successMessage: `B2B Lab ${editId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save B2B Lab.',
+      });
+    },
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/api/B2bClients/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'B2B Lab deleted successfully.',
+        errorFallback: 'Unable to delete B2B Lab.',
+      }),
+  });
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: boolean }) =>
+      apiFetch(`/api/B2bClients/${id}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
+      }),
+  });
+
+  const saveSubMutation = useMutation({
+    mutationFn: ({
+      values,
+      subId,
+      clientId,
+    }: {
+      values: B2bSubscriptionFormValues;
+      subId: number | null;
+      clientId: number;
+    }) => {
+      const method = subId ? 'PUT' : 'POST';
+      const path = `/api/B2bClientSubscription${subId ? `/${subId}` : ''}`;
+      return apiFetch(path, {
+        method,
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ ...values, b2b_client_id: clientId }),
+        successMessage: `Subscription ${subId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save subscription.',
+      });
+    },
+  });
+
+  const deleteSubMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/api/B2bClientSubscription/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Subscription deleted successfully.',
+        errorFallback: 'Unable to delete subscription.',
+      }),
+  });
+
+  const saveCustomPricingMutation = useMutation({
+    mutationFn: async ({
+      clientId,
+      fixedPrice,
+      fixedAmount,
+      prices,
+    }: {
+      clientId: number;
+      fixedPrice: boolean;
+      fixedAmount: string;
+      prices: { lab_test_id: number; custom_price: string }[];
+    }) => {
+      await apiFetch(`/api/B2bClients/${clientId}`, {
+        method: 'PUT',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ is_fixed_price: fixedPrice, fixed_price_amount: fixedAmount }),
+      });
+      if (!fixedPrice) {
+        await apiFetch('/api/B2bClientCustomPrices/bulk', {
+          method: 'POST',
+          tokenKey: 'superadmin_token',
+          body: JSON.stringify({ b2b_client_id: clientId, custom_prices: prices }),
+        });
+      }
+    },
+  });
+
+  const saveDocMutation = useMutation({
+    mutationFn: ({ formData, isUpdate }: { formData: FormData; isUpdate: boolean }) =>
+      apiFetch('/api/B2bClientDocument/saveB2bClientDocument', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: formData,
+        successMessage: `Document ${isUpdate ? 'updated' : 'saved'} successfully.`,
+        errorFallback: 'Unable to save document.',
+      }),
+  });
+
+  const deleteDocMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch('/api/B2bClientDocument/deleteB2bClientDocument', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ id }),
+        successMessage: 'Document deleted successfully.',
+        errorFallback: 'Unable to delete document.',
+      }),
+  });
+
+  const saveLabTestAccessMutation = useMutation({
+    mutationFn: ({ clientId, labTestIds }: { clientId: number; labTestIds: number[] }) =>
+      apiFetch('/api/B2bClientLabTestAccess/bulk', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({ b2b_client_id: clientId, lab_test_ids: labTestIds }),
+        successMessage: 'Lab Test Access saved successfully.',
+        errorFallback: 'Unable to save lab test access.',
+      }),
+  });
+
+  const rechargeWalletMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      amount,
+      description,
+    }: {
+      clientId: number;
+      amount: number;
+      description: string;
+    }) =>
+      apiFetch<{ newBalance: number }>('/api/B2bClients/rechargeWallet', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({
+          b2b_client_id: clientId,
+          amount,
+          description,
+        }),
+        errorFallback: 'Recharge failed.',
+      }),
+  });
 
   // ── B2B Client CRUD ──────────────────────────────────────────────────────
   const generatePassword = () => {
@@ -145,7 +540,7 @@ export default function B2BClientsPage() {
 
   const openAdd = () => {
     setEditingId(null);
-    setForm({ ...emptyClient, password: generatePassword() });
+    resetClient({ ...emptyClient, password: generatePassword() });
     setIsApproval(false);
     setIsFixedPrice(false);
     setView('form');
@@ -153,56 +548,36 @@ export default function B2BClientsPage() {
 
   const openEdit = (c: B2BClient) => {
     setEditingId(c.id);
-    setForm({ ...emptyClient, ...c as unknown as Record<string, string> });
-    setIsApproval(!!(c as any).is_approval);
+    resetClient({ ...emptyClient, ...c as unknown as Record<string, string> });
+    setIsApproval(!!c.is_approval);
     setIsFixedPrice(!!c.is_fixed_price);
     setView('form');
   };
 
-  const saveClient = async () => {
-    if (!form.company_name || !form.email) {
-      toast.error('Company Name and Login Email are required.');
-      return;
-    }
-    setSaving(true);
-    const method = editingId ? 'PUT' : 'POST';
-    const path = `/api/B2bClients${editingId ? `/${editingId}` : ''}`;
-    const hasFiles = logoFile || reportHeaderFile || reportFooterFile || medOfficerSigFile;
+  const saveClient = handleClientSubmit(async values => {
     try {
-      if (hasFiles) {
-        const fd = new FormData();
-        Object.entries({ ...form, role_id: '2', status: 'true', is_approval: String(isApproval), is_fixed_price: String(isFixedPrice) }).forEach(([k, v]) => fd.append(k, v as string));
-        if (logoFile) fd.append('logo_file', logoFile);
-        if (reportHeaderFile) fd.append('report_header_file', reportHeaderFile);
-        if (reportFooterFile) fd.append('report_footer_file', reportFooterFile);
-        if (medOfficerSigFile) fd.append('medical_officer_signature_file', medOfficerSigFile);
-        await apiFetch(path, {
-          method,
-          tokenKey: 'superadmin_token',
-          body: fd,
-          successMessage: `B2B Lab ${editingId ? 'updated' : 'added'} successfully.`,
-          errorFallback: 'Unable to save B2B Lab.',
-        });
-      } else {
-        await apiFetch(path, {
-          method,
-          tokenKey: 'superadmin_token',
-          body: JSON.stringify({ ...form, role_id: 2, status: true, deleted: false, is_approval: isApproval, is_fixed_price: isFixedPrice }),
-          successMessage: `B2B Lab ${editingId ? 'updated' : 'added'} successfully.`,
-          errorFallback: 'Unable to save B2B Lab.',
-        });
-      }
-      setLogoFile(null); setReportHeaderFile(null); setReportFooterFile(null); setMedOfficerSigFile(null);
+      await saveClientMutation.mutateAsync({
+        values,
+        editingId,
+        isApproval,
+        isFixedPrice,
+        logoFile,
+        reportHeaderFile,
+        reportFooterFile,
+        medOfficerSigFile,
+      });
+      setLogoFile(null);
+      setReportHeaderFile(null);
+      setReportFooterFile(null);
+      setMedOfficerSigFile(null);
       setIsApproval(false);
       setIsFixedPrice(false);
       setView('list');
-      loadClients();
+      await invalidateClients();
     } catch {
       /* error toasted by apiFetch */
-    } finally {
-      setSaving(false);
     }
-  };
+  }, createInvalidHandler<B2bClientFormValues>());
 
   const deleteClient = async (id: number) => {
     const ok = await confirmDialog({
@@ -213,94 +588,59 @@ export default function B2BClientsPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/B2bClients/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
-      loadClients();
+      await deleteClientMutation.mutateAsync(id);
+      await invalidateClients();
     } catch {
       /* error toasted by apiFetch */
     }
   };
 
   const toggleStatus = async (c: B2BClient) => {
+    const enabling = !c.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable B2B Lab?' : 'Disable B2B Lab?',
+      message: enabling
+        ? `${c.company_name || 'This B2B Lab'} will become active.`
+        : `${c.company_name || 'This B2B Lab'} will become inactive. You can enable it again later.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
-      await apiFetch(`/api/B2bClients/${c.id}`, {
-        method: 'PUT',
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({ status: !c.status }),
-      });
-      loadClients();
+      await toggleStatusMutation.mutateAsync({ id: c.id, status: !c.status });
+      await invalidateClients();
     } catch {
       /* error toasted by apiFetch */
     }
   };
 
   // ── Subscriptions ─────────────────────────────────────────────────────────
-  const loadSubscriptions = async (clientId: number) => {
-    try {
-      const data = await apiFetch<Subscription[]>(`/api/B2bClientSubscription?b2b_client_id=${clientId}`, { tokenKey: 'superadmin_token' });
-      setSubscriptions(data || []);
-    } catch {
-      setSubscriptions([]);
-    }
-  };
-
-  const loadCustomPrices = async (clientId: number) => {
-    try {
-      const data = await apiFetch<any[]>(`/api/B2bClientCustomPrices?b2b_client_id=${clientId}`, { tokenKey: 'superadmin_token' });
-      setCustomPrices(data || []);
-    } catch {
-      setCustomPrices([]);
-    }
-  };
-
-  const openSubscription = async (c: B2BClient) => {
+  const openSubscription = (c: B2BClient) => {
     setSelectedClient(c);
     setPricingMode('subscription');
-    setSubForm({ start_date: '', end_date: '', amount: '' });
+    resetSub({ start_date: '', end_date: '', amount: '' });
     setEditingSubId(null);
+    setDraftCustomPrices(null);
     setIsFixedPrice(!!c.is_fixed_price);
-    setForm(p => ({ ...p, fixed_price_amount: c.fixed_price_amount as string || '' }));
-    
-    // Load Global Tests to display table
-    try {
-      const tests = await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' });
-      setGlobalLabTests(tests || []);
-    } catch {
-      setGlobalLabTests([]);
-    }
-
-    loadSubscriptions(c.id);
-    loadCustomPrices(c.id);
+    setFixedPriceAmount(c.fixed_price_amount != null ? String(c.fixed_price_amount) : '');
     setView('subscription');
   };
 
-  const saveSub = async () => {
-    if (!subForm.start_date || !subForm.end_date || !subForm.amount) {
-      toast.error('All fields are required.');
-      return;
-    }
-    if (new Date(subForm.end_date) <= new Date(subForm.start_date)) {
-      toast.error('End date must be after start date.');
-      return;
-    }
-    if (isNaN(Number(subForm.amount)) || Number(subForm.amount) <= 0) {
-      toast.error('Amount must be a positive number.');
-      return;
-    }
-    const method = editingSubId ? 'PUT' : 'POST';
-    const path = `/api/B2bClientSubscription${editingSubId ? `/${editingSubId}` : ''}`;
+  const saveSub = handleSubSubmit(async values => {
+    if (!selectedClientId) return;
     try {
-      await apiFetch(path, {
-        method,
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({ ...subForm, b2b_client_id: selectedClient?.id }),
+      await saveSubMutation.mutateAsync({
+        values,
+        subId: editingSubId,
+        clientId: selectedClientId,
       });
-      setSubForm({ start_date: '', end_date: '', amount: '' });
+      resetSub({ start_date: '', end_date: '', amount: '' });
       setEditingSubId(null);
-      if (selectedClient) loadSubscriptions(selectedClient.id);
+      await queryClient.invalidateQueries({ queryKey: b2bSubscriptionsKey(selectedClientId) });
     } catch {
       /* error toasted by apiFetch */
     }
-  };
+  }, createInvalidHandler<B2bSubscriptionFormValues>());
 
   const deleteSub = async (id: number) => {
     const ok = await confirmDialog({
@@ -311,102 +651,68 @@ export default function B2BClientsPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/B2bClientSubscription/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
-      if (selectedClient) loadSubscriptions(selectedClient.id);
+      await deleteSubMutation.mutateAsync(id);
+      if (selectedClientId) {
+        await queryClient.invalidateQueries({ queryKey: b2bSubscriptionsKey(selectedClientId) });
+      }
     } catch {
       /* error toasted by apiFetch */
     }
   };
 
   const saveCustomPricing = async () => {
-    if (!selectedClient) return;
-    setPricingSaving(true);
+    if (!selectedClientId) return;
     try {
-      // 1. Save fixed price info to B2bClients
-      await apiFetch(`/api/B2bClients/${selectedClient.id}`, {
-        method: 'PUT',
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({ is_fixed_price: isFixedPrice, fixed_price_amount: form.fixed_price_amount }),
+      await saveCustomPricingMutation.mutateAsync({
+        clientId: selectedClientId,
+        fixedPrice: isFixedPrice,
+        fixedAmount: fixedPriceAmount,
+        prices: customPrices,
       });
-
-      // 2. Save test-wise custom pricing
-      if (!isFixedPrice) {
-        await apiFetch('/api/B2bClientCustomPrices/bulk', {
-          method: 'POST',
-          tokenKey: 'superadmin_token',
-          body: JSON.stringify({
-            b2b_client_id: selectedClient.id,
-            custom_prices: customPrices
-          }),
-        });
-      }
-      
-      toast.success('Custom Pricing saved successfully');
-      loadClients();
+      toastApiSuccess('Custom Pricing saved successfully');
+      await invalidateClients();
+      await queryClient.invalidateQueries({ queryKey: b2bCustomPricesKey(selectedClientId) });
     } catch {
       /* error toasted by apiFetch */
-    } finally {
-      setPricingSaving(false);
     }
   };
 
   // ── Documents ─────────────────────────────────────────────────────────────
-  const loadDocTypes = async () => {
-    try {
-      const data = await apiFetch<{ id: number; name: string }[]>('/api/TypeData', { tokenKey: 'superadmin_token' });
-      setDocTypes(data || []);
-    } catch {
-      setDocTypes([]);
-    }
-  };
-
-  const loadDocuments = async (clientId: number) => {
-    try {
-      const data = await apiFetch<B2BDocument[]>('/api/B2bClientDocument/getB2bClientDocumentList', {
-        method: 'POST',
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({ b2b_client_id: clientId }),
-      });
-      setDocuments(data || []);
-    } catch {
-      setDocuments([]);
-    }
-  };
-
   const openDocuments = (c: B2BClient) => {
     setSelectedClient(c);
-    if (docTypes.length === 0) loadDocTypes();
-    loadDocuments(c.id);
-    setDocForm({ id: null, typeDataId: '', file: null, fileName: '' });
+    resetDocForm({ typeDataId: '' });
+    setDocFormMeta({ id: null, file: null, fileName: '' });
+    setDocFileError('');
     setView('documents');
   };
 
-  const saveDoc = async () => {
-    if (!docForm.typeDataId || (!docForm.id && !docForm.file)) {
-      toast.error('Document Type and File are required.');
+  const saveDoc = handleDocSubmit(async values => {
+    if (!docFormMeta.id && !docFormMeta.file) {
+      setDocFileError('File is required.');
       return;
     }
+    setDocFileError('');
     const formData = new FormData();
     formData.append('b2bClientId', String(selectedClient?.id));
-    formData.append('typeDataId', docForm.typeDataId);
-    if (docForm.id) formData.append('id', String(docForm.id));
-    if (docForm.fileName) formData.append('fileName', docForm.fileName);
-    if (docForm.file) formData.append('UploadFile', docForm.file);
+    formData.append('typeDataId', values.typeDataId);
+    if (docFormMeta.id) formData.append('id', String(docFormMeta.id));
+    if (docFormMeta.fileName) formData.append('fileName', docFormMeta.fileName);
+    if (docFormMeta.file) formData.append('UploadFile', docFormMeta.file);
 
     try {
-      await apiFetch('/api/B2bClientDocument/saveB2bClientDocument', {
-        method: 'POST',
-        tokenKey: 'superadmin_token',
-        body: formData,
-        successMessage: `Document ${docForm.id ? 'updated' : 'uploaded'} successfully.`,
-        errorFallback: 'Unable to save document.',
+      await saveDocMutation.mutateAsync({
+        formData,
+        isUpdate: !!docFormMeta.id,
       });
-      setDocForm({ id: null, typeDataId: '', file: null, fileName: '' });
-      if (selectedClient) loadDocuments(selectedClient.id);
+      resetDocForm({ typeDataId: '' });
+      setDocFormMeta({ id: null, file: null, fileName: '' });
+      if (selectedClientId) {
+        await queryClient.invalidateQueries({ queryKey: b2bDocumentsKey(selectedClientId) });
+      }
     } catch {
       /* error toasted by apiFetch */
     }
-  };
+  }, createInvalidHandler<B2bDocumentFormValues>());
 
   const deleteDoc = async (id: number) => {
     const ok = await confirmDialog({
@@ -417,100 +723,62 @@ export default function B2BClientsPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch('/api/B2bClientDocument/deleteB2bClientDocument', {
-        method: 'POST',
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({ id }),
-      });
-      if (selectedClient) loadDocuments(selectedClient.id);
+      await deleteDocMutation.mutateAsync(id);
+      if (selectedClientId) {
+        await queryClient.invalidateQueries({ queryKey: b2bDocumentsKey(selectedClientId) });
+      }
     } catch {
       /* error toasted by apiFetch */
     }
   };
 
   // ── Lab Test Access ───────────────────────────────────────────────────────
-  const openLabTestAccess = async (c: B2BClient) => {
+  const openLabTestAccess = (c: B2BClient) => {
     setSelectedClient(c);
-    try {
-      const tests = await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' });
-      try {
-        const access = await apiFetch<{ lab_test_id: number }[]>(`/api/B2bClientLabTestAccess?b2b_client_id=${c.id}`, { tokenKey: 'superadmin_token' });
-        const accessIds = new Set((access || []).map((a: { lab_test_id: number }) => a.lab_test_id));
-        setLabTests((tests || []).map((t: LabTest) => ({ ...t, is_selected: accessIds.has(t.id) })));
-      } catch {
-        setLabTests(tests || []);
-      }
-    } catch {
-      setLabTests([]);
-    }
+    setDraftSelectedIds(null);
     setView('labtestaccess');
   };
 
   const saveLabTestAccess = async () => {
-    const selected = labTests.filter(t => t.is_selected).map(t => t.id);
+    if (!selectedClientId) return;
+    const selected = [...selectedTestIds];
     try {
-      await apiFetch('/api/B2bClientLabTestAccess/bulk', {
-        method: 'POST',
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({ b2b_client_id: selectedClient?.id, lab_test_ids: selected }),
-        successMessage: 'Lab Test Access saved successfully.',
-        errorFallback: 'Unable to save lab test access.',
+      await saveLabTestAccessMutation.mutateAsync({
+        clientId: selectedClientId,
+        labTestIds: selected,
       });
       setView('list');
+      await queryClient.invalidateQueries({ queryKey: b2bLabTestAccessKey(selectedClientId) });
     } catch {
       /* error toasted by apiFetch */
     }
   };
 
   // ── Wallet ────────────────────────────────────────────────────────────────
-  const openWallet = async (c: B2BClient) => {
+  const openWallet = (c: B2BClient) => {
     setSelectedClient(c);
-    setWalletBalance((c as any).wallet_balance || 0);
-    setWalletForm({ amount: '', description: '' });
-    try {
-      const history = await apiFetch<any[]>(`/api/B2bClients/walletHistory/${c.id}`, { tokenKey: 'superadmin_token' });
-      setWalletHistory(history || []);
-    } catch {
-      setWalletHistory([]);
-    }
+    setWalletBalanceOverride(c.wallet_balance != null ? Number(c.wallet_balance) : 0);
+    resetWallet({ amount: '', description: '' });
     setView('wallet');
   };
 
-  const rechargeWallet = async () => {
-    if (!walletForm.amount || isNaN(Number(walletForm.amount)) || Number(walletForm.amount) <= 0) {
-      toast.error('Please enter a valid positive amount.');
-      return;
-    }
-    setWalletSaving(true);
+  const rechargeWallet = handleWalletSubmit(async values => {
+    if (!selectedClientId) return;
     try {
-      const result = await apiFetch<{ newBalance: number }>('/api/B2bClients/rechargeWallet', {
-        method: 'POST',
-        tokenKey: 'superadmin_token',
-        body: JSON.stringify({
-          b2b_client_id: selectedClient?.id,
-          amount: Number(walletForm.amount),
-          description: walletForm.description || 'Manual Recharge',
-        }),
-        errorFallback: 'Recharge failed.',
+      const result = await rechargeWalletMutation.mutateAsync({
+        clientId: selectedClientId,
+        amount: Number(values.amount),
+        description: values.description || 'Manual Recharge',
       });
       toastApiSuccess(`Wallet recharged successfully. New Balance: $${result.newBalance}`);
-      setWalletBalance(result.newBalance);
-      setWalletForm({ amount: '', description: '' });
-      if (selectedClient) {
-        try {
-          const history = await apiFetch<any[]>(`/api/B2bClients/walletHistory/${selectedClient.id}`, { tokenKey: 'superadmin_token' });
-          setWalletHistory(history || []);
-        } catch {
-          /* error toasted by apiFetch */
-        }
-      }
-      loadClients();
+      setWalletBalanceOverride(result.newBalance);
+      resetWallet({ amount: '', description: '' });
+      await invalidateClients();
+      await queryClient.invalidateQueries({ queryKey: b2bWalletHistoryKey(selectedClientId) });
     } catch {
       /* error toasted by apiFetch */
-    } finally {
-      setWalletSaving(false);
     }
-  };
+  }, createInvalidHandler<WalletRechargeFormValues>());
 
   const clientColumns: ListingColumn<B2BClient>[] = [
     { key: 'company_name', label: 'Company Name', width: '25%' },
@@ -541,11 +809,31 @@ export default function B2BClientsPage() {
     },
   ];
 
-  const inp = (key: string, label: string, type = 'text', required = false, readOnly = false) => (
-    <div className="form-group" key={key}>
-      <label>{label}{required && <span style={{ color: '#ef4444' }}> *</span>}</label>
-      <input type={type} value={form[key] || ''} onChange={e => !readOnly && setForm(p => ({ ...p, [key]: e.target.value }))} placeholder={`Enter ${label}`} readOnly={readOnly} style={readOnly ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {}} />
-    </div>
+  const inp = (key: keyof B2bClientFormValues, label: string, type = 'text', required = false, readOnly = false) => (
+    <FormGroup key={key} label={label} htmlFor={`b2b-${key}`} required={required} error={clientErrors[key]?.message}>
+      {type === 'password' ? (
+        <PasswordInput
+          id={`b2b-${key}`}
+          placeholder={`Enter ${label}`}
+          readOnly={readOnly}
+          data-field={key}
+          aria-invalid={!!clientErrors[key]}
+          style={fieldStyle(!!clientErrors[key], readOnly ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {})}
+          {...registerClient(key)}
+        />
+      ) : (
+        <input
+          id={`b2b-${key}`}
+          type={type}
+          placeholder={`Enter ${label}`}
+          readOnly={readOnly}
+          data-field={key}
+          aria-invalid={!!clientErrors[key]}
+          style={fieldStyle(!!clientErrors[key], readOnly ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {})}
+          {...registerClient(key)}
+        />
+      )}
+    </FormGroup>
   );
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -557,9 +845,10 @@ export default function B2BClientsPage() {
         <TopNav title="B2B Lab Details">
           <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
           <div className="card">
             <div className="card-header"><span className="card-title">{editingId ? <><MdEdit size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Edit B2B Lab</> : <><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add B2B Lab</>}</span></div>
+            <form onSubmit={saveClient} noValidate>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                 {inp('company_name', 'B2B Company Name', 'text', true)}
@@ -628,12 +917,13 @@ export default function B2BClientsPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button className="btn btn-primary" onClick={saveClient} disabled={saving}>
-                  {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
+                <button type="submit" className="btn btn-primary" disabled={saveClientMutation.isPending}>
+                  {saveClientMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
                 </button>
-                <button className="btn btn-ghost" onClick={() => { setForm({ ...emptyClient }); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
+                <button type="button" className="btn btn-ghost" onClick={() => resetClient({ ...emptyClient, password: getClientValues('password') })}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
               </div>
             </div>
+            </form>
           </div>
         </div>
       </div>
@@ -667,24 +957,45 @@ export default function B2BClientsPage() {
               {/* Form card */}
               <div className="card">
                 <div className="card-header"><span className="card-title">Subscription Detail</span></div>
+                <form onSubmit={saveSub} noValidate>
                 <div className="card-body">
-                  <div className="form-group">
-                    <label>Start Date <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input type="date" value={subForm.start_date} onChange={e => setSubForm(p => ({ ...p, start_date: e.target.value }))} />
-                  </div>
-                  <div className="form-group">
-                    <label>End Date <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input type="date" value={subForm.end_date} onChange={e => setSubForm(p => ({ ...p, end_date: e.target.value }))} />
-                  </div>
-                  <div className="form-group">
-                    <label>Amount <span style={{ color: '#ef4444' }}>*</span></label>
-                    <input type="number" value={subForm.amount} onChange={e => setSubForm(p => ({ ...p, amount: e.target.value }))} placeholder="Enter Amount" />
-                  </div>
+                  <FormGroup label="Start Date" htmlFor="sub-start" required error={subErrors.start_date?.message}>
+                    <input
+                      id="sub-start"
+                      type="date"
+                      data-field="start_date"
+                      aria-invalid={!!subErrors.start_date}
+                      style={fieldStyle(!!subErrors.start_date)}
+                      {...registerSub('start_date')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="End Date" htmlFor="sub-end" required error={subErrors.end_date?.message}>
+                    <input
+                      id="sub-end"
+                      type="date"
+                      data-field="end_date"
+                      aria-invalid={!!subErrors.end_date}
+                      style={fieldStyle(!!subErrors.end_date)}
+                      {...registerSub('end_date')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="Amount" htmlFor="sub-amount" required error={subErrors.amount?.message}>
+                    <input
+                      id="sub-amount"
+                      type="number"
+                      data-field="amount"
+                      placeholder="Enter Amount"
+                      aria-invalid={!!subErrors.amount}
+                      style={fieldStyle(!!subErrors.amount)}
+                      {...registerSub('amount')}
+                    />
+                  </FormGroup>
                   <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                    <button className="btn btn-primary" onClick={saveSub}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
-                    <button className="btn btn-ghost" onClick={() => { setSubForm({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
+                    <button type="submit" className="btn btn-primary"><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => { resetSub({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
                   </div>
                 </div>
+                </form>
               </div>
 
               {/* List card */}
@@ -707,7 +1018,7 @@ export default function B2BClientsPage() {
                           <td style={{ padding: '0.75rem 1rem' }}>USD {s.amount}</td>
                           <td style={{ padding: '0.75rem 1rem' }}>
                             <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', marginRight: '0.5rem' }}
-                              onClick={() => { setSubForm({ start_date: s.start_date?.slice(0, 10) || '', end_date: s.end_date?.slice(0, 10) || '', amount: String(s.amount) }); setEditingSubId(s.id); }}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
+                              onClick={() => { resetSub({ start_date: s.start_date?.slice(0, 10) || '', end_date: s.end_date?.slice(0, 10) || '', amount: String(s.amount) }); setEditingSubId(s.id); }}><MdEdit size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Edit</button>
                             <button className="btn btn-ghost" style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', color: '#ef4444' }} onClick={() => deleteSub(s.id)}><MdDelete size={14} style={{ verticalAlign: 'text-bottom', marginRight: '0.25rem' }} aria-hidden />Delete</button>
                           </td>
                         </tr>
@@ -737,7 +1048,7 @@ export default function B2BClientsPage() {
                 {isFixedPrice && (
                   <div className="form-group" style={{ maxWidth: '400px' }}>
                     <label>Fixed Price Amount ($)</label>
-                    <input type="number" value={form.fixed_price_amount || ''} onChange={e => setForm(p => ({ ...p, fixed_price_amount: e.target.value }))} placeholder="Enter Fixed Amount" />
+                    <input type="number" value={fixedPriceAmount} onChange={e => setFixedPriceAmount(e.target.value)} placeholder="Enter Fixed Amount" />
                   </div>
                 )}
 
@@ -762,8 +1073,9 @@ export default function B2BClientsPage() {
                                  <input type="number" value={priceStr} placeholder="Free (0) if blank"
                                    onChange={e => {
                                      const val = e.target.value;
-                                     setCustomPrices(prev => {
-                                       const filtered = prev.filter(x => x.lab_test_id !== test.id);
+                                     setDraftCustomPrices(prev => {
+                                       const base = prev ?? customPricesData;
+                                       const filtered = base.filter(x => x.lab_test_id !== test.id);
                                        if (val === '') return filtered;
                                        return [...filtered, { lab_test_id: test.id, custom_price: val }];
                                      });
@@ -782,8 +1094,8 @@ export default function B2BClientsPage() {
                 )}
                 
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2rem' }}>
-                  <button className="btn btn-primary" onClick={saveCustomPricing} disabled={pricingSaving}>
-                    {pricingSaving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing Details</>}
+                  <button className="btn btn-primary" onClick={saveCustomPricing} disabled={saveCustomPricingMutation.isPending}>
+                    {saveCustomPricingMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing Details</>}
                   </button>
                 </div>
               </div>
@@ -810,24 +1122,25 @@ export default function B2BClientsPage() {
     return (
       <div className="page-content">
         <TopNav title="Manage B2B Labs" />
-        <div className="b2b-documents-split" style={{ padding: '1.5rem' }}>
+        <div className="b2b-documents-split page-body">
           <div>
             <div className="card">
               <div className="card-header">
-                <span className="card-title">{docForm.id ? 'Edit Document Detail' : 'Document Detail'}</span>
+                <span className="card-title">{docFormMeta.id ? 'Edit Document Detail' : 'Document Detail'}</span>
               </div>
+              <form onSubmit={saveDoc} noValidate>
               <div className="card-body">
-                <div className="form-group">
-                  <label>Document Type<span style={{ color: '#ef4444' }}> *</span></label>
-                  <select value={docForm.typeDataId} onChange={e => setDocForm(p => ({ ...p, typeDataId: e.target.value }))}>
+                <FormGroup label="Document Type" htmlFor="doc-type" required error={docErrors.typeDataId?.message}>
+                  <select id="doc-type" data-field="typeDataId" aria-invalid={!!docErrors.typeDataId} style={fieldStyle(!!docErrors.typeDataId)} {...registerDoc('typeDataId')}>
                     <option value="">-- Select Type --</option>
                     {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
-                </div>
+                </FormGroup>
                 <div className="form-group">
                   <label>File Upload<span style={{ color: '#ef4444' }}> *</span></label>
-                  <input type="file" onChange={e => setDocForm(p => ({ ...p, file: e.target.files ? e.target.files[0] : null }))} />
-                  {docForm.id && !docForm.file && (
+                  <input type="file" data-field="file" onChange={e => { setDocFormMeta(p => ({ ...p, file: e.target.files ? e.target.files[0] : null })); setDocFileError(''); }} />
+                  {docFileError && <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem' }}>{docFileError}</div>}
+                  {docFormMeta.id && !docFormMeta.file && (
                     <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
                       Leave empty to keep the current file.
                     </div>
@@ -835,17 +1148,18 @@ export default function B2BClientsPage() {
                 </div>
               </div>
               <div className="b2b-document-form-actions">
-                <button className="btn btn-primary" onClick={saveDoc} disabled={!docForm.typeDataId || (!docForm.id && !docForm.file)}>
+                <button type="submit" className="btn btn-primary">
                   Save
                 </button>
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={() => setDocForm({ id: null, typeDataId: '', file: null, fileName: '' })}
+                  onClick={() => { resetDocForm({ typeDataId: '' }); setDocFormMeta({ id: null, file: null, fileName: '' }); setDocFileError(''); }}
                 >
                   Reset Data
                 </button>
               </div>
+              </form>
             </div>
           </div>
 
@@ -877,9 +1191,9 @@ export default function B2BClientsPage() {
                   className="action-btn action-btn-edit"
                   title="Edit Document"
                   onClick={() => {
-                    setDocForm({
+                    resetDocForm({ typeDataId: String(document.type_data_id) });
+                    setDocFormMeta({
                       id: document.id,
-                      typeDataId: String(document.type_data_id),
                       file: null,
                       fileName: document.file_name,
                     });
@@ -907,10 +1221,9 @@ export default function B2BClientsPage() {
       <div className="page-content">
         <TopNav title={`Lab Test Access — ${selectedClient?.company_name || ''}`}>
           <button className="btn btn-primary" onClick={saveLabTestAccess}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
-            <button className="btn btn-ghost" onClick={() => { if (selectedClient) openLabTestAccess(selectedClient); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Refresh</button>
             <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
           <div className="card">
             <div className="card-header"><span className="card-title">List of Lab Test Access for &quot;{selectedClient?.company_name}&quot;</span></div>
             <div className="card-body" style={{ padding: 0 }}>
@@ -927,7 +1240,13 @@ export default function B2BClientsPage() {
                     <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td style={{ padding: '0.75rem 1rem' }}>
                         <input type="checkbox" checked={!!t.is_selected}
-                          onChange={() => setLabTests(prev => prev.map(lt => lt.id === t.id ? { ...lt, is_selected: !lt.is_selected } : lt))} />
+                          onChange={() => setDraftSelectedIds(prev => {
+                            const current = prev ?? new Set(accessList.map(a => a.lab_test_id));
+                            const next = new Set(current);
+                            if (next.has(t.id)) next.delete(t.id);
+                            else next.add(t.id);
+                            return next;
+                          })} />
                       </td>
                       <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{t.name}</td>
                       <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{t.description || '—'}</td>
@@ -958,7 +1277,7 @@ export default function B2BClientsPage() {
         <TopNav title={`Wallet — ${selectedClient?.company_name}`}>
           <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
 
           {/* Balance Banner */}
           <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', border: 'none' }}>
@@ -975,26 +1294,22 @@ export default function B2BClientsPage() {
           {/* Recharge Form */}
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div className="card-header"><span className="card-title"><MdAdd size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Funds</span></div>
+            <form onSubmit={rechargeWallet} noValidate>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'flex-end' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Amount ($) <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="number" min="0" step="0.01" value={walletForm.amount}
-                    onChange={e => setWalletForm(p => ({ ...p, amount: e.target.value }))}
-                    placeholder="e.g. 500.00" />
-                </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Description / Note</label>
-                  <input type="text" value={walletForm.description}
-                    onChange={e => setWalletForm(p => ({ ...p, description: e.target.value }))}
-                    placeholder="e.g. Payment received via bank transfer" />
-                </div>
-                <button className="btn btn-primary" onClick={rechargeWallet} disabled={walletSaving}
+                <FormGroup label="Amount ($)" htmlFor="wallet-amount" required error={walletErrors.amount?.message}>
+                  <input id="wallet-amount" type="number" min="0" step="0.01" data-field="amount" placeholder="e.g. 500.00" aria-invalid={!!walletErrors.amount} style={fieldStyle(!!walletErrors.amount)} {...registerWallet('amount')} />
+                </FormGroup>
+                <FormGroup label="Description / Note" htmlFor="wallet-desc" error={walletErrors.description?.message}>
+                  <input id="wallet-desc" type="text" data-field="description" placeholder="e.g. Payment received via bank transfer" style={fieldStyle(!!walletErrors.description)} {...registerWallet('description')} />
+                </FormGroup>
+                <button type="submit" className="btn btn-primary" disabled={rechargeWalletMutation.isPending}
                   style={{ whiteSpace: 'nowrap' }}>
-                  {walletSaving ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</> : <><MdPayment size={16} aria-hidden /> Add Funds</>}
+                  {rechargeWalletMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</> : <><MdPayment size={16} aria-hidden /> Add Funds</>}
                 </button>
               </div>
             </div>
+            </form>
           </div>
 
           {/* Transaction History */}
@@ -1013,7 +1328,7 @@ export default function B2BClientsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {walletHistory.map((t: any) => (
+                    {walletHistory.map((t: WalletTransaction) => (
                       <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
                           {formatDateTime(t.creation_timestamp)}
@@ -1028,9 +1343,9 @@ export default function B2BClientsPage() {
                           </span>
                         </td>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: t.transaction_type === 'CREDIT' ? '#10b981' : '#ef4444' }}>
-                          {t.transaction_type === 'CREDIT' ? '+' : '-'}${parseFloat(t.amount).toFixed(2)}
+                          {t.transaction_type === 'CREDIT' ? '+' : '-'}${parseFloat(String(t.amount)).toFixed(2)}
                         </td>
-                        <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>${parseFloat(t.closing_balance).toFixed(2)}</td>
+                        <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>${parseFloat(String(t.closing_balance)).toFixed(2)}</td>
                         <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{t.description || '—'}</td>
                       </tr>
                     ))}
@@ -1050,14 +1365,14 @@ export default function B2BClientsPage() {
   return (
     <div className="page-content">
       <TopNav title="Manage B2B Labs" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         <ListingTable
           title="List of B2B Labs"
           columns={clientColumns}
           rows={clients}
           loading={loading}
           emptyText="No B2B Labs found."
-          headerActions={<ListingHeaderActions onAdd={openAdd} onRefresh={loadClients} />}
+          headerActions={<ListingHeaderActions onAdd={openAdd} />}
           actionsLabel="Actions"
           actionsWidth={150}
           defaultPageSize={10}

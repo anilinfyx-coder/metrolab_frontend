@@ -1,11 +1,19 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdDownload, MdEmail, MdVisibility } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ListingColumn } from '../../../components/ListingTable';
+import { FieldError, FormGroup } from '../../../components/FormField';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  testRequestFormSchema,
+  type TestRequestFormValues,
+} from '../../../../lib/schemas';
 
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
@@ -55,6 +63,22 @@ interface EmployeeRecord {
   alcoholReportSubmitStatus?: boolean;
 }
 
+const emptyForm: TestRequestFormValues = {
+  title: '',
+  year: new Date().getFullYear().toString(),
+  frequency: 'Quarter',
+  quarter: '1',
+  testType: 'DOT',
+  reasonForTest: '',
+  selectionType: '1',
+  isDrugSelected: false,
+  drugCount: 0,
+  isAlcoholSelected: false,
+  alcoholCount: 0,
+  isAlternateSelected: false,
+  alternateCount: 0,
+};
+
 export default function TestRequestsPage() {
   const confirmDialog = useConfirm();
   const [requests, setRequests] = useState<TestRequest[]>([]);
@@ -64,25 +88,25 @@ export default function TestRequestsPage() {
   const [selectedRequest, setSelectedRequest] = useState<TestRequestDetail | null>(null);
   const [selectedRequestEmployees, setSelectedRequestEmployees] = useState<EmployeeRecord[]>([]);
   const [viewLoading, setViewLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Form State
-  const [form, setForm] = useState({
-    title: '',
-    year: new Date().getFullYear().toString(),
-    frequency: 'Quarter',
-    quarter: '1',
-    testType: 'DOT',
-    reasonForTest: '',
-    selectionType: '1', // 1=Number, 2=Percentage
-    isDrugSelected: false,
-    drugCount: 0,
-    isAlcoholSelected: false,
-    alcoholCount: 0,
-    isAlternateSelected: false,
-    alternateCount: 0
+  const schema = useMemo(() => testRequestFormSchema(employees.length), [employees.length]);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<TestRequestFormValues>({
+    resolver: formResolver<TestRequestFormValues>(schema),
+    defaultValues: emptyForm,
   });
 
-  const [saving, setSaving] = useState(false);
+  const frequency = watch('frequency');
+  const selectionType = watch('selectionType');
+  const isDrugSelected = watch('isDrugSelected');
+  const isAlcoholSelected = watch('isAlcoholSelected');
+  const isAlternateSelected = watch('isAlternateSelected');
 
   const loadData = async () => {
     setLoading(true);
@@ -99,10 +123,13 @@ export default function TestRequestsPage() {
       setRequests([]);
     }
     try {
-      const empD = await apiFetch<EmployeeRecord[]>(`/api/Employees${query}`, {
-        tokenKey: 'corporate_token',
-        errorFallback: 'Unable to load employees.',
-      });
+      const empD = await apiFetch<EmployeeRecord[]>(
+        `/api/Employees${query}${query.includes('?') ? '&' : '?'}status=true`,
+        {
+          tokenKey: 'corporate_token',
+          errorFallback: 'Unable to load employees.',
+        },
+      );
       setEmployees(empD || []);
     } catch {
       setEmployees([]);
@@ -121,21 +148,15 @@ export default function TestRequestsPage() {
     return [...shuffled, ...selected];
   }
 
-  const generateAndSubmit = async () => {
-    if (!form.title) return toastApiError("Request Title is mandatory");
-    if (!form.reasonForTest) return toastApiError("Reason for test is mandatory");
-
+  const generateAndSubmit = handleSubmit(async values => {
     const total = employees.length;
-    const altC = form.alternateCount || 0;
-    
-    let alcC = form.alcoholCount || 0;
-    if (form.selectionType === '2') alcC = Math.ceil((alcC / 100) * total);
+    const altC = values.alternateCount || 0;
 
-    let drugC = form.drugCount || 0;
-    if (form.selectionType === '2') drugC = Math.ceil((drugC / 100) * total);
+    let alcC = values.alcoholCount || 0;
+    if (values.selectionType === '2') alcC = Math.ceil((alcC / 100) * total);
 
-    if (altC + drugC > total) return toastApiError("Count in Drug + Alternate exceeds total employees");
-    if (altC + alcC > total) return toastApiError("Count in Alcohol + Alternate exceeds total employees");
+    let drugC = values.drugCount || 0;
+    if (values.selectionType === '2') drugC = Math.ceil((drugC / 100) * total);
 
     const ok = await confirmDialog({
       title: 'This is Random Pulling, Please confirm',
@@ -170,7 +191,7 @@ export default function TestRequestsPage() {
     }
 
     const payload = {
-      ...form,
+      ...values,
       totalCount: total,
       employeesList: emps
     };
@@ -190,7 +211,7 @@ export default function TestRequestsPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<TestRequestFormValues>());
 
   const viewRequest = async (r: TestRequest) => {
     setSelectedRequest(r); // set basic info immediately so page shows
@@ -380,7 +401,7 @@ export default function TestRequestsPage() {
       {viewMode === 'GENERATE' && (
         <>
           <TopNav title="Manage Test Request" />
-          
+
           <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
             <div
               className="card-header"
@@ -397,170 +418,210 @@ export default function TestRequestsPage() {
                 Close
               </button>
             </div>
-            <div className="row" style={{ display: 'flex', flexWrap: 'wrap', margin: '-0.5rem' }}>
-              <div style={{ width: '50%', padding: '0.5rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Request Title <span style={{ color: 'red' }}>*</span></label>
-                  <input type="text" placeholder="Enter Title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
+            <form onSubmit={generateAndSubmit} noValidate>
+              <div className="row" style={{ display: 'flex', flexWrap: 'wrap', margin: '-0.5rem' }}>
+                <div style={{ width: '50%', padding: '0.5rem' }}>
+                  <FormGroup label="Request Title" htmlFor="tr-title" required error={errors.title?.message}>
+                    <input
+                      id="tr-title"
+                      type="text"
+                      placeholder="Enter Title"
+                      data-field="title"
+                      aria-invalid={!!errors.title}
+                      style={fieldStyle(!!errors.title)}
+                      {...register('title')}
+                    />
+                  </FormGroup>
                 </div>
-              </div>
-              <div style={{ width: '25%', padding: '0.5rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Year <span style={{ color: 'red' }}>*</span></label>
-                  <input type="text" disabled value={form.year} />
+                <div style={{ width: '25%', padding: '0.5rem' }}>
+                  <FormGroup label="Year" htmlFor="tr-year" required>
+                    <input id="tr-year" type="text" disabled {...register('year')} />
+                  </FormGroup>
                 </div>
-              </div>
-              <div style={{ width: '25%', padding: '0.5rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Frequency <span style={{ color: 'red' }}>*</span></label>
-                  <select value={form.frequency} onChange={e => setForm({...form, frequency: e.target.value})}>
-                    <option value="Quarter">Quarter</option>
-                    <option value="Annual">Annual</option>
-                  </select>
+                <div style={{ width: '25%', padding: '0.5rem' }}>
+                  <FormGroup label="Frequency" htmlFor="tr-frequency" required>
+                    <select id="tr-frequency" {...register('frequency')}>
+                      <option value="Quarter">Quarter</option>
+                      <option value="Annual">Annual</option>
+                    </select>
+                  </FormGroup>
+                </div>
+
+                <div style={{ width: '25%', padding: '0.5rem' }}>
+                  <FormGroup label="Test Type" htmlFor="tr-test-type" required>
+                    <select id="tr-test-type" {...register('testType')}>
+                      <option value="DOT">DOT</option>
+                      <option value="Non-DOT">Non-DOT</option>
+                    </select>
+                  </FormGroup>
+                </div>
+                {frequency === 'Quarter' && (
+                  <div style={{ width: '25%', padding: '0.5rem' }}>
+                    <FormGroup label="Quarter" htmlFor="tr-quarter" required>
+                      <select id="tr-quarter" {...register('quarter')}>
+                        <option value="1">1st</option><option value="2">2nd</option>
+                        <option value="3">3rd</option><option value="4">4th</option>
+                      </select>
+                    </FormGroup>
+                  </div>
+                )}
+                <div style={{ width: frequency === 'Quarter' ? '50%' : '75%', padding: '0.5rem' }}>
+                  <FormGroup label="Reason for Test" htmlFor="tr-reason" required error={errors.reasonForTest?.message}>
+                    <input
+                      id="tr-reason"
+                      type="text"
+                      placeholder="Enter Reason for Test"
+                      data-field="reasonForTest"
+                      aria-invalid={!!errors.reasonForTest}
+                      style={fieldStyle(!!errors.reasonForTest)}
+                      {...register('reasonForTest')}
+                    />
+                  </FormGroup>
                 </div>
               </div>
 
-              <div style={{ width: '25%', padding: '0.5rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Test Type <span style={{ color: 'red' }}>*</span></label>
-                  <select value={form.testType} onChange={e => setForm({...form, testType: e.target.value})}>
-                    <option value="DOT">DOT</option>
-                    <option value="Non-DOT">Non-DOT</option>
-                  </select>
+              <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+                  <p style={{ margin: 0 }}><b>Test Date: {formatDate(new Date())}</b></p>
+                  <p style={{ margin: 0 }}><b>Test Time: {new Date().toLocaleTimeString('en-US')}</b></p>
                 </div>
-              </div>
-              {form.frequency === 'Quarter' && (
-                <div style={{ width: '25%', padding: '0.5rem' }}>
-                  <div className="form-group" style={{ margin: 0 }}>
-                    <label>Quarter <span style={{ color: 'red' }}>*</span></label>
-                    <select value={form.quarter} onChange={e => setForm({...form, quarter: e.target.value})}>
-                      <option value="1">1st</option><option value="2">2nd</option>
-                      <option value="3">3rd</option><option value="4">4th</option>
+
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ width: '16.66%' }}>
+                    <label style={{ margin: 0 }}>Set Selection Type</label>
+                  </div>
+                  <div style={{ width: '16.66%' }}>
+                    <select {...register('selectionType')}>
+                      <option value="1">Number</option>
+                      <option value="2">Percentage</option>
                     </select>
                   </div>
                 </div>
-              )}
-              <div style={{ width: form.frequency === 'Quarter' ? '50%' : '75%', padding: '0.5rem' }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Reason for Test <span style={{ color: 'red' }}>*</span></label>
-                  <input type="text" placeholder="Enter Reason for Test" value={form.reasonForTest} onChange={e => setForm({...form, reasonForTest: e.target.value})} />
-                </div>
-              </div>
-            </div>
 
-            <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-                <p style={{ margin: 0 }}><b>Test Date: {formatDate(new Date())}</b></p>
-                <p style={{ margin: 0 }}><b>Test Time: {new Date().toLocaleTimeString('en-US')}</b></p>
-              </div>
+                {/* Drug / Alcohol / Alternate checkboxes — isolated from global form-control CSS */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '0', marginBottom: '0.5rem' }}>
 
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <div style={{ width: '16.66%' }}>
-                  <label style={{ margin: 0 }}>Set Selection Type</label>
-                </div>
-                <div style={{ width: '16.66%' }}>
-                  <select value={form.selectionType} onChange={e => setForm({...form, selectionType: e.target.value})}>
-                    <option value="1">Number</option>
-                    <option value="2">Percentage</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Drug / Alcohol / Alternate checkboxes â€” isolated from global form-control CSS */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '0', marginBottom: '0.5rem' }}>
-
-                {/* Drug */}
-                <div style={{ width: '25%', padding: '0.5rem 0.5rem 0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      id="chk-drug"
-                      checked={form.isDrugSelected}
-                      onChange={e => setForm({...form, isDrugSelected: e.target.checked})}
-                      style={{ width: '16px', height: '16px' }}
-                    />
-                    <label htmlFor="chk-drug" style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', padding: 0 }}>
-                      Drug
-                    </label>
-                  </div>
-                  {form.isDrugSelected && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  {/* Drug */}
+                  <div style={{ width: '25%', padding: '0.5rem 0.5rem 0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                       <input
-                        type="number" min={0}
-                        style={{ width: '90px', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--bg-input)', color: 'var(--text)', fontSize: '0.875rem' }}
-                        value={form.drugCount}
-                        onChange={e => setForm({...form, drugCount: Number(e.target.value)})}
+                        type="checkbox"
+                        id="chk-drug"
+                        style={{ width: '16px', height: '16px' }}
+                        {...register('isDrugSelected')}
                       />
-                      {form.selectionType === '2' && <span style={{ fontWeight: 600 }}>%</span>}
+                      <label htmlFor="chk-drug" style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', padding: 0 }}>
+                        Drug
+                      </label>
                     </div>
-                  )}
-                </div>
-
-                {/* Alcohol */}
-                <div style={{ width: '25%', padding: '0.5rem 0.5rem 0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      id="chk-alcohol"
-                      checked={form.isAlcoholSelected}
-                      onChange={e => setForm({...form, isAlcoholSelected: e.target.checked})}
-                      style={{ width: '16px', height: '16px' }}
-                    />
-                    <label htmlFor="chk-alcohol" style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', padding: 0 }}>
-                      Alcohol
-                    </label>
+                    {isDrugSelected && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="number"
+                          min={0}
+                          data-field="drugCount"
+                          aria-invalid={!!errors.drugCount}
+                          style={{
+                            width: '90px',
+                            padding: '0.35rem 0.5rem',
+                            border: `1px solid ${errors.drugCount ? '#ef4444' : 'var(--border)'}`,
+                            borderRadius: 5,
+                            background: 'var(--bg-input)',
+                            color: 'var(--text)',
+                            fontSize: '0.875rem',
+                          }}
+                          {...register('drugCount', { valueAsNumber: true })}
+                        />
+                        {selectionType === '2' && <span style={{ fontWeight: 600 }}>%</span>}
+                      </div>
+                    )}
+                    <FieldError message={errors.drugCount?.message} />
                   </div>
-                  {form.isAlcoholSelected && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <input
-                        type="number" min={0}
-                        style={{ width: '90px', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--bg-input)', color: 'var(--text)', fontSize: '0.875rem' }}
-                        value={form.alcoholCount}
-                        onChange={e => setForm({...form, alcoholCount: Number(e.target.value)})}
-                      />
-                      {form.selectionType === '2' && <span style={{ fontWeight: 600 }}>%</span>}
-                    </div>
-                  )}
-                </div>
 
-                {/* Alternate */}
-                <div style={{ width: '25%', padding: '0.5rem 0.5rem 0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <input
-                      type="checkbox"
-                      id="chk-alternate"
-                      checked={form.isAlternateSelected}
-                      onChange={e => setForm({...form, isAlternateSelected: e.target.checked})}
-                      style={{ width: '16px', height: '16px' }}
-                    />
-                    <label htmlFor="chk-alternate" style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', padding: 0 }}>
-                      Alternate
-                    </label>
+                  {/* Alcohol */}
+                  <div style={{ width: '25%', padding: '0.5rem 0.5rem 0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="chk-alcohol"
+                        style={{ width: '16px', height: '16px' }}
+                        {...register('isAlcoholSelected')}
+                      />
+                      <label htmlFor="chk-alcohol" style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', padding: 0 }}>
+                        Alcohol
+                      </label>
+                    </div>
+                    {isAlcoholSelected && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="number"
+                          min={0}
+                          data-field="alcoholCount"
+                          aria-invalid={!!errors.alcoholCount}
+                          style={{
+                            width: '90px',
+                            padding: '0.35rem 0.5rem',
+                            border: `1px solid ${errors.alcoholCount ? '#ef4444' : 'var(--border)'}`,
+                            borderRadius: 5,
+                            background: 'var(--bg-input)',
+                            color: 'var(--text)',
+                            fontSize: '0.875rem',
+                          }}
+                          {...register('alcoholCount', { valueAsNumber: true })}
+                        />
+                        {selectionType === '2' && <span style={{ fontWeight: 600 }}>%</span>}
+                      </div>
+                    )}
+                    <FieldError message={errors.alcoholCount?.message} />
                   </div>
-                  {form.isAlternateSelected && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <input
-                        type="number" min={0}
-                        style={{ width: '90px', padding: '0.35rem 0.5rem', border: '1px solid var(--border)', borderRadius: 5, background: 'var(--bg-input)', color: 'var(--text)', fontSize: '0.875rem' }}
-                        value={form.alternateCount}
-                        onChange={e => setForm({...form, alternateCount: Number(e.target.value)})}
-                      />
-                    </div>
-                  )}
-                </div>
 
-                {/* Select & Submit */}
-                <div style={{ width: '25%', padding: '0.5rem', display: 'flex', alignItems: 'flex-start', paddingTop: '0.4rem' }}>
-                  <button
-                    style={{ background: '#17a2b8', color: '#fff', border: 'none', borderRadius: 6, padding: '0.45rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap' }}
-                    onClick={generateAndSubmit}
-                    disabled={saving}
-                  >
-                    {saving ? 'Processing...' : 'Select & Submit'}
-                  </button>
+                  {/* Alternate */}
+                  <div style={{ width: '25%', padding: '0.5rem 0.5rem 0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        id="chk-alternate"
+                        style={{ width: '16px', height: '16px' }}
+                        {...register('isAlternateSelected')}
+                      />
+                      <label htmlFor="chk-alternate" style={{ margin: 0, fontWeight: 500, fontSize: '0.9rem', cursor: 'pointer', userSelect: 'none', background: 'none', border: 'none', padding: 0 }}>
+                        Alternate
+                      </label>
+                    </div>
+                    {isAlternateSelected && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="number"
+                          min={0}
+                          data-field="alternateCount"
+                          style={{
+                            width: '90px',
+                            padding: '0.35rem 0.5rem',
+                            border: '1px solid var(--border)',
+                            borderRadius: 5,
+                            background: 'var(--bg-input)',
+                            color: 'var(--text)',
+                            fontSize: '0.875rem',
+                          }}
+                          {...register('alternateCount', { valueAsNumber: true })}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Select & Submit */}
+                  <div style={{ width: '25%', padding: '0.5rem', display: 'flex', alignItems: 'flex-start', paddingTop: '0.4rem' }}>
+                    <button
+                      type="submit"
+                      style={{ background: '#17a2b8', color: '#fff', border: 'none', borderRadius: 6, padding: '0.45rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', whiteSpace: 'nowrap' }}
+                      disabled={saving}
+                    >
+                      {saving ? 'Processing...' : 'Select & Submit'}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            </form>
 
             <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
               <ListingTable
@@ -659,7 +720,7 @@ export default function TestRequestsPage() {
 
             <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', fontWeight: 600 }}>Employees List ({selectedRequestEmployees.length} total)</h3>
             {viewLoading ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>â³ Loading employees...</div>
+              <PageLoader message="Loading employees..." />
             ) : (
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>

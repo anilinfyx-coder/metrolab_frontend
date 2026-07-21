@@ -1,9 +1,18 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
 import ListingTable, { ActionIcons, ListingHeaderActions, ListingColumn } from '../../../components/ListingTable';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  corporateClientFormSchema,
+  PASSWORD_HELPER_TEXT,
+  type CorporateClientFormValues,
+} from '../../../../lib/schemas';
 
 function getUser() { return typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('b2b_user') || '{}') : {}; }
 
@@ -17,19 +26,10 @@ interface CorporateClient {
 
 interface GeoItem { id: number; name: string; country_id?: number; state_id?: number; }
 
-const emptyClient = {
+const emptyClient: CorporateClientFormValues = {
   company_name: '', contact_person_name: '', email: '', mobile: '',
-  address: '', country_id: '', state_id: '', city_id: '', pincode: '', password: ''
+  address: '', country_id: '', state_id: '', city_id: '', pincode: '', password: '', id: null,
 };
-
-/** Same password rules as Staff Users / B2B Profile */
-function validatePassword(password: string): string | null {
-  const pwd = password.trim();
-  if (!pwd) return 'Password is required.';
-  if (pwd.length < 6) return 'Password must be at least 6 characters.';
-  if (/[^a-zA-Z0-9@#]/.test(pwd)) return 'Only @ # are allowed as special characters in password.';
-  return null;
-}
 
 const columns: ListingColumn<CorporateClient>[] = [
   { key: 'company_name', label: 'Company Name', sortable: true },
@@ -54,12 +54,29 @@ export default function CorporateClientPage() {
   const [view, setView] = useState<'list' | 'form'>('list');
   const [clients, setClients] = useState<CorporateClient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ ...emptyClient, id: null as number | null });
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const [countries, setCountries] = useState<GeoItem[]>([]);
   const [states, setStates] = useState<GeoItem[]>([]);
   const [cities, setCities] = useState<GeoItem[]>([]);
+
+  const schema = useMemo(() => corporateClientFormSchema(!!editingId), [editingId]);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<CorporateClientFormValues>({
+    resolver: formResolver<CorporateClientFormValues>(schema),
+    defaultValues: emptyClient,
+  });
+
+  const countryId = watch('country_id');
+  const stateId = watch('state_id');
 
   const loadData = async () => {
     setLoading(true);
@@ -79,7 +96,7 @@ export default function CorporateClientPage() {
 
   const loadCountries = async () => {
     try {
-      const data = await apiFetch<GeoItem[]>('/api/Country', {
+      const data = await apiFetch<GeoItem[]>('/api/Country?status=true', {
         tokenKey: 'b2b_token',
         errorFallback: 'Unable to load countries.',
       });
@@ -95,38 +112,38 @@ export default function CorporateClientPage() {
   }, []);
 
   useEffect(() => {
-    if (!form.country_id) {
+    if (!countryId) {
       setStates([]);
       return;
     }
-    apiFetch<GeoItem[]>(`/api/State?country_id=${form.country_id}`, {
+    apiFetch<GeoItem[]>(`/api/State?country_id=${countryId}&status=true`, {
       tokenKey: 'b2b_token',
       errorFallback: 'Unable to load states.',
     })
       .then(data => setStates(data || []))
       .catch(() => setStates([]));
-  }, [form.country_id]);
+  }, [countryId]);
 
   useEffect(() => {
-    if (!form.state_id) {
+    if (!stateId) {
       setCities([]);
       return;
     }
-    apiFetch<GeoItem[]>(`/api/City?state_id=${form.state_id}`, {
+    apiFetch<GeoItem[]>(`/api/City?state_id=${stateId}&status=true`, {
       tokenKey: 'b2b_token',
       errorFallback: 'Unable to load cities.',
     })
       .then(data => setCities(data || []))
       .catch(() => setCities([]));
-  }, [form.state_id]);
+  }, [stateId]);
 
   const filteredStates = useMemo(
-    () => states.filter(s => !form.country_id || Number(s.country_id) === Number(form.country_id)),
-    [states, form.country_id]
+    () => states.filter(s => !countryId || Number(s.country_id) === Number(countryId)),
+    [states, countryId]
   );
   const filteredCities = useMemo(
-    () => cities.filter(c => !form.state_id || Number(c.state_id) === Number(form.state_id)),
-    [cities, form.state_id]
+    () => cities.filter(c => !stateId || Number(c.state_id) === Number(stateId)),
+    [cities, stateId]
   );
 
   const generatePassword = () => {
@@ -137,12 +154,14 @@ export default function CorporateClientPage() {
   };
 
   const openAdd = () => {
-    setForm({ ...emptyClient, id: null, password: generatePassword() });
+    setEditingId(null);
+    reset({ ...emptyClient, password: generatePassword() });
     setView('form');
   };
 
   const openEdit = (c: CorporateClient) => {
-    setForm({
+    setEditingId(c.id);
+    reset({
       company_name: c.company_name || '',
       contact_person_name: c.contact_person_name || '',
       email: c.email || '',
@@ -160,60 +179,45 @@ export default function CorporateClientPage() {
 
   const closeForm = () => {
     setView('list');
-    setForm({ ...emptyClient, id: null });
+    setEditingId(null);
+    reset(emptyClient);
   };
 
   const resetForm = () => {
-    if (form.id) {
-      const existing = clients.find(c => c.id === form.id);
+    if (editingId) {
+      const existing = clients.find(c => c.id === editingId);
       if (existing) openEdit(existing);
-      else setForm({ ...emptyClient, id: form.id });
+      else reset({ ...emptyClient, id: editingId });
     } else {
-      setForm({ ...emptyClient, id: null });
+      reset({ ...emptyClient, password: generatePassword() });
     }
   };
 
-  const save = async () => {
-    if (!form.company_name.trim() || !form.contact_person_name.trim() || !form.mobile.trim() ||
-        !form.email.trim() || !form.address.trim() || !form.country_id || !form.state_id || !form.city_id) {
-      toastApiError('Please fill all required fields.');
-      return;
-    }
-    if (!form.id && !form.password.trim()) {
-      toastApiError('Password is required for new corporate clients.');
-      return;
-    }
-    if (!form.id || form.password.trim()) {
-      const pwdError = validatePassword(form.password);
-      if (pwdError) {
-        toastApiError(pwdError);
-        return;
-      }
-    }
-
+  const save = handleSubmit(async values => {
     setSaving(true);
-    const method = form.id ? 'PUT' : 'POST';
-    const path = `/api/CorporateClients${form.id ? `/${form.id}` : ''}`;
+    const method = values.id ? 'PUT' : 'POST';
+    const path = `/api/CorporateClients${values.id ? `/${values.id}` : ''}`;
 
     const payload: Record<string, unknown> = {
-      company_name: form.company_name.trim(),
-      contact_person_name: form.contact_person_name.trim(),
-      email: form.email.trim(),
-      mobile: form.mobile.trim(),
-      address: form.address.trim(),
-      country_id: form.country_id ? Number(form.country_id) : null,
-      state_id: form.state_id ? Number(form.state_id) : null,
-      city_id: form.city_id ? Number(form.city_id) : null,
-      pincode: form.pincode.trim() || null,
+      company_name: values.company_name.trim(),
+      contact_person_name: values.contact_person_name.trim(),
+      email: values.email.trim(),
+      mobile: values.mobile.trim(),
+      address: values.address.trim(),
+      country_id: values.country_id ? Number(values.country_id) : null,
+      state_id: values.state_id ? Number(values.state_id) : null,
+      city_id: values.city_id ? Number(values.city_id) : null,
+      pincode: values.pincode.trim() || null,
       b2b_client_id: getUser().id,
     };
-    if (form.password.trim()) payload.password = form.password.trim();
+    if (values.password?.trim()) payload.password = values.password.trim();
 
     try {
       await apiFetch(path, {
         method,
         tokenKey: 'b2b_token',
         body: JSON.stringify(payload),
+        successMessage: `Corporate client ${values.id ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Failed to save corporate client.',
       });
       closeForm();
@@ -223,14 +227,25 @@ export default function CorporateClientPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<CorporateClientFormValues>());
 
   const toggleStatus = async (c: CorporateClient) => {
+    const enabling = !c.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Corporate Client?' : 'Disable Corporate Client?',
+      message: enabling
+        ? `${c.company_name || 'This corporate client'} will become active.`
+        : `${c.company_name || 'This corporate client'} will become inactive. You can enable it again later.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/CorporateClients/${c.id}`, {
         method: 'PUT',
         tokenKey: 'b2b_token',
         body: JSON.stringify({ status: !c.status }),
+        successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update corporate client status.',
       });
       loadData();
@@ -251,6 +266,7 @@ export default function CorporateClientPage() {
       await apiFetch(`/api/CorporateClients/${id}`, {
         method: 'DELETE',
         tokenKey: 'b2b_token',
+        successMessage: 'Corporate client deleted successfully.',
         errorFallback: 'Failed to delete corporate client.',
       });
       loadData();
@@ -263,142 +279,102 @@ export default function CorporateClientPage() {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
         <TopNav title="Manage Corporate Client" />
-        <div style={{ padding: '1.25rem 1.5rem' }}>
+        <div className="page-body">
           <div className="card">
             <div className="listing-card-header">
               <h2 className="listing-card-title">Corporate Client Details</h2>
               <button type="button" className="listing-header-link" onClick={closeForm}>Close</button>
             </div>
-            <div className="card-body">
-              <div className="detail-form-grid">
-                <div className="form-group">
-                  <label>Company Name<span className="required-star">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="Enter Company Name"
-                    value={form.company_name}
-                    onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Contact Person Name<span className="required-star">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="Enter Contact Person Name"
-                    value={form.contact_person_name}
-                    onChange={e => setForm(p => ({ ...p, contact_person_name: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Mobile<span className="required-star">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="Enter Mobile"
-                    value={form.mobile}
-                    onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Email<span className="required-star">*</span></label>
-                  <input
-                    type="email"
-                    placeholder="Enter Email"
-                    value={form.email}
-                    onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>
-                    Password{!form.id && <span className="required-star">*</span>}
-                    {form.id && (
-                      <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                        {' '}(leave blank to keep current)
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type="password"
-                    placeholder={form.id ? 'Leave blank to keep current' : 'Enter Password'}
-                    value={form.password}
-                    onChange={e => !!form.id && setForm(p => ({ ...p, password: e.target.value }))}
-                    readOnly={!form.id}
-                    style={!form.id ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {}}
-                    autoComplete="new-password"
-                  />
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
-                    (Enter atleast 6 characters. Only @ # are allowed as special character)
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label>Address<span className="required-star">*</span></label>
-                  <input
-                    type="text"
-                    placeholder="Enter Address"
-                    value={form.address}
-                    onChange={e => setForm(p => ({ ...p, address: e.target.value }))}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Country<span className="required-star">*</span></label>
-                  <select
-                    value={form.country_id}
-                    onChange={e => setForm(p => ({ ...p, country_id: e.target.value, state_id: '', city_id: '' }))}
-                  >
-                    <option value="">Select Country</option>
-                    {countries.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>State<span className="required-star">*</span></label>
-                  <select
-                    value={form.state_id}
-                    onChange={e => setForm(p => ({ ...p, state_id: e.target.value, city_id: '' }))}
-                    disabled={!form.country_id}
-                  >
-                    <option value="">Select State</option>
-                    {filteredStates.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>City<span className="required-star">*</span></label>
-                  <select
-                    value={form.city_id}
-                    onChange={e => setForm(p => ({ ...p, city_id: e.target.value }))}
-                    disabled={!form.state_id}
-                  >
-                    <option value="">Select City</option>
-                    {filteredCities.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+            <form onSubmit={save} noValidate>
+              <div className="card-body">
+                <div className="detail-form-grid">
+                  <FormGroup label="Company Name" htmlFor="cc-company" required error={errors.company_name?.message}>
+                    <input id="cc-company" type="text" placeholder="Enter Company Name" data-field="company_name" aria-invalid={!!errors.company_name} style={fieldStyle(!!errors.company_name)} {...register('company_name')} />
+                  </FormGroup>
+                  <FormGroup label="Contact Person Name" htmlFor="cc-contact" required error={errors.contact_person_name?.message}>
+                    <input id="cc-contact" type="text" placeholder="Enter Contact Person Name" data-field="contact_person_name" aria-invalid={!!errors.contact_person_name} style={fieldStyle(!!errors.contact_person_name)} {...register('contact_person_name')} />
+                  </FormGroup>
+                  <FormGroup label="Mobile" htmlFor="cc-mobile" required error={errors.mobile?.message}>
+                    <input id="cc-mobile" type="text" inputMode="numeric" placeholder="Enter Mobile" data-field="mobile" aria-invalid={!!errors.mobile} style={fieldStyle(!!errors.mobile)} {...register('mobile')} />
+                  </FormGroup>
+                  <FormGroup label="Email" htmlFor="cc-email" required error={errors.email?.message}>
+                    <input id="cc-email" type="email" placeholder="Enter Email" data-field="email" aria-invalid={!!errors.email} style={fieldStyle(!!errors.email)} {...register('email')} />
+                  </FormGroup>
+                  <FormGroup label="Password" htmlFor="cc-password" required={!editingId} error={errors.password?.message}>
+                    <PasswordInput
+                      id="cc-password"
+                      placeholder={editingId ? 'Leave blank to keep current' : 'Enter Password'}
+                      data-field="password"
+                      aria-invalid={!!errors.password}
+                      style={fieldStyle(!!errors.password, !editingId ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {})}
+                      readOnly={!editingId}
+                      autoComplete="new-password"
+                      {...register('password')}
+                    />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
+                      {PASSWORD_HELPER_TEXT}
+                    </div>
+                  </FormGroup>
+                  <FormGroup label="Address" htmlFor="cc-address" required error={errors.address?.message}>
+                    <input id="cc-address" type="text" placeholder="Enter Address" data-field="address" aria-invalid={!!errors.address} style={fieldStyle(!!errors.address)} {...register('address')} />
+                  </FormGroup>
+                  <FormGroup label="Country" htmlFor="cc-country" required error={errors.country_id?.message}>
+                    <select
+                      id="cc-country"
+                      data-field="country_id"
+                      aria-invalid={!!errors.country_id}
+                      style={fieldStyle(!!errors.country_id)}
+                      {...register('country_id', {
+                        onChange: e => {
+                          setValue('country_id', e.target.value);
+                          setValue('state_id', '');
+                          setValue('city_id', '');
+                        },
+                      })}
+                    >
+                      <option value="">Select Country</option>
+                      {countries.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                    </select>
+                  </FormGroup>
+                  <FormGroup label="State" htmlFor="cc-state" required error={errors.state_id?.message}>
+                    <select
+                      id="cc-state"
+                      data-field="state_id"
+                      disabled={!countryId}
+                      aria-invalid={!!errors.state_id}
+                      style={fieldStyle(!!errors.state_id)}
+                      {...register('state_id', {
+                        onChange: e => {
+                          setValue('state_id', e.target.value);
+                          setValue('city_id', '');
+                        },
+                      })}
+                    >
+                      <option value="">Select State</option>
+                      {filteredStates.map(s => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                    </select>
+                  </FormGroup>
+                  <FormGroup label="City" htmlFor="cc-city" required error={errors.city_id?.message}>
+                    <select id="cc-city" data-field="city_id" disabled={!stateId} aria-invalid={!!errors.city_id} style={fieldStyle(!!errors.city_id)} {...register('city_id')}>
+                      <option value="">Select City</option>
+                      {filteredCities.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                    </select>
+                  </FormGroup>
+                  <FormGroup label="Pincode" htmlFor="cc-pincode" error={errors.pincode?.message}>
+                    <input id="cc-pincode" type="text" placeholder="Enter Pincode" data-field="pincode" style={fieldStyle(!!errors.pincode)} {...register('pincode')} />
+                  </FormGroup>
                 </div>
 
-                <div className="form-group">
-                  <label>Pincode</label>
-                  <input
-                    type="text"
-                    placeholder="Enter Pincode"
-                    value={form.pincode}
-                    onChange={e => setForm(p => ({ ...p, pincode: e.target.value }))}
-                  />
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button type="button" className="btn btn-reset" onClick={resetForm}>
+                    Reset Data
+                  </button>
                 </div>
               </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-                <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button type="button" className="btn btn-reset" onClick={resetForm}>
-                  Reset Data
-                </button>
-              </div>
-            </div>
+            </form>
           </div>
         </div>
       </div>
@@ -408,14 +384,14 @@ export default function CorporateClientPage() {
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Corporate Client" />
-      <div style={{ padding: '1.25rem 1.5rem' }}>
+      <div className="page-body">
         <ListingTable
           title="List of Corporate Clients"
           columns={columns}
           rows={clients}
           loading={loading}
           emptyText="No Corporate Clients found."
-          headerActions={<ListingHeaderActions onAdd={openAdd} onRefresh={loadData} />}
+          headerActions={<ListingHeaderActions onAdd={openAdd} />}
           rowActions={(c) => (
             <ActionIcons
               onEdit={() => openEdit(c)}

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import PageLoader from './PageLoader';
 
 const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
@@ -47,15 +48,21 @@ export default function ViewLabTestForm({ labTestId, token }: Props) {
     setLoading(true);
     Promise.all([
       fetch(`${API}/api/LabTests/${labTestId}`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/ReportQuestions?lab_test_id=${labTestId}`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/ReportRequestParameters?lab_test_id=${labTestId}`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/SpecimenTypeDrugLinking?lab_test_id=${labTestId}`, { headers: { token } }).then(r => r.json()),
+      fetch(`${API}/api/ReportQuestions?lab_test_id=${labTestId}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${API}/api/ReportRequestParameters?lab_test_id=${labTestId}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${API}/api/SpecimenTypeDrugLinking?lab_test_id=${labTestId}&status=true`, { headers: { token } }).then(r => r.json()),
     ])
       .then(([testRes, qRes, pRes, sRes]) => {
         if (testRes.response_code === '200') setTest(testRes.obj);
-        if (qRes.response_code === '200') setQuestions((qRes.obj || []).filter((x: any) => !x.deleted));
-        if (pRes.response_code === '200') setParameters((pRes.obj || []).filter((x: any) => !x.deleted));
-        if (sRes.response_code === '200') setSpecimens(sRes.obj || []);
+        if (qRes.response_code === '200') {
+          setQuestions((qRes.obj || []).filter((x: any) => !x.deleted && x.status !== false));
+        }
+        if (pRes.response_code === '200') {
+          setParameters((pRes.obj || []).filter((x: any) => !x.deleted && x.status !== false));
+        }
+        if (sRes.response_code === '200') {
+          setSpecimens((sRes.obj || []).filter((x: any) => x.status !== false));
+        }
       })
       .finally(() => setLoading(false));
   }, [labTestId, token]);
@@ -63,7 +70,7 @@ export default function ViewLabTestForm({ labTestId, token }: Props) {
   const visibleFields = FIELD_LABELS.filter(f => test?.[f.key]);
 
   if (loading) {
-    return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading form…</div>;
+    return <PageLoader message="Loading form..." />;
   }
 
   if (!test) {

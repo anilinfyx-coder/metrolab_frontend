@@ -1,348 +1,627 @@
 'use client';
-import { useEffect, useState } from 'react';
+
+import { useState } from 'react';
+import { useForm, UseFormRegister } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import TopNav from '../../../components/TopNav';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
+import { FormGroup, FieldError } from '../../../components/FormField';
+import { useConfirm } from '../../../components/ConfirmModal';
+import { formatDate } from '../../../utils/dateFormat';
+import { apiFetch, toastApiError, toastApiSuccess } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  physicalExaminationCertificateSchema,
+  type PhysicalExaminationCertificateFormValues,
+} from '../../../../lib/schemas';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+interface PhysicalExamCertificate {
+  id: number;
+  patient_id: number;
+  name?: string;
+  patient_email?: string;
+  patient_uid?: string;
+  date_of_examination?: string;
+  clinician_name?: string;
+  overall_condition?: string;
+}
 
-export default function PhysicalExaminationsPage() {
-  const [certificates, setCertificates] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [emailingId, setEmailingId] = useState<number | null>(null);
+interface PatientSearchResult {
+  id: number;
+  name?: string;
+  uid?: string;
+  email?: string;
+}
 
-  const [formData, setFormData] = useState({
-    patient_id: '',
-    age: '', height: '', weight: '', bp: '', pulse: '',
-    hearing_right: '', hearing_left: '', vision_right: '', vision_left: '', wear_glasses: false,
-    eval_head: '', eval_nose: '', eval_mouth: '', eval_ears: '',
-    eval_eyes: '', eval_lungs: '', eval_heart: '', eval_vascular: '',
-    eval_abdomen: '', eval_spine: '', eval_skin: '', eval_neurologic: '',
-    additional_comments: '',
-    overall_condition: 'Fit',
-    clinician_name: '',
-    clinician_specialty: 'MD',
-    date_of_examination: '',
-    clinician_address: ''
-  });
+const CERT_QUERY_KEY = ['physicalExaminationCertificates'] as const;
 
-  const router = useRouter();
+const emptyForm: PhysicalExaminationCertificateFormValues = {
+  patient_id: '',
+  age: '',
+  height: '',
+  weight: '',
+  bp: '',
+  pulse: '',
+  hearing_right: '',
+  hearing_left: '',
+  vision_right: '',
+  vision_left: '',
+  wear_glasses: false,
+  eval_head: '',
+  eval_nose: '',
+  eval_mouth: '',
+  eval_ears: '',
+  eval_eyes: '',
+  eval_lungs: '',
+  eval_heart: '',
+  eval_vascular: '',
+  eval_abdomen: '',
+  eval_spine: '',
+  eval_skin: '',
+  eval_neurologic: '',
+  additional_comments: '',
+  overall_condition: 'Fit',
+  clinician_name: '',
+  clinician_specialty: 'MD',
+  date_of_examination: '',
+  clinician_address: '',
+};
 
-  const getToken = () => localStorage.getItem('admin_token') || '';
+const EVAL_FIELDS: { label: string; field: keyof PhysicalExaminationCertificateFormValues }[] = [
+  { label: '1. Head, Neck, Face & Scalp', field: 'eval_head' },
+  { label: '2. Nose and Sinuses', field: 'eval_nose' },
+  { label: '3. Mouth and Throat', field: 'eval_mouth' },
+  { label: '4. Ears', field: 'eval_ears' },
+  { label: '5. Eyes, Pupils & Motion', field: 'eval_eyes' },
+  { label: '6. Lungs, Chest & Breasts', field: 'eval_lungs' },
+  { label: '7. Heart', field: 'eval_heart' },
+  { label: '8. Vascular System', field: 'eval_vascular' },
+  { label: '9. Abdomen and Viscera', field: 'eval_abdomen' },
+  { label: '10. Spine, Muscular Skeletal', field: 'eval_spine' },
+  { label: '11. Skin and Lymphatic', field: 'eval_skin' },
+  { label: '12. Neurologic', field: 'eval_neurologic' },
+];
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/PhysicalExaminationCertificates`, { headers: { token: getToken() } });
-      const data = await res.json();
-      if (data.response_code === '200') setCertificates(data.obj || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.patient_id) {
-      alert('Please search and select a patient first.');
-      return;
-    }
-    if (!formData.clinician_specialty) {
-      alert('Please select a clinician specialty (MD, PA, or NP).');
-      return;
-    }
-    try {
-      const res = await fetch(`${API}/api/PhysicalExaminationCertificates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify(formData)
-      });
-      const data = await res.json();
-      if (data.response_code === '200') {
-        alert('Certificate issued successfully');
-        setShowModal(false);
-        fetchData();
-        setFormData({
-          patient_id: '', age: '', height: '', weight: '', bp: '', pulse: '',
-          hearing_right: '', hearing_left: '', vision_right: '', vision_left: '', wear_glasses: false,
-          eval_head: '', eval_nose: '', eval_mouth: '', eval_ears: '',
-          eval_eyes: '', eval_lungs: '', eval_heart: '', eval_vascular: '',
-          eval_abdomen: '', eval_spine: '', eval_skin: '', eval_neurologic: '',
-          additional_comments: '', overall_condition: 'Fit', clinician_name: '', clinician_specialty: 'MD',
-          date_of_examination: '', clinician_address: ''
-        });
-      } else {
-        alert(data.obj);
-      }
-    } catch (err) {
-      alert('Failed to save');
-    }
-  };
-
-  const deleteCert = async (id: number) => {
-    if(!confirm('Are you sure you want to delete this certificate?')) return;
-    try {
-      await fetch(`${API}/api/PhysicalExaminationCertificates/${id}`, { method: 'DELETE', headers: { token: getToken() } });
-      fetchData();
-    } catch(err) { alert('Delete failed'); }
-  };
-
-  const formatDate = (d: string) => new Date(d).toLocaleDateString();
-
-  const EvalSelect = ({ label, field }: { label: string, field: string }) => (
-    <div className="col-md-6" style={{ display: 'flex', alignItems: 'center', marginBottom: '8px', gap: '16px' }}>
-      <label style={{ width: '180px', marginBottom: 0 }}>{label}</label>
-      <div style={{ display: 'flex', gap: '16px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: 0 }}>
-          <input type="radio" name={field} value="N" checked={(formData as any)[field] === 'N'} onChange={e => setFormData({...formData, [field]: e.target.value})} /> Normal (N)
+function EvalSelect({
+  label,
+  field,
+  register,
+}: {
+  label: string;
+  field: keyof PhysicalExaminationCertificateFormValues;
+  register: UseFormRegister<PhysicalExaminationCertificateFormValues>;
+}) {
+  return (
+    <div className="cert-eval-row">
+      <span className="cert-eval-label">{label}</span>
+      <div className="cert-eval-options">
+        <label>
+          <input type="radio" value="N" {...register(field)} /> Normal (N)
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', marginBottom: 0 }}>
-          <input type="radio" name={field} value="AB" checked={(formData as any)[field] === 'AB'} onChange={e => setFormData({...formData, [field]: e.target.value})} /> Abnormal (AB)
+        <label>
+          <input type="radio" value="AB" {...register(field)} /> Abnormal (AB)
         </label>
       </div>
     </div>
   );
+}
+
+export default function PhysicalExaminationsPage() {
+  const confirmDialog = useConfirm();
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<PhysicalExaminationCertificateFormValues>({
+    resolver: formResolver<PhysicalExaminationCertificateFormValues>(physicalExaminationCertificateSchema),
+    defaultValues: emptyForm,
+  });
+
+  const patientId = watch('patient_id');
+
+  const { data: certificates = [], isLoading: loading } = useQuery({
+    queryKey: CERT_QUERY_KEY,
+    queryFn: async () => {
+      try {
+        const list = await apiFetch<PhysicalExamCertificate[]>('/api/PhysicalExaminationCertificates', {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load physical examination certificates.',
+        });
+        return list || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const searchPatientMutation = useMutation({
+    mutationFn: async (val: string) => {
+      const isMobile = /^\d+$/.test(val);
+      const q = isMobile ? `mobile=${encodeURIComponent(val)}` : `uid=${encodeURIComponent(val)}`;
+      return apiFetch<PatientSearchResult>(`/api/Patient/search?${q}`, {
+        tokenKey: 'admin_token',
+        errorFallback: 'Patient not found.',
+      });
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (values: PhysicalExaminationCertificateFormValues) =>
+      apiFetch('/api/PhysicalExaminationCertificates', {
+        method: 'POST',
+        tokenKey: 'admin_token',
+        body: JSON.stringify(values),
+        successMessage: 'Physical examination certificate issued successfully.',
+        errorFallback: 'Failed to issue certificate.',
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/api/PhysicalExaminationCertificates/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'admin_token',
+        successMessage: 'Certificate deleted successfully.',
+        errorFallback: 'Failed to delete certificate.',
+      }),
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: ({ id, email }: { id: number; email: string }) =>
+      apiFetch('/api/PhysicalExaminationCertificates/emailPhysicalExaminationCertificate', {
+        method: 'POST',
+        tokenKey: 'admin_token',
+        body: JSON.stringify({ id }),
+        successMessage: email
+          ? `Certificate emailed successfully to ${email}.`
+          : 'Certificate emailed successfully.',
+        errorFallback: 'Failed to email certificate.',
+      }),
+  });
+
+  const openForm = () => {
+    reset(emptyForm);
+    setSelectedPatient(null);
+    setPatientSearch('');
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    reset(emptyForm);
+    setSelectedPatient(null);
+    setPatientSearch('');
+  };
+
+  const resetFormData = () => {
+    reset(emptyForm);
+    setSelectedPatient(null);
+    setPatientSearch('');
+  };
+
+  const searchPatient = async () => {
+    const val = patientSearch.trim();
+    if (!val) {
+      toastApiError('Enter a patient UID or mobile number.');
+      return;
+    }
+    try {
+      const patient = await searchPatientMutation.mutateAsync(val);
+      setSelectedPatient(patient);
+      // Match prior behavior: selecting a patient clears vitals tied to the previous selection
+      setValue('patient_id', patient.id, { shouldValidate: true });
+      setValue('age', '');
+      setValue('height', '');
+      setValue('weight', '');
+      toastApiSuccess(`Patient selected: ${patient.name || patient.uid || patient.id}`);
+    } catch {
+      setSelectedPatient(null);
+      setValue('patient_id', '', { shouldValidate: true });
+    }
+  };
+
+  const onSubmit = handleSubmit(async values => {
+    try {
+      await saveMutation.mutateAsync(values);
+      closeForm();
+      await queryClient.invalidateQueries({ queryKey: CERT_QUERY_KEY });
+    } catch {
+      /* toasted by apiFetch */
+    }
+  }, createInvalidHandler<PhysicalExaminationCertificateFormValues>());
+
+  const handleDelete = async (cert: PhysicalExamCertificate) => {
+    const ok = await confirmDialog({
+      title: 'Delete certificate?',
+      message: `Delete Physical Examination Certificate #${cert.id} for ${cert.name || 'this patient'}? This cannot be undone.`,
+      cancelText: 'Cancel',
+      confirmText: 'Delete',
+    });
+    if (!ok) return;
+
+    try {
+      await deleteMutation.mutateAsync(cert.id);
+      await queryClient.invalidateQueries({ queryKey: CERT_QUERY_KEY });
+    } catch {
+      /* toasted by apiFetch */
+    }
+  };
+
+  const emailCert = async (cert: PhysicalExamCertificate) => {
+    if (emailMutation.isPending) return;
+
+    const email = (cert.patient_email || '').trim();
+    // Same as original: confirm first, then POST { id } — backend validates patient email
+    const ok = await confirmDialog({
+      title: 'Send certificate by email?',
+      message: email
+        ? `Email the password-protected Physical Examination Certificate to ${email}? The patient will need their birthdate digits (MMDD) to open the PDF.`
+        : 'Send Physical Examination Certificate to patient via email?',
+      cancelText: 'Cancel',
+      confirmText: 'Send Email',
+    });
+    if (!ok) return;
+
+    try {
+      await emailMutation.mutateAsync({ id: cert.id, email });
+    } catch {
+      /* toasted by apiFetch — includes backend "No email address found for this patient" */
+    }
+  };
+
+  const saving = saveMutation.isPending;
+  const searching = searchPatientMutation.isPending;
+  const emailing = emailMutation.isPending;
+
+  const columns: ListingColumn<PhysicalExamCertificate>[] = [
+    {
+      key: 'id',
+      label: 'Cert ID',
+      sortable: true,
+      filterable: true,
+      width: '10%',
+      getValue: row => String(row.id),
+      render: row => `#${row.id}`,
+    },
+    {
+      key: 'name',
+      label: 'Patient',
+      sortable: true,
+      filterable: true,
+      width: '24%',
+      getValue: row => row.name || '',
+      render: row => (
+        <span>
+          <strong>{row.name || '—'}</strong>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            {row.patient_uid || `ID: ${row.patient_id}`}
+          </div>
+        </span>
+      ),
+    },
+    {
+      key: 'date_of_examination',
+      label: 'Exam Date',
+      sortable: true,
+      filterable: true,
+      width: '16%',
+      getValue: row => (row.date_of_examination ? formatDate(row.date_of_examination) : ''),
+      render: row => (row.date_of_examination ? formatDate(row.date_of_examination) : '—'),
+    },
+    {
+      key: 'clinician_name',
+      label: 'Clinician',
+      sortable: true,
+      filterable: true,
+      width: '18%',
+      getValue: row => row.clinician_name || '',
+      render: row => row.clinician_name || '—',
+    },
+    {
+      key: 'overall_condition',
+      label: 'Condition',
+      sortable: true,
+      filterable: true,
+      width: '12%',
+      getValue: row => row.overall_condition || '',
+      render: row => (
+        <span className={`badge ${row.overall_condition === 'Fit' ? 'badge-success' : 'badge-danger'}`}>
+          {row.overall_condition || '—'}
+        </span>
+      ),
+    },
+  ];
 
   return (
-    <div className="admin-page">
+    <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Physical Examination Certificates" />
-      <div className="page-content">
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 className="page-title">Physical Examinations</h2>
-            <p className="page-subtitle">Manage and print Physical Examination certificates</p>
-          </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(!showModal)}>
-            {showModal ? 'View Certificates List' : '+ Issue New Certificate'}
-          </button>
-        </div>
 
-        {showModal ? (
-          <div className="card" style={{ width: '100%', marginBottom: '24px' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 className="card-title">Issue Physical Examination Certificate</h3>
+      {emailing && (
+        <div className="test-reports-email-overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="test-reports-email-overlay-card">
+            <span className="test-reports-email-spinner" aria-hidden />
+            <div className="test-reports-email-overlay-title">Sending email...</div>
+            <div className="test-reports-email-overlay-text">
+              Please wait while we generate and send the certificate PDF.
             </div>
-            <div className="card-body">
-              <form id="peForm" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                
-                {/* Patient Selection */}
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Patient Selection</h4>
-                  <div className="form-group">
-                    <label className="form-label">Search Patient (UID or Mobile)</label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input type="text" className="form-control" id="patientSearchInput" placeholder="Enter PT001 or 9999999999" />
-                      <button type="button" className="btn btn-secondary" onClick={async () => {
-                        const val = (document.getElementById('patientSearchInput') as HTMLInputElement).value;
-                        if(!val) return;
-                        const isMobile = /^\d+$/.test(val);
-                        const q = isMobile ? `mobile=${val}` : `uid=${val}`;
-                        try {
-                          const res = await fetch(`${API}/api/Patient/search?${q}`, { headers: { token: getToken() } });
-                          const data = await res.json();
-                          if(data.response_code === '200') {
-                            setFormData({...formData, patient_id: data.obj.id, age: '', height: '', weight: ''});
-                            alert(`Patient Selected: ${data.obj.name}`);
-                          } else {
-                            alert('Patient not found!');
-                          }
-                        } catch(e) { alert('Error searching patient'); }
-                      }}>Search</button>
+          </div>
+        </div>
+      )}
+
+      <div className={`page-body${emailing ? ' test-reports-page-busy' : ''}`}>
+        {showForm ? (
+          <div className="card">
+            <div className="card-header cert-form-card-header">
+              <span className="card-title">Issue Physical Examination Certificate</span>
+              <button type="button" className="btn btn-ghost" onClick={closeForm}>
+                View Certificates List
+              </button>
+            </div>
+            <form onSubmit={onSubmit} noValidate>
+              <div className="card-body">
+                <div className="cert-form">
+                  <input type="hidden" data-field="patient_id" {...register('patient_id')} />
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Patient Selection</h4>
+                    <FormGroup
+                      label="Search Patient (UID or Mobile)"
+                      htmlFor="pe-patient-search"
+                      required
+                      error={errors.patient_id?.message as string | undefined}
+                    >
+                      <div className="cert-form-search">
+                        <input
+                          id="pe-patient-search"
+                          type="text"
+                          className="form-control"
+                          data-field="patient_id"
+                          placeholder="Enter PT001 or 9999999999"
+                          value={patientSearch}
+                          onChange={e => setPatientSearch(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void searchPatient();
+                            }
+                          }}
+                          style={fieldStyle(!!errors.patient_id)}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => void searchPatient()}
+                          disabled={searching}
+                        >
+                          {searching ? 'Searching...' : 'Search'}
+                        </button>
+                      </div>
+                    </FormGroup>
+                    {(selectedPatient || patientId) && (
+                      <div className="cert-form-selected">
+                        Selected: {selectedPatient?.name || 'Patient'}
+                        {selectedPatient?.uid ? ` (${selectedPatient.uid})` : ''} — ID {String(patientId)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Vitals & Basics</h4>
+                    <div className="cert-form-grid cert-form-grid-3">
+                      <FormGroup label="Age" htmlFor="age">
+                        <input id="age" type="text" className="form-control" style={fieldStyle(false)} {...register('age')} />
+                      </FormGroup>
+                      <FormGroup label="Height" htmlFor="height">
+                        <input id="height" type="text" className="form-control" style={fieldStyle(false)} {...register('height')} />
+                      </FormGroup>
+                      <FormGroup label="Weight" htmlFor="weight">
+                        <input id="weight" type="text" className="form-control" style={fieldStyle(false)} {...register('weight')} />
+                      </FormGroup>
+                      <FormGroup label="Blood Pressure" htmlFor="bp">
+                        <input id="bp" type="text" className="form-control" style={fieldStyle(false)} {...register('bp')} />
+                      </FormGroup>
+                      <FormGroup label="Pulse" htmlFor="pulse">
+                        <input id="pulse" type="text" className="form-control" style={fieldStyle(false)} {...register('pulse')} />
+                      </FormGroup>
                     </div>
                   </div>
-                  {formData.patient_id && <div style={{ marginTop: '8px', color: 'green', fontWeight: 'bold' }}>✓ Patient ID {formData.patient_id} Selected</div>}
-                </div>
 
-                {/* Vitals Section */}
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Vitals & Basics</h4>
-                  <div className="row">
-                    <div className="col-md-4 form-group"><label>Age</label><input type="text" className="form-control" value={formData.age} onChange={e=>setFormData({...formData, age:e.target.value})} /></div>
-                    <div className="col-md-4 form-group"><label>Height</label><input type="text" className="form-control" value={formData.height} onChange={e=>setFormData({...formData, height:e.target.value})} /></div>
-                    <div className="col-md-4 form-group"><label>Weight</label><input type="text" className="form-control" value={formData.weight} onChange={e=>setFormData({...formData, weight:e.target.value})} /></div>
-                    <div className="col-md-6 form-group mt-2"><label>Blood Pressure</label><input type="text" className="form-control" value={formData.bp} onChange={e=>setFormData({...formData, bp:e.target.value})} /></div>
-                    <div className="col-md-6 form-group mt-2"><label>Pulse</label><input type="text" className="form-control" value={formData.pulse} onChange={e=>setFormData({...formData, pulse:e.target.value})} /></div>
-                  </div>
-                </div>
-
-                {/* Hearing & Vision */}
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Hearing & Vision</h4>
-                  <div className="row">
-                    <div className="col-md-6 form-group"><label>Hearing Right</label><input type="text" className="form-control" value={formData.hearing_right} onChange={e=>setFormData({...formData, hearing_right:e.target.value})} /></div>
-                    <div className="col-md-6 form-group"><label>Hearing Left</label><input type="text" className="form-control" value={formData.hearing_left} onChange={e=>setFormData({...formData, hearing_left:e.target.value})} /></div>
-                    <div className="col-md-6 form-group mt-2"><label>Vision Right (20/___)</label><input type="text" className="form-control" value={formData.vision_right} onChange={e=>setFormData({...formData, vision_right:e.target.value})} /></div>
-                    <div className="col-md-6 form-group mt-2"><label>Vision Left (20/___)</label><input type="text" className="form-control" value={formData.vision_left} onChange={e=>setFormData({...formData, vision_left:e.target.value})} /></div>
-                    <div className="col-md-12 form-group mt-2">
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={formData.wear_glasses} onChange={e=>setFormData({...formData, wear_glasses:e.target.checked})} />
-                        Wear Glasses
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Evaluations */}
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Evaluation (NORMAL = N, ABNORMAL = AB)</h4>
-                  <div className="row">
-                    <EvalSelect label="1. Head, Neck, Face & Scalp" field="eval_head" />
-                    <EvalSelect label="2. Nose and Sinuses" field="eval_nose" />
-                    <EvalSelect label="3. Mouth and Throat" field="eval_mouth" />
-                    <EvalSelect label="4. Ears" field="eval_ears" />
-                    <EvalSelect label="5. Eyes, Pupils & Motion" field="eval_eyes" />
-                    <EvalSelect label="6. Lungs, Chest & Breasts" field="eval_lungs" />
-                    <EvalSelect label="7. Heart" field="eval_heart" />
-                    <EvalSelect label="8. Vascular System" field="eval_vascular" />
-                    <EvalSelect label="9. Abdomen and Viscera" field="eval_abdomen" />
-                    <EvalSelect label="10. Spine, Muscular Skeletal" field="eval_spine" />
-                    <EvalSelect label="11. Skin and Lymphatic" field="eval_skin" />
-                    <EvalSelect label="12. Neurologic" field="eval_neurologic" />
-                  </div>
-                  
-                  <div className="form-group mt-3">
-                    <label>13. Additional Comment, Past medical history, current medications:</label>
-                    <textarea className="form-control" rows={3} value={formData.additional_comments} onChange={e=>setFormData({...formData, additional_comments:e.target.value})}></textarea>
-                  </div>
-                </div>
-
-                {/* Conclusion */}
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Conclusion & Signature</h4>
-                  
-                  <div className="form-group mb-3">
-                    <label>14. Overall Physical Condition</label>
-                    <select className="form-control" value={formData.overall_condition} onChange={e=>setFormData({...formData, overall_condition:e.target.value})}>
-                      <option value="Fit">Fit</option>
-                      <option value="Unfit">Unfit</option>
-                    </select>
-                  </div>
-
-                  <div className="row">
-                    <div className="col-md-4 form-group">
-                      <label>Examining Clinician Name</label>
-                      <input type="text" className="form-control" required value={formData.clinician_name} onChange={e=>setFormData({...formData, clinician_name:e.target.value})} placeholder="e.g. Dr. John Doe" />
-                    </div>
-                    <div className="col-md-4 form-group">
-                      <label>Specialty *</label>
-                      <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-                        {['MD', 'PA', 'NP'].map(spec => (
-                          <label key={spec} style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                            <input type="radio" name="clinician_specialty" value={spec} checked={formData.clinician_specialty === spec} onChange={e => setFormData({...formData, clinician_specialty: e.target.value})} />
-                            {spec}
-                          </label>
-                        ))}
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Hearing & Vision</h4>
+                    <div className="cert-form-grid cert-form-grid-2">
+                      <FormGroup label="Hearing Right" htmlFor="hearing_right">
+                        <input
+                          id="hearing_right"
+                          type="text"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('hearing_right')}
+                        />
+                      </FormGroup>
+                      <FormGroup label="Hearing Left" htmlFor="hearing_left">
+                        <input
+                          id="hearing_left"
+                          type="text"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('hearing_left')}
+                        />
+                      </FormGroup>
+                      <FormGroup label="Vision Right (20/___)" htmlFor="vision_right">
+                        <input
+                          id="vision_right"
+                          type="text"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('vision_right')}
+                        />
+                      </FormGroup>
+                      <FormGroup label="Vision Left (20/___)" htmlFor="vision_left">
+                        <input
+                          id="vision_left"
+                          type="text"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('vision_left')}
+                        />
+                      </FormGroup>
+                      <div className="cert-form-span-full">
+                        <label className="cert-form-check">
+                          <input type="checkbox" {...register('wear_glasses')} />
+                          <span>Wear Glasses</span>
+                        </label>
                       </div>
                     </div>
-                    <div className="col-md-4 form-group">
-                      <label>Date of Examination</label>
-                      <input type="date" className="form-control" required value={formData.date_of_examination} onChange={e=>setFormData({...formData, date_of_examination:e.target.value})} />
+                  </div>
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Evaluation (NORMAL = N, ABNORMAL = AB)</h4>
+                    <div className="cert-eval-list">
+                      {EVAL_FIELDS.map(item => (
+                        <EvalSelect key={item.field} label={item.label} field={item.field} register={register} />
+                      ))}
                     </div>
-                    <div className="col-md-12 form-group mt-2">
-                      <label>Address</label>
-                      <input type="text" className="form-control" value={formData.clinician_address} onChange={e=>setFormData({...formData, clinician_address:e.target.value})} />
+                    <FormGroup
+                      label="13. Additional Comment, Past medical history, current medications"
+                      htmlFor="additional_comments"
+                    >
+                      <textarea
+                        id="additional_comments"
+                        className="form-control"
+                        rows={3}
+                        style={{ ...fieldStyle(false), resize: 'vertical' }}
+                        {...register('additional_comments')}
+                      />
+                    </FormGroup>
+                  </div>
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Conclusion & Signature</h4>
+                    <div className="cert-form-grid cert-form-grid-3">
+                      <FormGroup label="14. Overall Physical Condition" htmlFor="overall_condition">
+                        <select
+                          id="overall_condition"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('overall_condition')}
+                        >
+                          <option value="Fit">Fit</option>
+                          <option value="Unfit">Unfit</option>
+                        </select>
+                      </FormGroup>
+                      <FormGroup
+                        label="Examining Clinician Name"
+                        htmlFor="clinician_name"
+                        required
+                        error={errors.clinician_name?.message}
+                      >
+                        <input
+                          id="clinician_name"
+                          type="text"
+                          className="form-control"
+                          data-field="clinician_name"
+                          placeholder="e.g. Dr. John Doe"
+                          aria-invalid={!!errors.clinician_name}
+                          style={fieldStyle(!!errors.clinician_name)}
+                          {...register('clinician_name')}
+                        />
+                      </FormGroup>
+                      <div className="form-group">
+                        <label>
+                          Specialty<span className="required-star">*</span>
+                        </label>
+                        <div className="cert-radio-group" data-field="clinician_specialty">
+                          {(['MD', 'PA', 'NP'] as const).map(spec => (
+                            <label key={spec}>
+                              <input type="radio" value={spec} {...register('clinician_specialty')} />
+                              {spec}
+                            </label>
+                          ))}
+                        </div>
+                        <FieldError message={errors.clinician_specialty?.message} />
+                      </div>
+                      <FormGroup
+                        label="Date of Examination"
+                        htmlFor="date_of_examination"
+                        required
+                        error={errors.date_of_examination?.message}
+                      >
+                        <input
+                          id="date_of_examination"
+                          type="date"
+                          className="form-control"
+                          data-field="date_of_examination"
+                          aria-invalid={!!errors.date_of_examination}
+                          style={fieldStyle(!!errors.date_of_examination)}
+                          {...register('date_of_examination')}
+                        />
+                      </FormGroup>
+                      <div className="cert-form-span-full">
+                        <FormGroup label="Address" htmlFor="clinician_address">
+                          <input
+                            id="clinician_address"
+                            type="text"
+                            className="form-control"
+                            style={fieldStyle(false)}
+                            {...register('clinician_address')}
+                          />
+                        </FormGroup>
+                      </div>
                     </div>
                   </div>
                 </div>
-
-              </form>
-            </div>
-            
-            <div style={{ padding: '16px 24px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
-              <button type="submit" form="peForm" className="btn btn-primary" disabled={!formData.patient_id}>Save Certificate</button>
-            </div>
+              </div>
+              <div className="cert-form-footer-actions">
+                <button type="submit" className="btn btn-primary" disabled={saving || !patientId}>
+                  {saving ? 'Saving...' : 'Save Certificate'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={resetFormData} disabled={saving}>
+                  Reset Data
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={closeForm} disabled={saving}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         ) : (
-          <div className="card">
-            <div className="card-body" style={{ padding: 0 }}>
-              {loading ? (
-                <div style={{ padding: '24px', textAlign: 'center' }}>Loading...</div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>PATIENT</th>
-                        <th>EXAM DATE</th>
-                        <th>CLINICIAN</th>
-                        <th>CONDITION</th>
-                        <th>ACTIONS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {certificates.length === 0 ? (
-                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: '24px' }}>No certificates found</td></tr>
-                      ) : (
-                        certificates.map(cert => (
-                          <tr key={cert.id}>
-                            <td>#{cert.id}</td>
-                            <td>
-                              <strong>{cert.name}</strong>
-                              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>ID: {cert.patient_id}</div>
-                            </td>
-                            <td>{cert.date_of_examination ? formatDate(cert.date_of_examination) : 'N/A'}</td>
-                            <td>{cert.clinician_name}</td>
-                            <td>
-                              <span className={`badge ${cert.overall_condition === 'Fit' ? 'badge-success' : 'badge-danger'}`}>
-                                {cert.overall_condition}
-                              </span>
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: '8px' }}>
-                                <button 
-                                  className="btn btn-sm btn-ghost" 
-                                  style={{ padding: '4px 8px' }}
-                                  disabled={emailingId === cert.id}
-                                  onClick={async () => {
-                                    if (!window.confirm('Send Physical Examination Certificate to patient via email?')) return;
-                                    setEmailingId(cert.id);
-                                    try {
-                                      const res = await fetch(`${API}/api/PhysicalExaminationCertificates/emailPhysicalExaminationCertificate`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json', token: getToken() },
-                                        body: JSON.stringify({ id: cert.id })
-                                      });
-                                      const data = await res.json();
-                                      if (data.response_code === '200') {
-                                        alert('Certificate emailed successfully!');
-                                      } else {
-                                        alert(data.obj || 'Failed to email certificate');
-                                      }
-                                    } catch(e) {
-                                      alert('Error sending email');
-                                    } finally {
-                                      setEmailingId(null);
-                                    }
-                                  }}
-                                >
-                                  {emailingId === cert.id ? '⏳' : '✉️ Email'}
-                                </button>
-                                <Link href={`/admin/dashboard/physical-examinations/print/${cert.id}`} target="_blank" className="btn btn-sm btn-ghost" style={{ padding: '4px 8px' }}>
-                                  🖨️ Print
-                                </Link>
-                                <button className="btn btn-sm" style={{ padding: '4px 8px', color: '#dc2626', background: 'transparent', border: '1px solid #dc2626' }} onClick={() => deleteCert(cert.id)}>
-                                  🗑️
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
+          <ListingTable
+            title="Physical Examinations"
+            columns={columns}
+            rows={certificates}
+            loading={loading}
+            emptyText="No certificates found."
+            actionsLabel="Actions"
+            actionsWidth={140}
+            defaultPageSize={25}
+            headerActions={
+              <ListingHeaderActions onAdd={openForm} addLabel="Issue New Certificate" />
+            }
+            rowActions={cert => (
+              <ActionIcons
+                onMail={() => void emailCert(cert)}
+                mailTitle={`Email certificate #${cert.id}`}
+                onView={() =>
+                  window.open(
+                    `/admin/dashboard/physical-examinations/print/${cert.id}`,
+                    '_blank',
+                    'noopener,noreferrer',
+                  )
+                }
+                viewTitle="Print"
+                onDelete={() => void handleDelete(cert)}
+                deleteTitle="Delete"
+              />
+            )}
+          />
         )}
       </div>
     </div>

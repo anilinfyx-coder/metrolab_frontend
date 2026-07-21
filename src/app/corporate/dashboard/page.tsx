@@ -14,6 +14,7 @@ import {
 } from 'react-icons/md';
 import Link from 'next/link';
 import TopNav from '../../components/TopNav';
+import PageLoader from '../../components/PageLoader';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
@@ -39,7 +40,7 @@ export default function CorporateDashboard() {
 
         if (currentUser?.id) {
           const [empList, trList] = await Promise.all([
-            apiFetch<unknown[]>(`/api/Employees?corporate_client_id=${currentUser.id}`, {
+            apiFetch<unknown[]>(`/api/Employees?corporate_client_id=${currentUser.id}&status=true`, {
               tokenKey: 'corporate_token',
             }).catch(() => []),
             apiFetch<unknown[]>(`/api/TestRequest?corporate_client_id=${currentUser.id}`, {
@@ -66,11 +67,13 @@ export default function CorporateDashboard() {
     <>
       <TopNav title="Dashboard" />
 
-      <div className="page-content" style={{ backgroundColor: '#f0f4f8', minHeight: 'calc(100vh - 70px)', padding: '24px' }}>
+      <div className="page-content" style={{ backgroundColor: '#f0f4f8', minHeight: 'calc(100vh - 70px)' }}>
         {loading ? (
-          <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading your dashboard...</div>
+          <div className="page-body">
+            <PageLoader message="Loading your dashboard..." size="lg" />
+          </div>
         ) : (
-          <div style={{ maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+          <div className="page-body">
             
             <div style={{ marginBottom: '24px' }}>
               <h2 style={{ fontSize: '1.8rem', color: '#0f172a', margin: '0 0 8px 0' }}>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import TopNav from '../../../../components/TopNav';
+import PageLoader from '../../../../components/PageLoader';
 import { handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../../lib/api';
 
 type LabTestFlags = Record<string, boolean | string | number | null | undefined> & {
@@ -240,7 +241,7 @@ export default function EditTestReportPage() {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
         <TopNav title="Manage Test Reports" />
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
           <p>Invalid report.</p>
           <button type="button" className="btn btn-primary" onClick={goBack}>Back</button>
         </div>
@@ -256,9 +257,11 @@ export default function EditTestReportPage() {
 
       <div className="report-edit-page">
         {loading || !form || !labTest ? (
-          <div className="report-edit-loading">
-            {loadError || 'Loading report...'}
-          </div>
+          loadError ? (
+            <div className="report-edit-loading">{loadError}</div>
+          ) : (
+            <PageLoader message="Loading report..." size="lg" />
+          )
         ) : (
           <div className="card report-edit-card">
             <div className="report-edit-header">
