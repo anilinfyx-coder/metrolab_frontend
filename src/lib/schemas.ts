@@ -346,6 +346,9 @@ export function b2bClientFormSchema(isEditing = false) {
       ? yup.string().trim().required('Password is required.')
       : appPasswordSchema,
     address: requiredTrimmed('the address'),
+    country_id: yup.string().required('Please select a country.'),
+    state_id: yup.string().required('Please select a state.'),
+    city_id: yup.string().required('Please select a city.'),
     pincode: requiredTrimmed('the pincode'),
     public_email: emailSchema,
     public_phone_no: requiredTrimmed('the public phone number'),

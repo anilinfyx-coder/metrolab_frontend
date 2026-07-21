@@ -82,7 +82,7 @@ export default function UnifiedLoginPage() {
 
         <div className={styles.formWrap}>
           <p className={styles.heading}>
-            Login to your Super Admin Account
+            Login to your Account
           </p>
 
           <form onSubmit={handleSubmit(values => loginMutation.mutate(values), handleInvalid)} autoComplete="on" noValidate>

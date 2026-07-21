@@ -20,7 +20,7 @@ import {
 } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
-import { FormGroup } from '../../../components/FormField';
+import { FormGroup, FieldError } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
@@ -42,6 +42,9 @@ interface B2BClient {
   id: number; company_name: string; contact_person_name: string;
   mobile: string; email: string; address: string; status: boolean;
   public_email: string; public_phone_no: string; pincode: string;
+  country_id?: number | string | null;
+  state_id?: number | string | null;
+  city_id?: number | string | null;
   support_email: string; support_mobile: string; support_person_name: string;
   website: string; medical_officer_name: string; mrocc: string; clia_number: string;
   smtp_server: string; smtp_port: string; smtp_email: string; smtp_password: string;
@@ -52,6 +55,7 @@ interface B2BClient {
   is_approval?: boolean;
   wallet_balance?: number;
 }
+interface GeoItem { id: number; name: string; country_id?: number; state_id?: number; }
 interface Subscription { id: number; start_date: string; end_date: string; amount: number; b2b_client_id: number; }
 interface LabTest { id: number; name: string; description: string; b2b_client_lab_test_access_id?: number; is_selected?: boolean; }
 interface B2BDocument { id: number; type_data_id: number; typeData: string; file_name: string; }
@@ -66,6 +70,7 @@ interface WalletTransaction {
 
 const emptyClient = {
   company_name: '', contact_person_name: '', mobile: '', email: '', address: '',
+  country_id: '', state_id: '', city_id: '',
   public_email: '', public_phone_no: '', public_fax: '', pincode: '',
   support_email: '', support_mobile: '', support_person_name: '',
   website: '', medical_officer_name: '', medical_officer_position: '', mrocc: '', clia_number: '',
@@ -114,6 +119,8 @@ export default function B2BClientsPage() {
     handleSubmit: handleClientSubmit,
     reset: resetClient,
     getValues: getClientValues,
+    watch: watchClient,
+    setValue: setClientValue,
     formState: { errors: clientErrors },
   } = useForm<B2bClientFormValues>({
     resolver: formResolver<B2bClientFormValues>(clientSchema),
@@ -173,6 +180,12 @@ export default function B2BClientsPage() {
   const [isFixedPrice, setIsFixedPrice] = useState(false);
   const [fixedPriceAmount, setFixedPriceAmount] = useState('');
   const [walletBalanceOverride, setWalletBalanceOverride] = useState<number | null>(null);
+  const [countries, setCountries] = useState<GeoItem[]>([]);
+  const [states, setStates] = useState<GeoItem[]>([]);
+  const [cities, setCities] = useState<GeoItem[]>([]);
+
+  const countryId = watchClient('country_id');
+  const stateId = watchClient('state_id');
 
   const invalidateClients = () => queryClient.invalidateQueries({ queryKey: B2B_CLIENTS_KEY });
 
@@ -186,6 +199,50 @@ export default function B2BClientsPage() {
       }
     },
   });
+
+  useEffect(() => {
+    apiFetch<GeoItem[]>('/api/Country?status=true', {
+      tokenKey: 'superadmin_token',
+      silent: true,
+    })
+      .then(data => setCountries(data || []))
+      .catch(() => setCountries([]));
+  }, []);
+
+  useEffect(() => {
+    if (!countryId) {
+      setStates([]);
+      return;
+    }
+    apiFetch<GeoItem[]>(`/api/State?country_id=${countryId}&status=true`, {
+      tokenKey: 'superadmin_token',
+      silent: true,
+    })
+      .then(data => setStates(data || []))
+      .catch(() => setStates([]));
+  }, [countryId]);
+
+  useEffect(() => {
+    if (!stateId) {
+      setCities([]);
+      return;
+    }
+    apiFetch<GeoItem[]>(`/api/City?state_id=${stateId}&status=true`, {
+      tokenKey: 'superadmin_token',
+      silent: true,
+    })
+      .then(data => setCities(data || []))
+      .catch(() => setCities([]));
+  }, [stateId]);
+
+  const filteredStates = useMemo(
+    () => states.filter(s => !countryId || Number(s.country_id) === Number(countryId)),
+    [states, countryId],
+  );
+  const filteredCities = useMemo(
+    () => cities.filter(c => !stateId || Number(c.state_id) === Number(stateId)),
+    [cities, stateId],
+  );
 
   const { data: subscriptions = [] } = useQuery({
     queryKey: b2bSubscriptionsKey(selectedClientId ?? 0),
@@ -323,7 +380,7 @@ export default function B2BClientsPage() {
   }, [walletBalanceOverride, clients, selectedClientId, selectedClient, walletHistory]);
 
   // Deep-link: ?view=wallet&clientId=… opens wallet once client list is loaded.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
+   
   useEffect(() => {
     if (clients.length === 0 || initViewHandled || typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
@@ -356,16 +413,29 @@ export default function B2BClientsPage() {
     }: SaveClientPayload) => {
       const method = editId ? 'PUT' : 'POST';
       const path = `/api/B2bClients${editId ? `/${editId}` : ''}`;
+      const payload = {
+        ...values,
+        country_id: values.country_id ? Number(values.country_id) : null,
+        state_id: values.state_id ? Number(values.state_id) : null,
+        city_id: values.city_id ? Number(values.city_id) : null,
+        role_id: 2,
+        status: true,
+        deleted: false,
+        is_approval: approval,
+        is_fixed_price: fixedPrice,
+      };
       const hasFiles = logo || header || footer || sig;
       if (hasFiles) {
         const fd = new FormData();
-        Object.entries({
-          ...values,
-          role_id: '2',
-          status: 'true',
-          is_approval: String(approval),
-          is_fixed_price: String(fixedPrice),
-        }).forEach(([k, v]) => fd.append(k, v as string));
+        Object.entries(payload).forEach(([k, v]) => {
+          if (v === null || v === undefined) {
+            if (['country_id', 'state_id', 'city_id'].includes(k)) {
+              fd.append(k, '');
+            }
+            return;
+          }
+          fd.append(k, String(v));
+        });
         if (logo) fd.append('logo_file', logo);
         if (header) fd.append('report_header_file', header);
         if (footer) fd.append('report_footer_file', footer);
@@ -381,14 +451,7 @@ export default function B2BClientsPage() {
       return apiFetch(path, {
         method,
         tokenKey: 'superadmin_token',
-        body: JSON.stringify({
-          ...values,
-          role_id: 2,
-          status: true,
-          deleted: false,
-          is_approval: approval,
-          is_fixed_price: fixedPrice,
-        }),
+        body: JSON.stringify(payload),
         successMessage: `B2B Lab ${editId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save B2B Lab.',
       });
@@ -548,7 +611,13 @@ export default function B2BClientsPage() {
 
   const openEdit = (c: B2BClient) => {
     setEditingId(c.id);
-    resetClient({ ...emptyClient, ...c as unknown as Record<string, string> });
+    resetClient({
+      ...emptyClient,
+      ...(c as unknown as Record<string, string>),
+      country_id: c.country_id != null ? String(c.country_id) : '',
+      state_id: c.state_id != null ? String(c.state_id) : '',
+      city_id: c.city_id != null ? String(c.city_id) : '',
+    });
     setIsApproval(!!c.is_approval);
     setIsFixedPrice(!!c.is_fixed_price);
     setView('form');
@@ -842,12 +911,28 @@ export default function B2BClientsPage() {
   if (view === 'form') {
     return (
       <div className="page-content">
-        <TopNav title="B2B Lab Details">
-          <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-        </TopNav>
+        <TopNav title="B2B Lab Details" />
         <div className="page-body">
           <div className="card">
-            <div className="card-header"><span className="card-title">{editingId ? <><MdEdit size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Edit B2B Lab</> : <><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add B2B Lab</>}</span></div>
+            <div className="card-header">
+              <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                {editingId ? (
+                  <>
+                    <MdEdit size={16} aria-hidden />
+                    Edit B2B Lab
+                  </>
+                ) : (
+                  <>
+                    <MdAdd size={16} aria-hidden />
+                    Add B2B Lab
+                  </>
+                )}
+              </span>
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />
+                Close
+              </button>
+            </div>
             <form onSubmit={saveClient} noValidate>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
@@ -857,6 +942,55 @@ export default function B2BClientsPage() {
                 {inp('email', 'Login Email', 'email', true)}
                 {inp('password', 'Login Password', 'password', true, true)}
                 {inp('address', 'Address', 'text', true)}
+                <FormGroup label="Country" htmlFor="b2b-country" required error={clientErrors.country_id?.message}>
+                  <select
+                    id="b2b-country"
+                    data-field="country_id"
+                    aria-invalid={!!clientErrors.country_id}
+                    style={fieldStyle(!!clientErrors.country_id)}
+                    {...registerClient('country_id', {
+                      onChange: e => {
+                        setClientValue('country_id', e.target.value);
+                        setClientValue('state_id', '');
+                        setClientValue('city_id', '');
+                      },
+                    })}
+                  >
+                    <option value="">-- Select Country --</option>
+                    {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </FormGroup>
+                <FormGroup label="State" htmlFor="b2b-state" required error={clientErrors.state_id?.message}>
+                  <select
+                    id="b2b-state"
+                    data-field="state_id"
+                    disabled={!countryId}
+                    aria-invalid={!!clientErrors.state_id}
+                    style={fieldStyle(!!clientErrors.state_id)}
+                    {...registerClient('state_id', {
+                      onChange: e => {
+                        setClientValue('state_id', e.target.value);
+                        setClientValue('city_id', '');
+                      },
+                    })}
+                  >
+                    <option value="">-- Select State --</option>
+                    {filteredStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </FormGroup>
+                <FormGroup label="City" htmlFor="b2b-city" required error={clientErrors.city_id?.message}>
+                  <select
+                    id="b2b-city"
+                    data-field="city_id"
+                    disabled={!stateId}
+                    aria-invalid={!!clientErrors.city_id}
+                    style={fieldStyle(!!clientErrors.city_id)}
+                    {...registerClient('city_id')}
+                  >
+                    <option value="">-- Select City --</option>
+                    {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </FormGroup>
                 {inp('pincode', 'Pincode', 'text', true)}
                 {inp('public_email', 'Public Email', 'email', true)}
                 {inp('public_phone_no', 'Public Phone Number', 'text', true)}
@@ -936,20 +1070,23 @@ export default function B2BClientsPage() {
   if (view === 'subscription') {
     return (
       <div className="page-content">
-        <TopNav title={`Pricing & Subscription — ${selectedClient?.company_name || ''}`}>
-          <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-        </TopNav>
+        <TopNav title={`Pricing & Subscription — ${selectedClient?.company_name || ''}`} />
         <div style={{ padding: '1.5rem' }}>
           {/* Mode Toggle */}
-          <div style={{ display: 'flex', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
-              <input type="radio" checked={pricingMode === 'subscription'} onChange={() => setPricingMode('subscription')} style={{ width: 18, height: 18, accentColor: '#6366f1' }} />
-              Subscription (Time-Based)
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
-              <input type="radio" checked={pricingMode === 'custom'} onChange={() => setPricingMode('custom')} style={{ width: 18, height: 18, accentColor: '#6366f1' }} />
-              Custom Pricing (Wallet Deduction)
-            </label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1.5rem', marginBottom: '1.5rem', padding: '1rem', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+                <input type="radio" checked={pricingMode === 'subscription'} onChange={() => setPricingMode('subscription')} style={{ width: 18, height: 18, accentColor: '#6366f1' }} />
+                Subscription (Time-Based)
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontWeight: 600 }}>
+                <input type="radio" checked={pricingMode === 'custom'} onChange={() => setPricingMode('custom')} style={{ width: 18, height: 18, accentColor: '#6366f1' }} />
+                Custom Pricing (Wallet Deduction)
+              </label>
+            </div>
+            <button type="button" className="btn btn-ghost" onClick={() => { setView('list'); }}>
+              <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+            </button>
           </div>
 
           {pricingMode === 'subscription' && (
@@ -1127,6 +1264,9 @@ export default function B2BClientsPage() {
             <div className="card">
               <div className="card-header">
                 <span className="card-title">{docFormMeta.id ? 'Edit Document Detail' : 'Document Detail'}</span>
+                <button type="button" className="btn btn-ghost" onClick={() => { setView('list'); }}>
+                  <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+                </button>
               </div>
               <form onSubmit={saveDoc} noValidate>
               <div className="card-body">
@@ -1219,13 +1359,15 @@ export default function B2BClientsPage() {
   if (view === 'labtestaccess') {
     return (
       <div className="page-content">
-        <TopNav title={`Lab Test Access — ${selectedClient?.company_name || ''}`}>
-          <button className="btn btn-primary" onClick={saveLabTestAccess}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
-            <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-        </TopNav>
+        <TopNav title={`Lab Test Access — ${selectedClient?.company_name || ''}`} />
         <div className="page-body">
           <div className="card">
-            <div className="card-header"><span className="card-title">List of Lab Test Access for &quot;{selectedClient?.company_name}&quot;</span></div>
+            <div className="card-header">
+              <span className="card-title">List of Lab Test Access for &quot;{selectedClient?.company_name}&quot;</span>
+              <button type="button" className="btn btn-ghost" onClick={() => { setView('list'); }}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+              </button>
+            </div>
             <div className="card-body" style={{ padding: 0 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
@@ -1274,9 +1416,7 @@ export default function B2BClientsPage() {
   if (view === 'wallet') {
     return (
       <div className="page-content">
-        <TopNav title={`Wallet — ${selectedClient?.company_name}`}>
-          <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-        </TopNav>
+        <TopNav title={`Wallet — ${selectedClient?.company_name}`} />
         <div className="page-body">
 
           {/* Balance Banner */}
@@ -1287,26 +1427,66 @@ export default function B2BClientsPage() {
                 <div style={{ fontSize: '2.5rem', fontWeight: 700, color: '#fff' }}>${parseFloat(String(walletBalance || 0)).toFixed(2)}</div>
                 <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)' }}>{selectedClient?.company_name}</div>
               </div>
-              <div style={{ fontSize: '3rem', opacity: 0.3 }}><MdAccountBalanceWallet size={48} aria-hidden /></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <button
+                  type="button"
+                  className="btn wallet-banner-close"
+                  onClick={() => { setView('list'); }}
+                >
+                  <MdClose size={16} aria-hidden />Close
+                </button>
+                <div style={{ fontSize: '3rem', opacity: 0.3 }}><MdAccountBalanceWallet size={48} aria-hidden /></div>
+              </div>
             </div>
           </div>
 
           {/* Recharge Form */}
           <div className="card" style={{ marginBottom: '1.5rem' }}>
-            <div className="card-header"><span className="card-title"><MdAdd size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Funds</span></div>
+            <div className="card-header"><span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><MdAdd size={18} aria-hidden />Add Funds</span></div>
             <form onSubmit={rechargeWallet} noValidate>
             <div className="card-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: '1rem', alignItems: 'flex-end' }}>
-                <FormGroup label="Amount ($)" htmlFor="wallet-amount" required error={walletErrors.amount?.message}>
-                  <input id="wallet-amount" type="number" min="0" step="0.01" data-field="amount" placeholder="e.g. 500.00" aria-invalid={!!walletErrors.amount} style={fieldStyle(!!walletErrors.amount)} {...registerWallet('amount')} />
-                </FormGroup>
-                <FormGroup label="Description / Note" htmlFor="wallet-desc" error={walletErrors.description?.message}>
-                  <input id="wallet-desc" type="text" data-field="description" placeholder="e.g. Payment received via bank transfer" style={fieldStyle(!!walletErrors.description)} {...registerWallet('description')} />
-                </FormGroup>
-                <button type="submit" className="btn btn-primary" disabled={rechargeWalletMutation.isPending}
-                  style={{ whiteSpace: 'nowrap' }}>
-                  {rechargeWalletMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</> : <><MdPayment size={16} aria-hidden /> Add Funds</>}
-                </button>
+              <div className="wallet-funds-row">
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="wallet-amount">
+                    Amount ($)<span className="required-star">*</span>
+                  </label>
+                  <input
+                    id="wallet-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    data-field="amount"
+                    placeholder="e.g. 500.00"
+                    aria-invalid={!!walletErrors.amount}
+                    style={fieldStyle(!!walletErrors.amount)}
+                    {...registerWallet('amount')}
+                  />
+                  <FieldError message={walletErrors.amount?.message} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="wallet-desc">Description / Note</label>
+                  <input
+                    id="wallet-desc"
+                    type="text"
+                    data-field="description"
+                    placeholder="e.g. Payment received via bank transfer"
+                    style={fieldStyle(!!walletErrors.description)}
+                    {...registerWallet('description')}
+                  />
+                  <FieldError message={walletErrors.description?.message} />
+                </div>
+                <div className="form-group wallet-funds-action" style={{ marginBottom: 0 }}>
+                  <label className="wallet-funds-action-label" aria-hidden="true">&nbsp;</label>
+                  <button
+                    type="submit"
+                    className="btn btn-primary wallet-funds-submit"
+                    disabled={rechargeWalletMutation.isPending}
+                  >
+                    {rechargeWalletMutation.isPending
+                      ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</>
+                      : <><MdPayment size={16} aria-hidden /> Add Funds</>}
+                  </button>
+                </div>
               </div>
             </div>
             </form>
@@ -1314,7 +1494,12 @@ export default function B2BClientsPage() {
 
           {/* Transaction History */}
           <div className="card">
-            <div className="card-header"><span className="card-title"><MdAssignment size={18} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Transaction History</span></div>
+            <div className="card-header">
+              <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                <MdAssignment size={18} aria-hidden />
+                Transaction History
+              </span>
+            </div>
             <div className="card-body" style={{ padding: 0 }}>
               {walletHistory.length === 0 ? (
                 <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No transactions yet.</div>

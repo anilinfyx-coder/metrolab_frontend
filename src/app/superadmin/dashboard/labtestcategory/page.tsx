@@ -559,11 +559,7 @@ export default function LabTestCategoryPage() {
   if (view === 'form') {
     return (
       <div className="page-content">
-        <TopNav title={isReadOnly ? 'Manage Lab Test Category' : 'Lab Test Type Detail'}>
-          {!isReadOnly && (
-            <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-          )}
-        </TopNav>
+        <TopNav title={isReadOnly ? 'Manage Lab Test Category' : 'Lab Test Type Detail'} />
         <div className="page-body">
           <div className="card">
             <div
@@ -575,14 +571,12 @@ export default function LabTestCategoryPage() {
                 gap: '1rem',
               }}
             >
-              <span className="card-title">
-                {isReadOnly ? String(form.name || 'Lab Test Type') : editingId ? <><MdEdit size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Edit Lab Test Type</> : <><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Lab Test Type</>}
+              <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                {isReadOnly ? String(form.name || 'Lab Test Type') : editingId ? <><MdEdit size={16} aria-hidden />Edit Lab Test Type</> : <><MdAdd size={16} aria-hidden />Add Lab Test Type</>}
               </span>
-              {isReadOnly && (
-                <button type="button" className="listing-header-link" onClick={() => setView('list')}>
-                  Close
-                </button>
-              )}
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+              </button>
             </div>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
@@ -686,6 +680,9 @@ export default function LabTestCategoryPage() {
               <span className="card-title">
                 {editingSpecimenId ? 'Edit Link Specimen Type Detail' : 'Link Specimen Type Detail'}
               </span>
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+              </button>
             </div>
             <div className="card-body">
               <div className="form-group">
@@ -786,7 +783,12 @@ export default function LabTestCategoryPage() {
         <TopNav title="Manage Lab Test Category" />
         <div className="labtest-question-split page-body">
           <div className="card">
-            <div className="card-header"><span className="card-title">Test Report Question Detail</span></div>
+            <div className="card-header">
+              <span className="card-title">Test Report Question Detail</span>
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+              </button>
+            </div>
             <div className="card-body">
               <div className="form-group"><label>Question <span style={{ color: '#ef4444' }}>*</span></label>
                 <textarea rows={3} placeholder="Enter Question" value={questionForm.question_text}
@@ -891,12 +893,15 @@ export default function LabTestCategoryPage() {
 
     return (
       <div className="page-content">
-        <TopNav title={`Lab Test Type Params — ${selectedTest?.name || ''}`}>
-          <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-        </TopNav>
+        <TopNav title={`Lab Test Type Params — ${selectedTest?.name || ''}`} />
         <div className="page-body page-split-400">
           <div className="card">
-            <div className="card-header"><span className="card-title">Lab Test Type Params</span></div>
+            <div className="card-header">
+              <span className="card-title">Lab Test Type Params</span>
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+              </button>
+            </div>
             <div className="card-body">
               <div className="form-group">
                 <label>Name <span style={{ color: '#ef4444' }}>*</span></label>

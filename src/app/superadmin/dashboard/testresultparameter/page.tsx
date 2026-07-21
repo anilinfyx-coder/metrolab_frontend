@@ -182,12 +182,15 @@ export default function TestResultParameterPage() {
   if (view === 'form') {
     return (
       <div className="page-content">
-        <TopNav title={editingId ? 'Edit Test Result Parameter' : 'Add Test Result Parameter'}>
-          <button type="button" className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
-        </TopNav>
+        <TopNav title={editingId ? 'Edit Test Result Parameter' : 'Add Test Result Parameter'} />
         <div className="page-body">
           <div className="card">
-            <div className="card-header"><span className="card-title">Test Result Parameter Detail</span></div>
+            <div className="card-header">
+              <span className="card-title">Test Result Parameter Detail</span>
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+              </button>
+            </div>
             <form onSubmit={save} noValidate>
               <div className="card-body">
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '0 1.5rem' }}>
