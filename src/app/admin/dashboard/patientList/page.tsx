@@ -139,7 +139,7 @@ export default function PatientListPage() {
 
     const confirmed = await confirmDialog({
       title: 'Send report by email?',
-      message: `Email the password-protected ${entry.lab_test_name} report to ${selected.email}? The patient will need their birthdate 4 digits (MMDD) to open it.`,
+      message: `Email the ${entry.lab_test_name} report to ${selected.email}?`,
       cancelText: 'Cancel',
       confirmText: 'Send Email',
     });

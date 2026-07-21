@@ -203,8 +203,8 @@ export default function HealthCertificatesPage() {
     const ok = await confirmDialog({
       title: 'Send certificate by email?',
       message: email
-        ? `Email the password-protected Adult Health Certificate to ${email}? The patient will need their birthdate digits (MMDD) to open the PDF.`
-        : 'Send Adult Health Certificate to the patient via email? The patient will need their birthdate digits (MMDD) to open the PDF.',
+        ? `Email the Adult Health Certificate to ${email}?`
+        : 'Send Adult Health Certificate to the patient via email?',
       cancelText: 'Cancel',
       confirmText: 'Send Email',
     });

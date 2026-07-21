@@ -155,7 +155,7 @@ export default function TestsReportsPage() {
 
     const ok = await confirmDialog({
       title: 'Send report by email?',
-      message: `Email the password-protected PDF report to ${email}? The patient will need their birthdate 4 digits (MMDD) to open the PDF.`,
+      message: `Email the PDF report to ${email}?`,
       cancelText: 'Cancel',
       confirmText: 'Send Email',
     });
