@@ -1,6 +1,6 @@
-'use client';
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+﻿'use client';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
+import { useForm } from 'react-hook-form';
 import {
   MdBloodtype,
   MdCoronavirus,
@@ -11,56 +11,46 @@ import {
   MdScience,
 } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
+import { FormGroup } from '../../../components/FormField';
 import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { globalPricingSchema } from '../../../../lib/schemas';
 
 interface LabTest {
   id: number;
   name: string;
 }
 
-export default function GlobalSettingsPage() {
-  const [labTests, setLabTests] = useState<LabTest[]>([]);
-  const [prices, setPrices] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
+type PricingFormValues = Record<string, string>;
+
+function PricingForm({ labTests, initialPrices }: { labTests: LabTest[]; initialPrices: PricingFormValues }) {
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [settingsRes, testsRes] = await Promise.all([
-          fetch(`${API_BASE}/api/GlobalSettings`, { headers: { token: getToken('superadmin_token') } }),
-          fetch(`${API_BASE}/api/LabTests`, { headers: { token: getToken('superadmin_token') } }),
-        ]);
-        const [settings, tests] = await Promise.all([
-          handleApiResponse<Record<string, { value?: string }>>(settingsRes),
-          handleApiResponse<LabTest[]>(testsRes),
-        ]);
-        const testList = tests || [];
-        setLabTests(testList);
-        const newPrices: Record<string, string> = {};
-        testList.forEach((t: LabTest) => {
-          const key = `lab_test_${t.id}_price`;
-          newPrices[key] = settings[key]?.value || '';
-        });
-        setPrices(newPrices);
-    } catch {
-      /* error toasted by handleApiResponse */
-    } finally {
-      setLoading(false);
-    }
-    };
-    void load();
-  }, []);
+  const priceKeys = useMemo(
+    () => labTests.map(t => `lab_test_${t.id}_price`),
+    [labTests],
+  );
+  const schema = useMemo(() => globalPricingSchema(priceKeys), [priceKeys]);
 
-  const save = async () => {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<PricingFormValues>({
+    resolver: formResolver<PricingFormValues>(schema),
+    defaultValues: initialPrices,
+  });
+
+  const save = handleSubmit(async values => {
     const parsed: Record<string, number> = {};
-    for (const [k, v] of Object.entries(prices)) {
-      const p = parseFloat(v);
-      if (isNaN(p) || p < 0) {
-        toast.error('Invalid value for one of the test prices');
-        return;
+    for (const key of priceKeys) {
+      const v = values[key];
+      if (v === '' || v == null) {
+        parsed[key] = 0;
+      } else {
+        parsed[key] = parseFloat(v);
       }
-      parsed[k] = p;
     }
     setSaving(true);
     try {
@@ -76,7 +66,94 @@ export default function GlobalSettingsPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<PricingFormValues>());
+
+  return (
+    <form onSubmit={save} noValidate>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
+        {labTests.map(test => {
+          const key = `lab_test_${test.id}_price`;
+          let icon: ReactNode = <MdScience size={24} aria-hidden />;
+          let color = '#6366f1';
+          const n = (test.name || '').toLowerCase();
+          if (n.includes('drug')) { icon = <MdMedication size={24} aria-hidden />; color = '#ef4444'; }
+          else if (n.includes('alcohol')) { icon = <MdLocalBar size={24} aria-hidden />; color = '#f59e0b'; }
+          else if (n.includes('covid')) { icon = <MdCoronavirus size={24} aria-hidden />; color = '#10b981'; }
+          else if (n.includes('blood')) { icon = <MdBloodtype size={24} aria-hidden />; color = '#e11d48'; }
+
+          const fieldError = errors[key]?.message as string | undefined;
+
+          return (
+            <div key={key} className="card" style={{ border: `1px solid ${color}30`, padding: '1.25rem', margin: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                <div style={{ fontSize: '1.5rem', width: 44, height: 44, borderRadius: 12, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{test.name}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per test deduction</div>
+                </div>
+              </div>
+              <FormGroup label="Price (USD)" htmlFor={`price-${key}`} error={fieldError}>
+                <div style={{ position: 'relative' }}>
+                  <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 600 }}>$</span>
+                  <input
+                    id={`price-${key}`}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    data-field={key}
+                    aria-invalid={!!fieldError}
+                    style={fieldStyle(!!fieldError, { paddingLeft: '1.5rem' })}
+                    {...register(key)}
+                  />
+                </div>
+              </FormGroup>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing</>}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export default function GlobalSettingsPage() {
+  const [labTests, setLabTests] = useState<LabTest[]>([]);
+  const [prices, setPrices] = useState<PricingFormValues>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [settingsRes, testsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/GlobalSettings`, { headers: { token: getToken('superadmin_token') } }),
+          fetch(`${API_BASE}/api/LabTests?status=true`, { headers: { token: getToken('superadmin_token') } }),
+        ]);
+        const [settings, tests] = await Promise.all([
+          handleApiResponse<Record<string, { value?: string }>>(settingsRes),
+          handleApiResponse<LabTest[]>(testsRes),
+        ]);
+        const testList = tests || [];
+        setLabTests(testList);
+        const newPrices: PricingFormValues = {};
+        testList.forEach((t: LabTest) => {
+          const key = `lab_test_${t.id}_price`;
+          newPrices[key] = settings[key]?.value || '';
+        });
+        setPrices(newPrices);
+      } catch {
+        /* error toasted by handleApiResponse */
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
 
   return (
     <div className="page-content">
@@ -92,54 +169,10 @@ export default function GlobalSettingsPage() {
             </p>
 
             {loading ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading current prices...</div>
+              <PageLoader message="Loading current prices..." />
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
-                {labTests.map(test => {
-                  const key = `lab_test_${test.id}_price`;
-                  let icon: React.ReactNode = <MdScience size={24} aria-hidden />;
-                  let color = '#6366f1';
-                  const n = (test.name || '').toLowerCase();
-                  if (n.includes('drug')) { icon = <MdMedication size={24} aria-hidden />; color = '#ef4444'; }
-                  else if (n.includes('alcohol')) { icon = <MdLocalBar size={24} aria-hidden />; color = '#f59e0b'; }
-                  else if (n.includes('covid')) { icon = <MdCoronavirus size={24} aria-hidden />; color = '#10b981'; }
-                  else if (n.includes('blood')) { icon = <MdBloodtype size={24} aria-hidden />; color = '#e11d48'; }
-
-                  return (
-                    <div key={key} className="card" style={{ border: `1px solid ${color}30`, padding: '1.25rem', margin: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                        <div style={{ fontSize: '1.5rem', width: 44, height: 44, borderRadius: 12, background: `${color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{test.name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Per test deduction</div>
-                        </div>
-                      </div>
-                      <div className="form-group" style={{ margin: 0 }}>
-                        <label style={{ fontSize: '0.8rem' }}>Price (USD)</label>
-                        <div style={{ position: 'relative' }}>
-                          <span style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontWeight: 600 }}>$</span>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={prices[key] || ''}
-                            onChange={e => setPrices(p => ({ ...p, [key]: e.target.value }))}
-                            style={{ paddingLeft: '1.5rem' }}
-                            placeholder="0.00"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <PricingForm labTests={labTests} initialPrices={prices} />
             )}
-
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button className="btn btn-primary" onClick={save} disabled={saving || loading}>
-                {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing</>}
-              </button>
-            </div>
           </div>
         </div>
 

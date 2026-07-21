@@ -1,11 +1,23 @@
 'use client';
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
 import { getStoredUser } from '../../../components/portalConfig';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  b2bProfileSettingsSchema,
+  changePasswordFormSchema,
+  PASSWORD_HELPER_TEXT,
+  type B2bProfileSettingsFormValues,
+  type ChangePasswordFormValues,
+} from '../../../../lib/schemas';
 
-const emptyProfile = {
+const emptyProfile: B2bProfileSettingsFormValues = {
   id: 0,
   support_person_name: '',
   support_mobile: '',
@@ -23,15 +35,36 @@ const emptyProfile = {
   contact_person_name: '',
 };
 
-type ProfileForm = typeof emptyProfile;
-
 export default function B2BProfilePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [changingPwd, setChangingPwd] = useState(false);
-  const [form, setForm] = useState<ProfileForm>({ ...emptyProfile });
-  const [pwd, setPwd] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    reset: resetProfile,
+    setValue: setProfileValue,
+    getValues: getProfileValues,
+    watch: watchProfile,
+    formState: { errors: profileErrors },
+  } = useForm<B2bProfileSettingsFormValues>({
+    resolver: formResolver<B2bProfileSettingsFormValues>(b2bProfileSettingsSchema),
+    defaultValues: emptyProfile,
+  });
+
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    reset: resetPassword,
+    formState: { errors: passwordErrors },
+  } = useForm<ChangePasswordFormValues>({
+    resolver: formResolver<ChangePasswordFormValues>(changePasswordFormSchema),
+    defaultValues: { oldPassword: '', newPassword: '', confirmPassword: '' },
+  });
+
+  const primaryColor = watchProfile('primary_color_code');
 
   useEffect(() => {
     const stored = getStoredUser('b2b_user');
@@ -44,7 +77,7 @@ export default function B2BProfilePage() {
       errorFallback: 'Unable to load profile.',
     })
       .then(u => {
-        setForm({
+        resetProfile({
           id: Number(u.id),
           support_person_name: String(u.support_person_name || ''),
           support_mobile: String(u.support_mobile || ''),
@@ -64,35 +97,30 @@ export default function B2BProfilePage() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, resetProfile]);
 
-  const setField = (key: keyof ProfileForm, value: string) => {
-    setForm(p => ({ ...p, [key]: value }));
-  };
-
-  const saveProfile = async (e: FormEvent) => {
-    e.preventDefault();
+  const saveProfile = handleProfileSubmit(async values => {
     setSaving(true);
     const payload = {
-      support_person_name: form.support_person_name.trim(),
-      support_mobile: form.support_mobile.trim(),
-      support_email: form.support_email.trim(),
-      primary_color_code: form.primary_color_code.trim(),
-      public_phone_no: form.public_phone_no.trim(),
-      public_email: form.public_email.trim(),
-      public_fax: form.public_fax.trim(),
-      tagline: form.tagline.trim(),
-      smtp_server: form.smtp_server.trim(),
-      smtp_port: form.smtp_port.trim(),
-      smtp_email: form.smtp_email.trim(),
-      smtp_password: form.smtp_password,
+      support_person_name: (values.support_person_name || '').trim(),
+      support_mobile: (values.support_mobile || '').trim(),
+      support_email: (values.support_email || '').trim(),
+      primary_color_code: (values.primary_color_code || '').trim(),
+      public_phone_no: (values.public_phone_no || '').trim(),
+      public_email: (values.public_email || '').trim(),
+      public_fax: (values.public_fax || '').trim(),
+      tagline: (values.tagline || '').trim(),
+      smtp_server: (values.smtp_server || '').trim(),
+      smtp_port: (values.smtp_port || '').trim(),
+      smtp_email: (values.smtp_email || '').trim(),
+      smtp_password: values.smtp_password,
     };
     try {
-      await apiFetch(`/api/B2bClients/${form.id}`, {
+      await apiFetch(`/api/B2bClients/${values.id}`, {
         method: 'PUT',
         tokenKey: 'b2b_token',
         body: JSON.stringify(payload),
-        successMessage: 'Profile saved successfully.',
+        successMessage: 'Profile updated successfully.',
         errorFallback: 'Failed to save profile.',
       });
       const stored = getStoredUser('b2b_user') || {};
@@ -100,8 +128,8 @@ export default function B2BProfilePage() {
         'b2b_user',
         JSON.stringify({
           ...stored,
-          id: form.id,
-          name: form.company_name || stored.name,
+          id: values.id,
+          name: values.company_name || stored.name,
           email: stored.email,
         })
       );
@@ -110,86 +138,79 @@ export default function B2BProfilePage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<B2bProfileSettingsFormValues>());
 
-  const changePassword = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!pwd.oldPassword || !pwd.newPassword || !pwd.confirmPassword) {
-      toastApiError('All password fields are required.');
-      return;
-    }
-    if (pwd.newPassword.length < 6) {
-      toastApiError('New password must be at least 6 characters.');
-      return;
-    }
-    if (/[^a-zA-Z0-9@#]/.test(pwd.newPassword)) {
-      toastApiError('Only @ # are allowed as special characters.');
-      return;
-    }
-    if (pwd.newPassword !== pwd.confirmPassword) {
-      toastApiError('New password and confirm password do not match.');
-      return;
-    }
-
+  const changePassword = handlePasswordSubmit(async values => {
     setChangingPwd(true);
     try {
       await apiFetch('/api/B2bClients/changePassword', {
         method: 'POST',
         tokenKey: 'b2b_token',
         body: JSON.stringify({
-          userId: form.id,
-          oldPassword: pwd.oldPassword,
-          newPassword: pwd.newPassword,
+          userId: getProfileValues('id'),
+          oldPassword: values.oldPassword,
+          newPassword: values.newPassword,
         }),
         successMessage: 'Password changed successfully.',
         errorFallback: 'Failed to change password.',
       });
-      setPwd({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      resetPassword({ oldPassword: '', newPassword: '', confirmPassword: '' });
     } catch {
       /* toast handled by apiFetch */
     } finally {
       setChangingPwd(false);
     }
-  };
+  }, createInvalidHandler<ChangePasswordFormValues>());
 
-  const field = (
+  const profileField = (
     id: string,
     label: string,
-    key: keyof ProfileForm,
-    opts?: { type?: string; placeholder?: string }
+    key: keyof B2bProfileSettingsFormValues,
+    opts?: { type?: string; placeholder?: string; error?: string }
   ) => (
-    <div className="form-group">
-      <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type={opts?.type || 'text'}
-        placeholder={opts?.placeholder}
-        value={String(form[key] ?? '')}
-        onChange={e => setField(key, e.target.value)}
-      />
-    </div>
+    <FormGroup label={label} htmlFor={id} error={opts?.error}>
+      {opts?.type === 'password' ? (
+        <PasswordInput
+          id={id}
+          placeholder={opts?.placeholder}
+          data-field={key}
+          aria-invalid={!!opts?.error}
+          style={fieldStyle(!!opts?.error)}
+          {...registerProfile(key)}
+        />
+      ) : (
+        <input
+          id={id}
+          type={opts?.type || 'text'}
+          placeholder={opts?.placeholder}
+          data-field={key}
+          aria-invalid={!!opts?.error}
+          style={fieldStyle(!!opts?.error)}
+          {...registerProfile(key)}
+        />
+      )}
+    </FormGroup>
   );
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="B2B Profile" />
 
-      <div style={{ padding: '1.25rem 1.5rem' }}>
+      <div className="page-body">
         {loading ? (
-          <div style={{ color: 'var(--text-muted)', padding: '2rem 0' }}>Loading...</div>
+          <PageLoader message="Loading profile..." />
         ) : (
           <div className="split-pane" style={{ gridTemplateColumns: 'minmax(0, 2fr) minmax(260px, 1fr)' }}>
-            {/* Profile */}
             <div className="card">
               <div className="card-header">
                 <span className="card-title" style={{ color: 'var(--text)', fontWeight: 700 }}>Profile</span>
               </div>
               <div className="card-body">
-                <form onSubmit={saveProfile}>
+                <form onSubmit={saveProfile} noValidate>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1.25rem' }}>
-                    {field('support_person_name', 'Support Person Name', 'support_person_name')}
-                    {field('support_mobile', 'Support Mobile', 'support_mobile')}
-                    {field('support_email', 'Support Email', 'support_email', { type: 'email' })}
+                    {profileField('support_person_name', 'Support Person Name', 'support_person_name')}
+                    {profileField('support_mobile', 'Support Mobile', 'support_mobile', { error: profileErrors.support_mobile?.message })}
+                    {profileField('support_email', 'Support Email', 'support_email', { type: 'email', error: profileErrors.support_email?.message })}
 
                     <div className="form-group">
                       <label htmlFor="primary_color_code">Primary Colour code</label>
@@ -197,8 +218,8 @@ export default function B2BProfilePage() {
                         <input
                           type="color"
                           aria-label="Pick color"
-                          value={/^#[0-9A-Fa-f]{6}$/.test(form.primary_color_code) ? form.primary_color_code : '#0076A3'}
-                          onChange={e => setField('primary_color_code', e.target.value.toUpperCase())}
+                          value={/^#[0-9A-Fa-f]{6}$/.test(primaryColor || '') ? primaryColor : '#0076A3'}
+                          onChange={e => setProfileValue('primary_color_code', e.target.value.toUpperCase(), { shouldValidate: true })}
                           style={{
                             width: 36,
                             height: 36,
@@ -212,22 +233,22 @@ export default function B2BProfilePage() {
                         <input
                           id="primary_color_code"
                           type="text"
-                          value={form.primary_color_code}
-                          onChange={e => setField('primary_color_code', e.target.value)}
+                          data-field="primary_color_code"
                           placeholder="#0076A3"
-                          style={{ flex: 1 }}
+                          style={{ ...fieldStyle(false), flex: 1 }}
+                          {...registerProfile('primary_color_code')}
                         />
                       </div>
                     </div>
 
-                    {field('public_phone_no', 'Public Phone Number', 'public_phone_no')}
-                    {field('public_email', 'Public Email', 'public_email', { type: 'email' })}
-                    {field('public_fax', 'Public Fax', 'public_fax')}
-                    {field('tagline', 'Tagline', 'tagline')}
-                    {field('smtp_server', 'SMTP Server', 'smtp_server')}
-                    {field('smtp_port', 'SMTP Port', 'smtp_port')}
-                    {field('smtp_email', 'SMTP Email', 'smtp_email', { type: 'email' })}
-                    {field('smtp_password', 'SMTP Password', 'smtp_password')}
+                    {profileField('public_phone_no', 'Public Phone Number', 'public_phone_no')}
+                    {profileField('public_email', 'Public Email', 'public_email', { type: 'email', error: profileErrors.public_email?.message })}
+                    {profileField('public_fax', 'Public Fax', 'public_fax')}
+                    {profileField('tagline', 'Tagline', 'tagline')}
+                    {profileField('smtp_server', 'SMTP Server', 'smtp_server')}
+                    {profileField('smtp_port', 'SMTP Port', 'smtp_port')}
+                    {profileField('smtp_email', 'SMTP Email', 'smtp_email', { type: 'email', error: profileErrors.smtp_email?.message })}
+                    {profileField('smtp_password', 'SMTP Password', 'smtp_password', { type: 'password' })}
                   </div>
 
                   <div style={{ marginTop: '0.5rem' }}>
@@ -239,49 +260,48 @@ export default function B2BProfilePage() {
               </div>
             </div>
 
-            {/* Change Password */}
             <div className="card">
               <div className="card-header">
                 <span className="card-title" style={{ color: 'var(--text)', fontWeight: 700 }}>Change Password</span>
               </div>
               <div className="card-body">
-                <form onSubmit={changePassword}>
-                  <div className="form-group">
-                    <label htmlFor="old_password">Old Password</label>
-                    <input
+                <form onSubmit={changePassword} noValidate>
+                  <FormGroup label="Old Password" htmlFor="old_password" required error={passwordErrors.oldPassword?.message}>
+                    <PasswordInput
                       id="old_password"
-                      type="password"
                       placeholder="Password"
-                      value={pwd.oldPassword}
-                      onChange={e => setPwd(p => ({ ...p, oldPassword: e.target.value }))}
+                      data-field="oldPassword"
+                      aria-invalid={!!passwordErrors.oldPassword}
+                      style={fieldStyle(!!passwordErrors.oldPassword)}
                       autoComplete="current-password"
+                      {...registerPassword('oldPassword')}
                     />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="new_password">New Password</label>
-                    <input
+                  </FormGroup>
+                  <FormGroup label="New Password" htmlFor="new_password" required error={passwordErrors.newPassword?.message}>
+                    <PasswordInput
                       id="new_password"
-                      type="password"
                       placeholder="Password"
-                      value={pwd.newPassword}
-                      onChange={e => setPwd(p => ({ ...p, newPassword: e.target.value }))}
+                      data-field="newPassword"
+                      aria-invalid={!!passwordErrors.newPassword}
+                      style={fieldStyle(!!passwordErrors.newPassword)}
                       autoComplete="new-password"
+                      {...registerPassword('newPassword')}
                     />
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
-                      (Enter atleast 6 characters. Only @ # are allowed as special character)
+                      {PASSWORD_HELPER_TEXT}
                     </div>
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="confirm_password">Confirm Password</label>
-                    <input
+                  </FormGroup>
+                  <FormGroup label="Confirm Password" htmlFor="confirm_password" required error={passwordErrors.confirmPassword?.message}>
+                    <PasswordInput
                       id="confirm_password"
-                      type="password"
                       placeholder="Password"
-                      value={pwd.confirmPassword}
-                      onChange={e => setPwd(p => ({ ...p, confirmPassword: e.target.value }))}
+                      data-field="confirmPassword"
+                      aria-invalid={!!passwordErrors.confirmPassword}
+                      style={fieldStyle(!!passwordErrors.confirmPassword)}
                       autoComplete="new-password"
+                      {...registerPassword('confirmPassword')}
                     />
-                  </div>
+                  </FormGroup>
                   <button type="submit" className="btn btn-primary" disabled={changingPwd}>
                     {changingPwd ? 'Saving…' : 'Change Password'}
                   </button>

@@ -1,15 +1,19 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { useForm } from 'react-hook-form';
 import { MdAdd, MdDelete, MdEdit, MdHourglassEmpty, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { testReportQuestionSchema, type TestReportQuestionFormValues } from '../../../../lib/schemas';
 
 interface ReportQuestion { id: number; question_text: string; type_data_id: number; status: boolean; }
 interface DocType { id: number; name: string; }
 
-const emptyForm = { question_text: '', type_data_id: '' };
+const emptyForm: TestReportQuestionFormValues = { question_text: '', type_data_id: '' };
 
 export default function TestReportQuestionsPage() {
   const confirmDialog = useConfirm();
@@ -17,10 +21,19 @@ export default function TestReportQuestionsPage() {
   const [docTypes, setDocTypes] = useState<DocType[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ ...emptyForm });
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<TestReportQuestionFormValues>({
+    resolver: formResolver<TestReportQuestionFormValues>(testReportQuestionSchema),
+    defaultValues: emptyForm,
+  });
 
   const loadData = async () => {
     setLoading(true);
@@ -36,7 +49,7 @@ export default function TestReportQuestionsPage() {
 
   const loadDocTypes = async () => {
     try {
-      const data = await apiFetch<DocType[]>('/api/TypeData', { tokenKey: 'superadmin_token' });
+      const data = await apiFetch<DocType[]>('/api/TypeData?status=true', { tokenKey: 'superadmin_token' });
       setDocTypes(data || []);
     } catch {
       setDocTypes([]);
@@ -45,11 +58,7 @@ export default function TestReportQuestionsPage() {
 
   useEffect(() => { loadData(); loadDocTypes(); }, []);
 
-  const save = async () => {
-    if (!form.question_text) {
-      toast.error('Question text is required.');
-      return;
-    }
+  const save = handleSubmit(async values => {
     setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
     const path = `/api/ReportQuestions${editingId ? `/${editingId}` : ''}`;
@@ -57,11 +66,14 @@ export default function TestReportQuestionsPage() {
       await apiFetch(path, {
         method,
         tokenKey: 'superadmin_token',
-        body: JSON.stringify({ ...form, type_data_id: form.type_data_id || null }),
-        successMessage: `Question ${editingId ? 'updated' : 'added'}.`,
+        body: JSON.stringify({
+          question_text: values.question_text.trim(),
+          type_data_id: values.type_data_id || null,
+        }),
+        successMessage: `Question ${editingId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Error saving.',
       });
-      setForm({ ...emptyForm });
+      reset(emptyForm);
       setEditingId(null);
       setShowModal(false);
       loadData();
@@ -70,7 +82,7 @@ export default function TestReportQuestionsPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<TestReportQuestionFormValues>());
 
   const remove = async (id: number) => {
     const ok = await confirmDialog({
@@ -81,7 +93,12 @@ export default function TestReportQuestionsPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/ReportQuestions/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/ReportQuestions/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Question deleted successfully.',
+        errorFallback: 'Unable to delete question.',
+      });
       loadData();
     } catch {
       /* error toasted by apiFetch */
@@ -89,11 +106,23 @@ export default function TestReportQuestionsPage() {
   };
 
   const toggleStatus = async (q: ReportQuestion) => {
+    const enabling = !q.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Question?' : 'Disable Question?',
+      message: enabling
+        ? 'This report question will become active.'
+        : 'This report question will become inactive. You can enable it again later.',
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/ReportQuestions/${q.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: !q.status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
       });
       loadData();
     } catch {
@@ -103,7 +132,13 @@ export default function TestReportQuestionsPage() {
 
   const openEdit = (q: ReportQuestion) => {
     setEditingId(q.id);
-    setForm({ question_text: q.question_text || '', type_data_id: String(q.type_data_id || '') });
+    reset({ question_text: q.question_text || '', type_data_id: String(q.type_data_id || '') });
+    setShowModal(true);
+  };
+
+  const openAdd = () => {
+    setEditingId(null);
+    reset(emptyForm);
     setShowModal(true);
   };
 
@@ -116,7 +151,7 @@ export default function TestReportQuestionsPage() {
       <TopNav title="Test Report Questions">
         <input type="text" placeholder="Search questions..." value={search} onChange={e => setSearch(e.target.value)}
           style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '0.5rem 0.75rem', color: 'var(--text)', fontSize: '0.875rem', width: 240 }} />
-        <button className="btn btn-primary" onClick={() => { setEditingId(null); setForm({ ...emptyForm }); setShowModal(true); }}>
+        <button className="btn btn-primary" onClick={openAdd}>
           <MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add Question
         </button>
       </TopNav>
@@ -126,28 +161,38 @@ export default function TestReportQuestionsPage() {
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
             <div className="card" style={{ width: '100%', maxWidth: 520, margin: '1rem' }}>
               <div className="card-header"><span className="card-title">{editingId ? <><MdEdit size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Edit</> : <><MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Add</>} Test Report Question</span></div>
-              <div className="card-body">
-                <div className="form-group">
-                  <label>Test Type</label>
-                  <select value={form.type_data_id} onChange={e => setForm(p => ({ ...p, type_data_id: e.target.value }))}>
-                    <option value="">-- Select Test Type --</option>
-                    {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                  </select>
-                </div>
+              <form onSubmit={save} noValidate>
+                <div className="card-body">
+                  <FormGroup label="Test Type" htmlFor="trq-type" error={errors.type_data_id?.message}>
+                    <select
+                      id="trq-type"
+                      data-field="type_data_id"
+                      style={fieldStyle(!!errors.type_data_id)}
+                      {...register('type_data_id')}
+                    >
+                      <option value="">-- Select Test Type --</option>
+                      {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </FormGroup>
 
-                <div className="form-group">
-                  <label>Question <span style={{ color: '#ef4444' }}>*</span></label>
-                  <textarea rows={4} placeholder="Enter question text"
-                    value={form.question_text}
-                    onChange={e => setForm(p => ({ ...p, question_text: e.target.value }))}
-                    style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', resize: 'vertical', fontFamily: 'inherit' }} />
-                </div>
+                  <FormGroup label="Question" htmlFor="trq-question" required error={errors.question_text?.message}>
+                    <textarea
+                      id="trq-question"
+                      rows={4}
+                      placeholder="Enter question text"
+                      data-field="question_text"
+                      aria-invalid={!!errors.question_text}
+                      style={{ ...fieldStyle(!!errors.question_text), resize: 'vertical', fontFamily: 'inherit' }}
+                      {...register('question_text')}
+                    />
+                  </FormGroup>
 
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? <MdHourglassEmpty size={16} aria-hidden /> : <><MdSave size={16} aria-hidden /> Save</>}</button>
-                  <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                    <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? <MdHourglassEmpty size={16} aria-hidden /> : <><MdSave size={16} aria-hidden /> Save</>}</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
+                  </div>
                 </div>
-              </div>
+              </form>
             </div>
           </div>
         )}
@@ -155,7 +200,7 @@ export default function TestReportQuestionsPage() {
         <div className="card">
           <div className="card-body" style={{ padding: 0 }}>
             {loading ? (
-              <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+              <PageLoader message="Loading questions..." />
             ) : filtered.length === 0 ? (
               <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No questions found.</div>
             ) : (

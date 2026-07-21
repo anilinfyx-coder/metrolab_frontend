@@ -1,9 +1,13 @@
-'use client';
-import { useState, useEffect, type InputHTMLAttributes } from 'react';
+﻿'use client';
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { yupResolver } from '@hookform/resolvers/yup';
 import TopNav from '../../../components/TopNav';
-import { apiFetch, handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
+import { FieldError } from '../../../components/FormField';
+import { handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
+import { createInvalidHandler, formResolver } from '../../../../lib/formHelpers';
+import { patientDemographicSchema, type PatientDemographicFormValues } from '../../../../lib/schemas';
 
-// US States for dropdown
 const US_STATES = [
   'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware',
   'Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky',
@@ -27,27 +31,52 @@ interface Patient {
 }
 interface LabTest { id: number; name: string; is_selected?: boolean; }
 
-const emptyPatient = {
-  name: '', mobile: '', gender: '1', dob_month: '1', dob_day: '1', dob_year: '',
-  driving_license_state: '', driving_license: '', street1: '', street2: '',
-  city: '', state: '', zipcode: '', email: '', ssn: '', accept: false as boolean
+const emptyPatient: PatientDemographicFormValues = {
+  name: '',
+  mobile: '',
+  gender: '1',
+  dob_month: '1',
+  dob_day: '1',
+  dob_year: '',
+  driving_license_state: '',
+  driving_license: '',
+  street1: '',
+  street2: '',
+  city: '',
+  state: '',
+  zipcode: '',
+  email: '',
+  ssn: '',
+  accept: false,
 };
 
 export default function PatientDemographicPage() {
   const [filter, setFilter] = useState({ uid: '', mobile: '' });
-  const [patient, setPatient] = useState<Record<string, string | boolean>>({ ...emptyPatient });
   const [patientId, setPatientId] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [labTests, setLabTests] = useState<LabTest[]>([]);
   const [reason, setReason] = useState('Other');
   const [customReason, setCustomReason] = useState('');
   const [saving, setSaving] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [extraErrors, setExtraErrors] = useState<Record<string, string>>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
 
-  const clearFieldError = (key: string) => {
-    setFieldErrors(prev => {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<PatientDemographicFormValues>({
+    resolver: formResolver<PatientDemographicFormValues>(patientDemographicSchema),
+    defaultValues: emptyPatient,
+  });
+
+  const inputClass = (field: keyof PatientDemographicFormValues) =>
+    `patient-form-input${errors[field] ? ' patient-form-input-error' : ''}`;
+
+  const clearExtraError = (key: string) => {
+    setExtraErrors(prev => {
       if (!prev[key]) return prev;
       const next = { ...prev };
       delete next[key];
@@ -55,47 +84,10 @@ export default function PatientDemographicPage() {
     });
   };
 
-  const inputClass = (field: string) =>
-    `patient-form-input${fieldErrors[field] ? ' patient-form-input-error' : ''}`;
-
-  const FieldErr = ({ field }: { field: string }) =>
-    fieldErrors[field] ? <div className="patient-field-error">{fieldErrors[field]}</div> : null;
-
-  const validateForm = (): boolean => {
-    const errors: Record<string, string> = {};
-    const str = (key: string) => String(patient[key] || '').trim();
-
-    if (!str('name')) errors.name = 'Name is required.';
-    if (!str('mobile')) errors.mobile = 'Mobile is required.';
-    if (!str('dob_year')) errors.dob = 'Year is required.';
-    if (!str('driving_license_state')) errors.driving_license_state = 'State of Driving License / State ID is required.';
-    if (!str('driving_license')) errors.driving_license = 'Driving License Number / State ID is required.';
-    if (!str('street1')) errors.street1 = 'Street 1 is required.';
-    if (!str('city')) errors.city = 'City is required.';
-    if (!str('state')) errors.state = 'State is required.';
-    if (!str('zipcode')) errors.zipcode = 'Zip Code is required.';
-    if (!str('email')) errors.email = 'Email is required.';
-    if (!labTests.some(t => t.is_selected)) errors.labTests = 'Please select at least one lab test.';
-    if (reason === 'Other' && !customReason.trim()) errors.customReason = 'Please specify the reason.';
-    if (!(patient.accept as boolean)) errors.accept = 'Please acknowledge the information is accurate.';
-
-    setFieldErrors(errors);
-    setSaveError(null);
-
-    if (Object.keys(errors).length > 0) {
-      setTimeout(() => {
-        document.querySelector('.patient-form-error-summary, .patient-field-error')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 0);
-      return false;
-    }
-    return true;
-  };
-
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/LabTests`, { headers: { token: getToken('admin_token') } });
+        const res = await fetch(`${API_BASE}/api/LabTests?status=true`, { headers: { token: getToken('admin_token') } });
         const list = await handleApiResponse<LabTest[]>(res, {
           errorFallback: 'Failed to load lab tests.',
         });
@@ -120,20 +112,27 @@ export default function PatientDemographicPage() {
         errorFallback: 'Patient not found. Click "New Patient/Donor" to create one.',
       });
       const dobParts = p.dob ? p.dob.split('T')[0].split('-') : ['', '1', '1'];
-      setPatient({
-        ...emptyPatient,
-        name: p.name || '', mobile: p.mobile || '', gender: String(p.gender || '1'),
-        dob_year: dobParts[0] || '', dob_month: String(parseInt(dobParts[1]) || 1),
+      reset({
+        name: p.name || '',
+        mobile: p.mobile || '',
+        gender: String(p.gender || '1'),
+        dob_year: dobParts[0] || '',
+        dob_month: String(parseInt(dobParts[1]) || 1),
         dob_day: String(parseInt(dobParts[2]) || 1),
         driving_license_state: p.driving_license_state || '',
         driving_license: p.driving_license || '',
-        street1: p.street1 || '', street2: p.street2 || '',
-        city: p.city || '', state: p.state || '', zipcode: p.zipcode || '',
-        email: p.email || '', ssn: p.ssn || '',
+        street1: p.street1 || '',
+        street2: p.street2 || '',
+        city: p.city || '',
+        state: p.state || '',
+        zipcode: p.zipcode || '',
+        email: p.email || '',
+        ssn: p.ssn || '',
+        accept: false,
       });
       setPatientId(p.id);
       setShowDetails(true);
-      setFieldErrors({});
+      setExtraErrors({});
       setSaveError(null);
     } catch {
       // Error toast handled by handleApiResponse
@@ -143,9 +142,9 @@ export default function PatientDemographicPage() {
   };
 
   const newPatient = () => {
-    setPatient({ ...emptyPatient });
+    reset(emptyPatient);
     setPatientId(null);
-    setFieldErrors({});
+    setExtraErrors({});
     setSaveError(null);
     setLabTests(prev => prev.map(t => ({ ...t, is_selected: false })));
     setReason('Other');
@@ -153,13 +152,32 @@ export default function PatientDemographicPage() {
     setShowDetails(true);
   };
 
-  const savePatient = async () => {
-    if (!validateForm()) return;
+  const validateExtraFields = (): boolean => {
+    const next: Record<string, string> = {};
+    if (!labTests.some(t => t.is_selected)) {
+      next.labTests = 'Please select at least one lab test.';
+    }
+    if (reason === 'Other' && !customReason.trim()) {
+      next.customReason = 'Please specify the reason.';
+    }
+    setExtraErrors(next);
+    if (Object.keys(next).length > 0) {
+      window.setTimeout(() => {
+        document.querySelector('.patient-form-error-summary, .patient-field-error, .patient-lab-tests-section.has-error')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 0);
+      return false;
+    }
+    return true;
+  };
+
+  const savePatient = handleSubmit(async values => {
+    if (!validateExtraFields()) return;
 
     setSaving(true);
     setSaveError(null);
-    const dobString = patient.dob_year
-      ? `${patient.dob_year}-${String(patient.dob_month).padStart(2, '0')}-${String(patient.dob_day).padStart(2, '0')}`
+    const dobString = values.dob_year
+      ? `${values.dob_year}-${String(values.dob_month).padStart(2, '0')}-${String(values.dob_day).padStart(2, '0')}`
       : null;
 
     const selectedTests = labTests.filter(t => t.is_selected).map(t => t.id);
@@ -168,16 +186,21 @@ export default function PatientDemographicPage() {
     let finalPatientId = patientId;
     let createdPatientUid = '';
 
-    // Step 1: Create Patient if it doesn't exist yet
     if (!finalPatientId) {
       const patientPayload = {
-        name: patient.name, mobile: patient.mobile, gender: patient.gender,
+        name: values.name,
+        mobile: values.mobile,
+        gender: values.gender,
         dob: dobString,
-        driving_license_state: patient.driving_license_state,
-        driving_license: patient.driving_license,
-        street1: patient.street1, street2: patient.street2,
-        city: patient.city, state: patient.state, zipcode: patient.zipcode,
-        email: patient.email, ssn: patient.ssn,
+        driving_license_state: values.driving_license_state,
+        driving_license: values.driving_license,
+        street1: values.street1,
+        street2: values.street2,
+        city: values.city,
+        state: values.state,
+        zipcode: values.zipcode,
+        email: values.email,
+        ssn: values.ssn,
       };
 
       try {
@@ -187,6 +210,7 @@ export default function PatientDemographicPage() {
           body: JSON.stringify(patientPayload),
         });
         const created = await handleApiResponse<{ id: number; uid?: string }>(patRes, {
+          successMessage: 'Patient created successfully.',
           errorFallback: 'Failed to create patient.',
         });
         finalPatientId = created.id;
@@ -197,7 +221,6 @@ export default function PatientDemographicPage() {
       }
     }
 
-    // Step 2: Add to Waiting List
     const wlPayload = {
       patient_id: finalPatientId,
       lab_test_ids: selectedTests,
@@ -210,70 +233,45 @@ export default function PatientDemographicPage() {
         headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
         body: JSON.stringify(wlPayload),
       });
-      await handleApiResponse(res, { errorFallback: 'Failed to save patient. Please try again.' });
-      const savedUid = createdPatientUid ? ` (UID: ${createdPatientUid})` : '';
-      toastApiSuccess(`Patient saved and added to Waiting List successfully!${savedUid}`);
-      setFieldErrors({});
+      await handleApiResponse(res, {
+        successMessage: 'Patient added to waiting list successfully.',
+        errorFallback: 'Failed to save patient. Please try again.',
+      });
+      setExtraErrors({});
       setSaveError(null);
-      setPatient({ ...emptyPatient });
+      reset(emptyPatient);
       setPatientId(null);
       setLabTests(prev => prev.map(t => ({ ...t, is_selected: false })));
+      setReason('Other');
+      setCustomReason('');
       setShowDetails(false);
     } catch {
       // Error toast handled by handleApiResponse
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<PatientDemographicFormValues>());
 
   const resetForm = () => {
-    setPatient({ ...emptyPatient });
+    reset(emptyPatient);
     setPatientId(null);
-    setFieldErrors({});
+    setExtraErrors({});
     setSaveError(null);
     setReason('Other');
     setCustomReason('');
     setLabTests(prev => prev.map(t => ({ ...t, is_selected: false })));
   };
 
-  const inp = (key: string, ph: string, type = 'text', extra: InputHTMLAttributes<HTMLInputElement> = {}) => (
-    <input
-      type={type}
-      className={inputClass(key)}
-      placeholder={ph}
-      value={patient[key] as string || ''}
-      onChange={e => {
-        clearFieldError(key);
-        setSaveError(null);
-        setPatient(p => ({ ...p, [key]: e.target.value }));
-      }}
-      {...extra}
-    />
-  );
-
-  const sel = (key: string, options: { value: string; label: string }[], placeholder = 'Select') => (
-    <select
-      className={inputClass(key)}
-      value={patient[key] as string || ''}
-      onChange={e => {
-        clearFieldError(key);
-        setSaveError(null);
-        setPatient(p => ({ ...p, [key]: e.target.value }));
-      }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
-
-  const validationMessages = Object.values(fieldErrors);
-  const showFormErrorSummary = validationMessages.length > 0 || !!saveError;
+  const formErrorMessages = [
+    ...Object.values(errors).map(e => e?.message).filter(Boolean) as string[],
+    ...Object.values(extraErrors),
+  ];
+  const showFormErrorSummary = formErrorMessages.length > 0 || !!saveError;
 
   return (
     <div className="page-content">
       <TopNav title="Patient Demographic" />
-      <div style={{ padding: '1.5rem' }}>
-        {/* ── Search Card ── */}
+      <div className="page-body">
         <div className="card patient-search-card" style={{ marginBottom: '1.5rem' }}>
           <div className="card-header patient-search-card-header"><span className="card-title">Select Patient/Donor</span></div>
           <div className="card-body patient-search-card-body">
@@ -295,7 +293,6 @@ export default function PatientDemographicPage() {
           </div>
         </div>
 
-        {/* ── Patient Details Card ── */}
         {showDetails && (
           <div className="card patient-details-card">
             <div className="card-header patient-details-header">
@@ -305,13 +302,28 @@ export default function PatientDemographicPage() {
               <div className="patient-form-row patient-form-row-3">
                 <div className="form-group patient-gender-field">
                   <label>Name <span className="req">*</span></label>
-                  {inp('name', 'Name')}
-                  <FieldErr field="name" />
+                  <input
+                    type="text"
+                    className={inputClass('name')}
+                    placeholder="Name"
+                    data-field="name"
+                    aria-invalid={!!errors.name}
+                    {...register('name')}
+                  />
+                  <FieldError message={errors.name?.message} />
                 </div>
                 <div className="form-group">
                   <label>Mobile <span className="req">*</span></label>
-                  {inp('mobile', 'Mobile')}
-                  <FieldErr field="mobile" />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className={inputClass('mobile')}
+                    placeholder="Mobile (9-12 digits)"
+                    data-field="mobile"
+                    aria-invalid={!!errors.mobile}
+                    {...register('mobile')}
+                  />
+                  <FieldError message={errors.mobile?.message} />
                 </div>
                 <div className="form-group">
                   <label>Gender <span className="req">*</span></label>
@@ -320,18 +332,15 @@ export default function PatientDemographicPage() {
                       <label key={val} className="patient-radio-label">
                         <input
                           type="radio"
-                          name="gender"
                           value={val}
-                          checked={patient.gender === val}
-                          onChange={() => {
-                            clearFieldError('gender');
-                            setPatient(p => ({ ...p, gender: val }));
-                          }}
+                          data-field="gender"
+                          {...register('gender')}
                         />
                         {lbl}
                       </label>
                     ))}
                   </div>
+                  <FieldError message={errors.gender?.message} />
                 </div>
               </div>
 
@@ -340,24 +349,20 @@ export default function PatientDemographicPage() {
                   <label>DOB (mm/dd/yyyy) <span className="req">*</span></label>
                   <div className="patient-dob-row">
                     <select
-                      className={`patient-form-input patient-dob-month${fieldErrors.dob ? ' patient-form-input-error' : ''}`}
-                      value={patient.dob_month as string}
-                      onChange={e => {
-                        clearFieldError('dob');
-                        setPatient(p => ({ ...p, dob_month: e.target.value }));
-                      }}
+                      className={`patient-form-input patient-dob-month${errors.dob_year ? ' patient-form-input-error' : ''}`}
+                      data-field="dob_month"
+                      aria-invalid={!!errors.dob_year}
+                      {...register('dob_month')}
                     >
                       {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
                         <option key={m} value={i + 1}>{m}</option>
                       ))}
                     </select>
                     <select
-                      className={`patient-form-input patient-dob-day${fieldErrors.dob ? ' patient-form-input-error' : ''}`}
-                      value={patient.dob_day as string}
-                      onChange={e => {
-                        clearFieldError('dob');
-                        setPatient(p => ({ ...p, dob_day: e.target.value }));
-                      }}
+                      className={`patient-form-input patient-dob-day${errors.dob_year ? ' patient-form-input-error' : ''}`}
+                      data-field="dob_day"
+                      aria-invalid={!!errors.dob_year}
+                      {...register('dob_day')}
                     >
                       {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
                         <option key={d} value={d}>{d}</option>
@@ -365,64 +370,119 @@ export default function PatientDemographicPage() {
                     </select>
                     <input
                       type="number"
-                      className={`patient-form-input patient-dob-year${fieldErrors.dob ? ' patient-form-input-error' : ''}`}
+                      className={`patient-form-input patient-dob-year${errors.dob_year ? ' patient-form-input-error' : ''}`}
                       placeholder="Year"
-                      value={patient.dob_year as string}
-                      onChange={e => {
-                        clearFieldError('dob');
-                        setPatient(p => ({ ...p, dob_year: e.target.value }));
-                      }}
+                      data-field="dob_year"
+                      aria-invalid={!!errors.dob_year}
+                      {...register('dob_year')}
                     />
                   </div>
-                  <FieldErr field="dob" />
+                  <FieldError message={errors.dob_year?.message} />
                 </div>
                 <div className="form-group">
                   <label>State of Driving License / State ID <span className="req">*</span></label>
-                  {sel('driving_license_state', US_STATES.map(s => ({ value: s, label: s })), 'Select State')}
-                  <FieldErr field="driving_license_state" />
+                  <select
+                    className={inputClass('driving_license_state')}
+                    data-field="driving_license_state"
+                    aria-invalid={!!errors.driving_license_state}
+                    {...register('driving_license_state')}
+                  >
+                    <option value="">Select State</option>
+                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <FieldError message={errors.driving_license_state?.message} />
                 </div>
                 <div className="form-group">
                   <label>Driving License Number / State ID <span className="req">*</span></label>
-                  {inp('driving_license', 'Driving License')}
-                  <FieldErr field="driving_license" />
+                  <input
+                    type="text"
+                    className={inputClass('driving_license')}
+                    placeholder="Driving License"
+                    data-field="driving_license"
+                    aria-invalid={!!errors.driving_license}
+                    {...register('driving_license')}
+                  />
+                  <FieldError message={errors.driving_license?.message} />
                 </div>
               </div>
 
               <div className="patient-form-row patient-form-row-2">
                 <div className="form-group">
                   <label>Street 1 <span className="req">*</span></label>
-                  {inp('street1', 'Home Address')}
-                  <FieldErr field="street1" />
+                  <input
+                    type="text"
+                    className={inputClass('street1')}
+                    placeholder="Home Address"
+                    data-field="street1"
+                    aria-invalid={!!errors.street1}
+                    {...register('street1')}
+                  />
+                  <FieldError message={errors.street1?.message} />
                 </div>
                 <div className="form-group">
                   <label>Street 2</label>
-                  {inp('street2', 'Home Address')}
+                  <input
+                    type="text"
+                    className={inputClass('street2')}
+                    placeholder="Home Address"
+                    data-field="street2"
+                    {...register('street2')}
+                  />
                 </div>
               </div>
 
               <div className="patient-form-row patient-form-row-3">
                 <div className="form-group">
                   <label>City <span className="req">*</span></label>
-                  {inp('city', 'City')}
-                  <FieldErr field="city" />
+                  <input
+                    type="text"
+                    className={inputClass('city')}
+                    placeholder="City"
+                    data-field="city"
+                    aria-invalid={!!errors.city}
+                    {...register('city')}
+                  />
+                  <FieldError message={errors.city?.message} />
                 </div>
                 <div className="form-group">
                   <label>State <span className="req">*</span></label>
-                  {sel('state', US_STATES.map(s => ({ value: s, label: s })), 'Select State')}
-                  <FieldErr field="state" />
+                  <select
+                    className={inputClass('state')}
+                    data-field="state"
+                    aria-invalid={!!errors.state}
+                    {...register('state')}
+                  >
+                    <option value="">Select State</option>
+                    {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                  <FieldError message={errors.state?.message} />
                 </div>
                 <div className="form-group">
                   <label>Zip Code <span className="req">*</span></label>
-                  {inp('zipcode', 'ZIP Code')}
-                  <FieldErr field="zipcode" />
+                  <input
+                    type="text"
+                    className={inputClass('zipcode')}
+                    placeholder="ZIP Code"
+                    data-field="zipcode"
+                    aria-invalid={!!errors.zipcode}
+                    {...register('zipcode')}
+                  />
+                  <FieldError message={errors.zipcode?.message} />
                 </div>
               </div>
 
               <div className="patient-form-row patient-form-row-3">
                 <div className="form-group">
                   <label>Email <span className="req">*</span></label>
-                  {inp('email', 'Email', 'email')}
-                  <FieldErr field="email" />
+                  <input
+                    type="email"
+                    className={inputClass('email')}
+                    placeholder="Email"
+                    data-field="email"
+                    aria-invalid={!!errors.email}
+                    {...register('email')}
+                  />
+                  <FieldError message={errors.email?.message} />
                 </div>
                 <div className="form-group">
                   <label>Last 4 Digits of your SSN</label>
@@ -431,14 +491,18 @@ export default function PatientDemographicPage() {
                     className="patient-form-input"
                     placeholder="SSN"
                     maxLength={4}
-                    value={patient.ssn as string || ''}
-                    onChange={e => setPatient(p => ({ ...p, ssn: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                    data-field="ssn"
+                    {...register('ssn', {
+                      onChange: e => {
+                        e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      },
+                    })}
                   />
                 </div>
                 <div className="form-group patient-form-spacer" aria-hidden />
               </div>
 
-              <div className={`patient-lab-tests-section${fieldErrors.labTests ? ' has-error' : ''}`}>
+              <div className={`patient-lab-tests-section${extraErrors.labTests ? ' has-error' : ''}`}>
                 <div className="patient-section-title">Select Lab Tests to be conducted</div>
                 <div className="patient-lab-tests-grid">
                   {labTests.map(t => (
@@ -448,7 +512,7 @@ export default function PatientDemographicPage() {
                         className="patient-lab-test-checkbox"
                         checked={!!t.is_selected}
                         onChange={() => {
-                          clearFieldError('labTests');
+                          clearExtraError('labTests');
                           setSaveError(null);
                           setLabTests(prev =>
                             prev.map(lt => (lt.id === t.id ? { ...lt, is_selected: !lt.is_selected } : lt))
@@ -459,7 +523,7 @@ export default function PatientDemographicPage() {
                     </label>
                   ))}
                 </div>
-                <FieldErr field="labTests" />
+                <FieldError message={extraErrors.labTests} />
               </div>
 
               <div className={`patient-form-row ${reason === 'Other' ? 'patient-form-row-reason' : 'patient-form-row-1'}`}>
@@ -473,7 +537,7 @@ export default function PatientDemographicPage() {
                       setReason(val);
                       if (val !== 'Other') {
                         setCustomReason('');
-                        clearFieldError('customReason');
+                        clearExtraError('customReason');
                       }
                     }}
                   >
@@ -485,35 +549,32 @@ export default function PatientDemographicPage() {
                     <label>Specify Reason:</label>
                     <input
                       type="text"
-                      className={inputClass('customReason')}
+                      className={`patient-form-input${extraErrors.customReason ? ' patient-form-input-error' : ''}`}
                       placeholder="Reason"
+                      data-field="customReason"
                       value={customReason}
                       onChange={e => {
-                        clearFieldError('customReason');
+                        clearExtraError('customReason');
                         setSaveError(null);
                         setCustomReason(e.target.value);
                       }}
                     />
-                    <FieldErr field="customReason" />
+                    <FieldError message={extraErrors.customReason} />
                   </div>
                 )}
               </div>
 
-              <div className={`patient-ack-row${fieldErrors.accept ? ' has-error' : ''}`}>
+              <div className={`patient-ack-row${errors.accept ? ' has-error' : ''}`}>
                 <label className="patient-ack-label">
                   <input
                     type="checkbox"
                     className="patient-ack-checkbox"
-                    checked={!!patient.accept}
-                    onChange={e => {
-                      clearFieldError('accept');
-                      setSaveError(null);
-                      setPatient(p => ({ ...p, accept: e.target.checked }));
-                    }}
+                    data-field="accept"
+                    {...register('accept')}
                   />
                   <span className="patient-ack-text">I hereby acknowledge that the information given by me is accurate and complete.</span>
                 </label>
-                <FieldErr field="accept" />
+                <FieldError message={errors.accept?.message} />
               </div>
 
               {showFormErrorSummary && (
@@ -521,7 +582,7 @@ export default function PatientDemographicPage() {
                   <strong>Please correct the following:</strong>
                   <ul>
                     {saveError && <li>{saveError}</li>}
-                    {validationMessages.map((text, i) => (
+                    {formErrorMessages.map((text, i) => (
                       <li key={`${text}-${i}`}>{text}</li>
                     ))}
                   </ul>

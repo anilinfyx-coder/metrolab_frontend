@@ -1,7 +1,8 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
 import { MdAccountBalanceWallet, MdAssignment, MdCheckCircle, MdWarning } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { formatDateTime } from '../../../utils/dateFormat';
 import { apiFetch } from '../../../../lib/api';
 
@@ -49,9 +50,9 @@ export default function WalletPage() {
   return (
     <div className="page-content">
       <TopNav title="Wallet & Transactions" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading wallet...</div>
+          <PageLoader message="Loading wallet..." size="lg" />
         ) : (
           <>
             {/* Stats Row */}

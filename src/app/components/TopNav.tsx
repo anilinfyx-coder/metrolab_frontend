@@ -78,33 +78,18 @@ export default function TopNav({ title, children }: TopNavProps) {
         
         {/* Notification Bell */}
         {(portal.key === 'superadmin' || portal.key === 'b2b') && (
-          <div className="topnav-notifications" ref={dropdownRef} style={{ position: 'relative' }}>
-            <button 
-              type="button" 
-              className="topnav-user-link" 
-              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 8px', position: 'relative' }}
+          <div className="topnav-notifications" ref={dropdownRef}>
+            <button
+              type="button"
+              className="topnav-user-link topnav-notification-btn"
               onClick={() => setShowDropdown(!showDropdown)}
               title="Notifications"
             >
               <span className="topnav-user-icon" aria-hidden>
-                <MdNotifications size={20} />
+                <MdNotifications size={18} />
               </span>
               {alerts.length > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '-5px',
-                  right: '0px',
-                  backgroundColor: '#ef4444',
-                  color: 'white',
-                  borderRadius: '50%',
-                  width: '16px',
-                  height: '16px',
-                  fontSize: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold'
-                }}>
+                <span className="topnav-notification-badge">
                   {alerts.length}
                 </span>
               )}
@@ -155,22 +140,22 @@ export default function TopNav({ title, children }: TopNavProps) {
         )}
 
         {portal.key === 'admin' && (
-          <Link href={`${portal.basePath}/changepassword`} className="topnav-user-link" title="Change Password" style={{ marginRight: '0.5rem' }}>
+          <Link href={`${portal.basePath}/changepassword`} className="topnav-user-link" title="Change Password">
             <span className="topnav-user-icon" aria-hidden>
-              <MdVpnKey size={16} />
+              <MdVpnKey size={18} />
             </span>
             <span>Security</span>
           </Link>
         )}
         <Link href={portal.profilePath} className="topnav-user-link" title="Update Profile">
           <span className="topnav-user-icon" aria-hidden>
-            <MdPerson size={16} />
+            <MdPerson size={18} />
           </span>
           <span>{userName}</span>
         </Link>
         <button type="button" className="topnav-signout" onClick={signOut} title="Sign Out">
           <span className="topnav-user-icon" aria-hidden>
-            <MdLogout size={15} />
+            <MdLogout size={18} />
           </span>
           <span>Sign Out</span>
         </button>

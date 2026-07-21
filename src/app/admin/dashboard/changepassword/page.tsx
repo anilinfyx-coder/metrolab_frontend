@@ -1,118 +1,109 @@
-'use client';
-import { useState, FormEvent } from 'react';
+﻿'use client';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdHourglassEmpty, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
 import { useRouter } from 'next/navigation';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  changePasswordFormSchema,
+  PASSWORD_HELPER_TEXT,
+  type ChangePasswordFormValues,
+} from '../../../../lib/schemas';
+
+const emptyForm: ChangePasswordFormValues = {
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+};
 
 export default function ChangePasswordPage() {
   const router = useRouter();
-  const [oldPassword, setOldPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (newPassword !== confirmPassword) {
-      toastApiError('New passwords do not match.');
-      return;
-    }
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<ChangePasswordFormValues>({
+    resolver: formResolver<ChangePasswordFormValues>(changePasswordFormSchema),
+    defaultValues: emptyForm,
+  });
 
+  const onSubmit = handleSubmit(async values => {
     setLoading(true);
-
     try {
       await apiFetch('/api/Auth/change-password', {
         method: 'POST',
         tokenKey: 'admin_token',
         acceptHttpOk: true,
-        body: JSON.stringify({ oldPassword, newPassword }),
+        body: JSON.stringify({
+          oldPassword: values.oldPassword,
+          newPassword: values.newPassword,
+        }),
         successMessage: 'Password changed successfully.',
         errorFallback: 'Error changing password',
       });
-      setOldPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
+      reset(emptyForm);
     } catch {
-      // Error toast handled by apiFetch
+      /* error toasted by apiFetch */
     } finally {
       setLoading(false);
     }
-  };
+  }, createInvalidHandler<ChangePasswordFormValues>());
 
   return (
     <div className="page-content">
       <TopNav title="Change Password" />
-      <div style={{ padding: '1.5rem', maxWidth: 600, margin: '0 auto' }}>
+      <div className="page-body page-body-narrow">
         <div className="card">
           <div className="card-header"><span className="card-title">Update Your Password</span></div>
           <div className="card-body">
-            <form onSubmit={handleSubmit}>
-              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: 'var(--text)', marginBottom: '0.35rem' }}>
-                  Old Password <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="password"
+            <form onSubmit={onSubmit} noValidate>
+              <FormGroup label="Old Password" htmlFor="old-password" required error={errors.oldPassword?.message}>
+                <PasswordInput
+                  id="old-password"
                   placeholder="Enter old password"
-                  value={oldPassword}
-                  onChange={e => setOldPassword(e.target.value)}
-                  required
-                  style={{
-                    width: '100%', padding: '0.6rem 0.9rem',
-                    background: 'var(--bg-input)', border: '1px solid var(--border)',
-                    borderRadius: 6, color: 'var(--text)', fontSize: '0.875rem',
-                    fontFamily: 'inherit', outline: 'none',
-                    transition: 'border-color 0.15s',
-                  }}
-                  onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                  data-field="oldPassword"
+                  aria-invalid={!!errors.oldPassword}
+                  style={fieldStyle(!!errors.oldPassword, { padding: '0.6rem 0.9rem', fontSize: '0.875rem' })}
+                  {...register('oldPassword')}
                 />
-              </div>
+              </FormGroup>
 
-              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: 'var(--text)', marginBottom: '0.35rem' }}>
-                  New Password <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="password"
+              <FormGroup label="New Password" htmlFor="new-password" required error={errors.newPassword?.message}>
+                <PasswordInput
+                  id="new-password"
                   placeholder="Enter new password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  required
-                  style={{
-                    width: '100%', padding: '0.6rem 0.9rem',
-                    background: 'var(--bg-input)', border: '1px solid var(--border)',
-                    borderRadius: 6, color: 'var(--text)', fontSize: '0.875rem',
-                    fontFamily: 'inherit', outline: 'none',
-                    transition: 'border-color 0.15s',
-                  }}
-                  onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                  data-field="newPassword"
+                  aria-invalid={!!errors.newPassword}
+                  style={fieldStyle(!!errors.newPassword, { padding: '0.6rem 0.9rem', fontSize: '0.875rem' })}
+                  {...register('newPassword')}
                 />
-              </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                  {PASSWORD_HELPER_TEXT}
+                </div>
+              </FormGroup>
 
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: 'var(--text)', marginBottom: '0.35rem' }}>
-                  Confirm New Password <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="password"
+              <FormGroup
+                label="Confirm New Password"
+                htmlFor="confirm-password"
+                required
+                error={errors.confirmPassword?.message}
+              >
+                <PasswordInput
+                  id="confirm-password"
                   placeholder="Confirm new password"
-                  value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)}
-                  required
-                  style={{
-                    width: '100%', padding: '0.6rem 0.9rem',
-                    background: 'var(--bg-input)', border: '1px solid var(--border)',
-                    borderRadius: 6, color: 'var(--text)', fontSize: '0.875rem',
-                    fontFamily: 'inherit', outline: 'none',
-                    transition: 'border-color 0.15s',
-                  }}
-                  onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
+                  data-field="confirmPassword"
+                  aria-invalid={!!errors.confirmPassword}
+                  style={fieldStyle(!!errors.confirmPassword, { padding: '0.6rem 0.9rem', fontSize: '0.875rem' })}
+                  {...register('confirmPassword')}
                 />
-              </div>
+              </FormGroup>
 
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button

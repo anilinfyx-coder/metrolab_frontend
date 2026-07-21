@@ -1,9 +1,14 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdAdd, MdClose, MdDelete, MdEdit } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { b2bPatientSchema, type B2bPatientFormValues } from '../../../../lib/schemas';
 
 interface Patient {
   id: number;
@@ -20,8 +25,16 @@ interface Patient {
   deleted: boolean | null;
 }
 
-const emptyPatient: Partial<Patient> = {
-  name: '', mobile: '', email: '', dob: '', gender: 1, city: '', state: '', zipcode: '', uid: ''
+const emptyPatient: B2bPatientFormValues = {
+  name: '',
+  mobile: '',
+  email: '',
+  dob: '',
+  gender: 1,
+  city: '',
+  state: '',
+  zipcode: '',
+  uid: '',
 };
 
 export default function PatientsPage() {
@@ -30,9 +43,18 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState<Partial<Patient>>(emptyPatient);
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<B2bPatientFormValues>({
+    resolver: formResolver<B2bPatientFormValues>(b2bPatientSchema),
+    defaultValues: emptyPatient,
+  });
 
   const fetchPatients = useCallback(async () => {
     setLoading(true);
@@ -57,11 +79,35 @@ export default function PatientsPage() {
     p.email?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const openAdd = () => { setForm(emptyPatient); setEditId(null); setShowModal(true); };
-  const openEdit = (p: Patient) => { setForm(p); setEditId(p.id); setShowModal(true); };
+  const closeModal = () => {
+    setShowModal(false);
+    setEditId(null);
+    reset(emptyPatient);
+  };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openAdd = () => {
+    setEditId(null);
+    reset(emptyPatient);
+    setShowModal(true);
+  };
+
+  const openEdit = (p: Patient) => {
+    setEditId(p.id);
+    reset({
+      name: p.name || '',
+      mobile: p.mobile || '',
+      email: p.email || '',
+      dob: p.dob ? p.dob.split('T')[0] : '',
+      gender: p.gender ?? 1,
+      city: p.city || '',
+      state: p.state || '',
+      zipcode: p.zipcode || '',
+      uid: p.uid || '',
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = handleSubmit(async values => {
     setSaving(true);
     try {
       const path = editId ? `/api/Patient/${editId}` : '/api/Patient';
@@ -69,17 +115,18 @@ export default function PatientsPage() {
       await apiFetch(path, {
         method,
         tokenKey: 'b2b_token',
-        body: JSON.stringify(form),
+        body: JSON.stringify(values),
+        successMessage: `Patient ${editId ? 'updated' : 'added'} successfully.`,
         errorFallback: editId ? 'Unable to update patient.' : 'Unable to add patient.',
       });
-      setShowModal(false);
+      closeModal();
       fetchPatients();
     } catch {
       /* toast handled by apiFetch */
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<B2bPatientFormValues>());
 
   const handleDelete = async (id: number) => {
     const ok = await confirmDialog({
@@ -93,6 +140,7 @@ export default function PatientsPage() {
       await apiFetch(`/api/Patient/${id}`, {
         method: 'DELETE',
         tokenKey: 'b2b_token',
+        successMessage: 'Patient deleted successfully.',
         errorFallback: 'Unable to delete patient.',
       });
       fetchPatients();
@@ -144,7 +192,7 @@ export default function PatientsPage() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading patients...</td></tr>
+                  <tr><td colSpan={8}><PageLoader message="Loading patients..." /></td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No patients found</td></tr>
                 ) : filtered.map(p => (
@@ -175,61 +223,115 @@ export default function PatientsPage() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>{editId ? 'Edit Patient' : 'Add New Patient'}</h2>
-              <button className="btn btn-ghost btn-sm" id="close-patient-modal" onClick={() => setShowModal(false)}><MdClose size={16} aria-hidden /></button>
+              <button className="btn btn-ghost btn-sm" id="close-patient-modal" onClick={closeModal}><MdClose size={16} aria-hidden /></button>
             </div>
-            <form onSubmit={handleSave}>
+            <form onSubmit={handleSave} noValidate>
               <div className="modal-body">
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Full Name *</label>
-                    <input id="patient-name" required value={form.name || ''} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="John Doe" />
-                  </div>
-                  <div className="form-group">
-                    <label>UID</label>
-                    <input id="patient-uid" value={form.uid || ''} onChange={e => setForm({ ...form, uid: e.target.value })} placeholder="PT-001" />
-                  </div>
+                  <FormGroup label="Full Name" htmlFor="patient-name" required error={errors.name?.message}>
+                    <input
+                      id="patient-name"
+                      type="text"
+                      placeholder="John Doe"
+                      data-field="name"
+                      aria-invalid={!!errors.name}
+                      style={fieldStyle(!!errors.name)}
+                      {...register('name')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="UID" htmlFor="patient-uid" error={errors.uid?.message}>
+                    <input
+                      id="patient-uid"
+                      type="text"
+                      placeholder="PT-001"
+                      data-field="uid"
+                      aria-invalid={!!errors.uid}
+                      style={fieldStyle(!!errors.uid)}
+                      {...register('uid')}
+                    />
+                  </FormGroup>
                 </div>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Mobile *</label>
-                    <input id="patient-mobile" required value={form.mobile || ''} onChange={e => setForm({ ...form, mobile: e.target.value })} placeholder="+1 555 0000" />
-                  </div>
-                  <div className="form-group">
-                    <label>Email</label>
-                    <input id="patient-email" type="email" value={form.email || ''} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="patient@email.com" />
-                  </div>
+                  <FormGroup label="Mobile" htmlFor="patient-mobile" required error={errors.mobile?.message}>
+                    <input
+                      id="patient-mobile"
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="9-10 digits"
+                      data-field="mobile"
+                      aria-invalid={!!errors.mobile}
+                      style={fieldStyle(!!errors.mobile)}
+                      {...register('mobile')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="Email" htmlFor="patient-email" error={errors.email?.message}>
+                    <input
+                      id="patient-email"
+                      type="email"
+                      placeholder="patient@email.com"
+                      data-field="email"
+                      aria-invalid={!!errors.email}
+                      style={fieldStyle(!!errors.email)}
+                      {...register('email')}
+                    />
+                  </FormGroup>
                 </div>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Date of Birth</label>
-                    <input id="patient-dob" type="date" value={form.dob || ''} onChange={e => setForm({ ...form, dob: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label>Gender</label>
-                    <select id="patient-gender" value={form.gender ?? 1} onChange={e => setForm({ ...form, gender: parseInt(e.target.value) })}>
+                  <FormGroup label="Date of Birth" htmlFor="patient-dob" error={errors.dob?.message}>
+                    <input
+                      id="patient-dob"
+                      type="date"
+                      data-field="dob"
+                      aria-invalid={!!errors.dob}
+                      style={fieldStyle(!!errors.dob)}
+                      {...register('dob')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="Gender" htmlFor="patient-gender" error={errors.gender?.message}>
+                    <select
+                      id="patient-gender"
+                      data-field="gender"
+                      aria-invalid={!!errors.gender}
+                      style={fieldStyle(!!errors.gender)}
+                      {...register('gender', { valueAsNumber: true })}
+                    >
                       <option value={1}>Male</option>
                       <option value={2}>Female</option>
                       <option value={3}>Other</option>
                     </select>
-                  </div>
+                  </FormGroup>
                 </div>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>City</label>
-                    <input id="patient-city" value={form.city || ''} onChange={e => setForm({ ...form, city: e.target.value })} placeholder="New York" />
-                  </div>
-                  <div className="form-group">
-                    <label>State</label>
-                    <input id="patient-state" value={form.state || ''} onChange={e => setForm({ ...form, state: e.target.value })} placeholder="NY" />
-                  </div>
+                  <FormGroup label="City" htmlFor="patient-city" error={errors.city?.message}>
+                    <input
+                      id="patient-city"
+                      type="text"
+                      placeholder="New York"
+                      data-field="city"
+                      aria-invalid={!!errors.city}
+                      style={fieldStyle(!!errors.city)}
+                      {...register('city')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="State" htmlFor="patient-state" error={errors.state?.message}>
+                    <input
+                      id="patient-state"
+                      type="text"
+                      placeholder="NY"
+                      data-field="state"
+                      aria-invalid={!!errors.state}
+                      style={fieldStyle(!!errors.state)}
+                      {...register('state')}
+                    />
+                  </FormGroup>
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
+                <button type="button" className="btn btn-ghost" onClick={closeModal}>Cancel</button>
                 <button type="submit" id="save-patient-btn" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : editId ? 'Update Patient' : 'Add Patient'}
                 </button>

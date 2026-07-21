@@ -12,7 +12,7 @@ export default function WaitingListApplyPage() {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
         <TopNav title="Waiting List" />
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
           <p>Invalid waiting list entry.</p>
           <button type="button" className="btn btn-primary" onClick={() => router.push('/admin/dashboard/labtest')}>
             Back to Waiting List

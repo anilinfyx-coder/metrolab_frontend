@@ -105,7 +105,10 @@ export default function WaitingListPage() {
         method: 'DELETE',
         headers: { token: getToken('admin_token') },
       });
-      await handleApiResponse(res, { errorFallback: 'Failed to delete waiting list entry.' });
+      await handleApiResponse(res, {
+        successMessage: 'Waiting list entry deleted successfully.',
+        errorFallback: 'Failed to delete waiting list entry.',
+      });
       loadData();
     } catch {
       // Error toast handled by handleApiResponse
@@ -116,7 +119,7 @@ export default function WaitingListPage() {
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Waiting List" />
 
-      <div style={{ padding: '1.25rem 1.5rem' }}>
+      <div className="page-body">
         <ListingTable
           className="waiting-list-table"
           title="List of Patients/Donor"

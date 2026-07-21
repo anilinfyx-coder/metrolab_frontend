@@ -1,18 +1,45 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { formatDate } from '../../../utils/dateFormat';
+import { useForm } from 'react-hook-form';
 import { apiFetch } from '../../../../lib/api';
+import PageLoader from '../../../components/PageLoader';
+import TopNav from '../../../components/TopNav';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  PASSWORD_HELPER_TEXT,
+  superAdminChangePasswordSchema,
+  superAdminProfileSchema,
+  type SuperAdminChangePasswordFormValues,
+  type SuperAdminProfileFormValues,
+} from '../../../../lib/schemas';
 
 export default function SuperAdminProfilePage() {
   const [loading, setLoading] = useState(true);
-
-  const [profileForm, setProfileForm] = useState({ name: '', email: '', mobile: '' });
-  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
-
   const [profileSaving, setProfileSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    reset: resetProfile,
+    formState: { errors: profileErrors },
+  } = useForm<SuperAdminProfileFormValues>({
+    resolver: formResolver<SuperAdminProfileFormValues>(superAdminProfileSchema),
+    defaultValues: { name: '', email: '', mobile: '' },
+  });
+
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    reset: resetPassword,
+    formState: { errors: passwordErrors },
+  } = useForm<SuperAdminChangePasswordFormValues>({
+    resolver: formResolver<SuperAdminChangePasswordFormValues>(superAdminChangePasswordSchema),
+    defaultValues: { currentPassword: '', newPassword: '', confirmPassword: '' },
+  });
 
   const loadProfile = async () => {
     setLoading(true);
@@ -23,7 +50,7 @@ export default function SuperAdminProfilePage() {
         body: JSON.stringify({}),
       });
       if (profile) {
-        setProfileForm({ name: profile.name || '', email: profile.email || '', mobile: profile.mobile || '' });
+        resetProfile({ name: profile.name || '', email: profile.email || '', mobile: profile.mobile || '' });
       }
     } catch {
       /* error toasted by apiFetch */
@@ -32,21 +59,16 @@ export default function SuperAdminProfilePage() {
     }
   };
 
-  useEffect(() => { loadProfile(); }, []);
+  useEffect(() => { loadProfile(); }, [resetProfile]);
 
-  const handleProfileSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!profileForm.name || !profileForm.email) {
-      toast.error('Name and Email are required');
-      return;
-    }
+  const saveProfile = handleProfileSubmit(async values => {
     setProfileSaving(true);
     try {
       await apiFetch('/api/SuperAdmin/updateProfile', {
         method: 'POST',
         tokenKey: 'superadmin_token',
-        body: JSON.stringify(profileForm),
-        successMessage: 'Profile updated successfully!',
+        body: JSON.stringify(values),
+        successMessage: 'Profile updated successfully.',
         errorFallback: 'Failed to update profile',
       });
     } catch {
@@ -54,102 +76,62 @@ export default function SuperAdminProfilePage() {
     } finally {
       setProfileSaving(false);
     }
-  };
+  }, createInvalidHandler<SuperAdminProfileFormValues>());
 
-  const handlePasswordSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error('New passwords do not match');
-      return;
-    }
-    if (passwordForm.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters long');
-      return;
-    }
+  const savePassword = handlePasswordSubmit(async values => {
     setPasswordSaving(true);
     try {
       await apiFetch('/api/SuperAdmin/changePassword', {
         method: 'POST',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
+          currentPassword: values.currentPassword,
+          newPassword: values.newPassword,
         }),
-        successMessage: 'Password changed successfully!',
+        successMessage: 'Password changed successfully.',
         errorFallback: 'Failed to change password',
       });
-      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      resetPassword({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch {
       /* error toasted by apiFetch */
     } finally {
       setPasswordSaving(false);
     }
-  };
+  }, createInvalidHandler<SuperAdminChangePasswordFormValues>());
 
   if (loading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+      <div className="page-content" style={{ paddingTop: 0 }}>
+        <TopNav title="Super Admin Profile" />
+        <PageLoader message="Loading profile..." size="lg" />
       </div>
     );
   }
 
   return (
-    <>
-      <div className="topnav">
-        <h1 className="topnav-title">Super Admin Profile</h1>
-        <div className="topnav-actions">
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {formatDate(new Date())}
-          </span>
-          <div className="avatar">A</div>
-        </div>
-      </div>
+    <div className="page-content" style={{ paddingTop: 0 }}>
+      <TopNav title="Super Admin Profile" />
 
-      <div className="page-content">
+      <div className="page-body">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
 
-          {/* Personal Details Form */}
           <div className="card">
             <div className="card-header">
               <span className="card-title">Profile</span>
             </div>
             <div className="card-body">
-              <form onSubmit={handleProfileSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={profileForm.name}
-                    onChange={e => setProfileForm({ ...profileForm, name: e.target.value })}
-                    className="form-control"
-                    placeholder="Enter Name"
-                  />
-                </div>
+              <form onSubmit={saveProfile} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <FormGroup label="Name" htmlFor="sa-name" required error={profileErrors.name?.message}>
+                  <input id="sa-name" type="text" placeholder="Enter Name" data-field="name" className="form-control" aria-invalid={!!profileErrors.name} style={fieldStyle(!!profileErrors.name)} {...registerProfile('name')} />
+                </FormGroup>
 
-                <div className="form-group">
-                  <label className="form-label">Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={profileForm.email}
-                    onChange={e => setProfileForm({ ...profileForm, email: e.target.value })}
-                    className="form-control"
-                    placeholder="Enter Email"
-                  />
-                </div>
+                <FormGroup label="Email" htmlFor="sa-email" required error={profileErrors.email?.message}>
+                  <input id="sa-email" type="email" placeholder="Enter Email" data-field="email" className="form-control" aria-invalid={!!profileErrors.email} style={fieldStyle(!!profileErrors.email)} {...registerProfile('email')} />
+                </FormGroup>
 
-                <div className="form-group">
-                  <label className="form-label">Mobile No.</label>
-                  <input
-                    type="text"
-                    value={profileForm.mobile}
-                    onChange={e => setProfileForm({ ...profileForm, mobile: e.target.value })}
-                    className="form-control"
-                    placeholder="Enter Mobile No."
-                  />
-                </div>
+                <FormGroup label="Mobile No." htmlFor="sa-mobile" error={profileErrors.mobile?.message}>
+                  <input id="sa-mobile" type="text" inputMode="numeric" placeholder="Enter Mobile No." data-field="mobile" className="form-control" aria-invalid={!!profileErrors.mobile} style={fieldStyle(!!profileErrors.mobile)} {...registerProfile('mobile')} />
+                </FormGroup>
 
                 <div style={{ marginTop: '1rem' }}>
                   <button type="submit" disabled={profileSaving} className="btn btn-block btn-info btn-sm" style={{ width: '160px', cursor: 'pointer' }}>
@@ -160,51 +142,26 @@ export default function SuperAdminProfilePage() {
             </div>
           </div>
 
-          {/* Change Password Form */}
           <div className="card">
             <div className="card-header">
               <span className="card-title">Change Password</span>
             </div>
             <div className="card-body">
-              <form onSubmit={handlePasswordSave} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Old Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.currentPassword}
-                    onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                    className="form-control"
-                    placeholder="Password"
-                  />
-                </div>
+              <form onSubmit={savePassword} noValidate style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <FormGroup label="Old Password" htmlFor="sa-old-pwd" required error={passwordErrors.currentPassword?.message}>
+                  <PasswordInput id="sa-old-pwd" placeholder="Password" data-field="currentPassword" className="form-control" aria-invalid={!!passwordErrors.currentPassword} style={fieldStyle(!!passwordErrors.currentPassword)} autoComplete="current-password" {...registerPassword('currentPassword')} />
+                </FormGroup>
 
-                <div className="form-group">
-                  <label className="form-label">New Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.newPassword}
-                    onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                    className="form-control"
-                    placeholder="Password"
-                  />
+                <FormGroup label="New Password" htmlFor="sa-new-pwd" required error={passwordErrors.newPassword?.message}>
+                  <PasswordInput id="sa-new-pwd" placeholder="Password" data-field="newPassword" className="form-control" aria-invalid={!!passwordErrors.newPassword} style={fieldStyle(!!passwordErrors.newPassword)} autoComplete="new-password" {...registerPassword('newPassword')} />
                   <label className="form-label" style={{ fontSize: '9px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    (Enter atleast 6 characters. Only @,# are allowed as special character)
+                    {PASSWORD_HELPER_TEXT}
                   </label>
-                </div>
+                </FormGroup>
 
-                <div className="form-group">
-                  <label className="form-label">Confirm Password</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.confirmPassword}
-                    onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                    className="form-control"
-                    placeholder="Password"
-                  />
-                </div>
+                <FormGroup label="Confirm Password" htmlFor="sa-confirm-pwd" required error={passwordErrors.confirmPassword?.message}>
+                  <PasswordInput id="sa-confirm-pwd" placeholder="Password" data-field="confirmPassword" className="form-control" aria-invalid={!!passwordErrors.confirmPassword} style={fieldStyle(!!passwordErrors.confirmPassword)} autoComplete="new-password" {...registerPassword('confirmPassword')} />
+                </FormGroup>
 
                 <div style={{ marginTop: '1rem' }}>
                   <button type="submit" disabled={passwordSaving} className="btn btn-block btn-info btn-sm" style={{ width: '160px', cursor: 'pointer' }}>
@@ -217,6 +174,6 @@ export default function SuperAdminProfilePage() {
 
         </div>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,317 +1,552 @@
 'use client';
-import { useEffect, useState } from 'react';
-import TopNav from '../../../components/TopNav';
-import { formatDate } from '../../../utils/dateFormat';
-import Link from 'next/link';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-function getToken() { return typeof window !== 'undefined' ? localStorage.getItem('admin_token') || '' : ''; }
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import TopNav from '../../../components/TopNav';
+import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
+import { FormGroup, FieldError } from '../../../components/FormField';
+import { useConfirm } from '../../../components/ConfirmModal';
+import { formatDate } from '../../../utils/dateFormat';
+import { apiFetch, toastApiError, toastApiSuccess } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  adultHealthCertificateSchema,
+  type AdultHealthCertificateFormValues,
+} from '../../../../lib/schemas';
+
+interface HealthCertificate {
+  id: number;
+  patient_id: number;
+  name?: string;
+  patient_email?: string;
+  patient_uid?: string;
+  date_of_examination?: string;
+  clinician_name?: string;
+}
+
+interface PatientSearchResult {
+  id: number;
+  name?: string;
+  uid?: string;
+  email?: string;
+}
+
+const CERT_QUERY_KEY = ['adultHealthCertificates'] as const;
+
+const emptyForm: AdultHealthCertificateFormValues = {
+  patient_id: '',
+  free_from_disease: false,
+  satisfactory_physical: false,
+  tuberculin_test_type: '',
+  tuberculin_date_planted: '',
+  tuberculin_date_read: '',
+  tuberculin_result: '',
+  chest_xray_date: '',
+  chest_xray_result: '',
+  additional_info: '',
+  clinician_name: '',
+  clinician_specialty: 'MD',
+  clinician_address: '',
+  date_of_examination: '',
+};
 
 export default function HealthCertificatesPage() {
-  const [certificates, setCertificates] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [emailingId, setEmailingId] = useState<number | null>(null);
-  
-  // Form state
-  const [formData, setFormData] = useState({
-    patient_id: '',
-    free_from_disease: false,
-    satisfactory_physical: false,
-    tuberculin_test_type: '',
-    tuberculin_date_planted: '',
-    tuberculin_date_read: '',
-    tuberculin_result: '',
-    chest_xray_date: '',
-    chest_xray_result: '',
-    additional_info: '',
-    clinician_name: '',
-    clinician_specialty: 'MD',
-    clinician_address: '',
-    date_of_examination: ''
+  const confirmDialog = useConfirm();
+  const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<AdultHealthCertificateFormValues>({
+    resolver: formResolver<AdultHealthCertificateFormValues>(adultHealthCertificateSchema),
+    defaultValues: emptyForm,
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const patientId = watch('patient_id');
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API}/api/AdultHealthCertificates`, { headers: { token: getToken() } });
-      const data = await res.json();
-      if (data.response_code === '200') setCertificates(data.obj || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.patient_id) {
-      alert('Please search and select a patient first.');
-      return;
-    }
-    if (!formData.clinician_specialty) {
-      alert('Please select a clinician specialty (MD, PA, or NP).');
-      return;
-    }
-    try {
-      const res = await fetch(`${API}/api/AdultHealthCertificates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', token: getToken() },
-        body: JSON.stringify(formData)
-      });
-      const data = await res.json();
-      if (data.response_code === '200') {
-        setShowModal(false);
-        fetchData();
-        setFormData({
-          patient_id: '', free_from_disease: false, satisfactory_physical: false,
-          tuberculin_test_type: '', tuberculin_date_planted: '', tuberculin_date_read: '',
-          tuberculin_result: '', chest_xray_date: '', chest_xray_result: '',
-          additional_info: '', clinician_name: '', clinician_specialty: 'MD', clinician_address: '', date_of_examination: ''
+  const { data: certificates = [], isLoading: loading } = useQuery({
+    queryKey: CERT_QUERY_KEY,
+    queryFn: async () => {
+      try {
+        const list = await apiFetch<HealthCertificate[]>('/api/AdultHealthCertificates', {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load health certificates.',
         });
-      } else {
-        alert(data.obj);
+        return list || [];
+      } catch {
+        return [];
       }
-    } catch (err) {
-      console.error(err);
+    },
+  });
+
+  const searchPatientMutation = useMutation({
+    mutationFn: async (val: string) => {
+      const isMobile = /^\d+$/.test(val);
+      const q = isMobile ? `mobile=${encodeURIComponent(val)}` : `uid=${encodeURIComponent(val)}`;
+      return apiFetch<PatientSearchResult>(`/api/Patient/search?${q}`, {
+        tokenKey: 'admin_token',
+        errorFallback: 'Patient not found.',
+      });
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (values: AdultHealthCertificateFormValues) =>
+      apiFetch('/api/AdultHealthCertificates', {
+        method: 'POST',
+        tokenKey: 'admin_token',
+        body: JSON.stringify(values),
+        successMessage: 'Health certificate issued successfully.',
+        errorFallback: 'Failed to issue certificate.',
+      }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/api/AdultHealthCertificates/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'admin_token',
+        successMessage: 'Certificate deleted successfully.',
+        errorFallback: 'Failed to delete certificate.',
+      }),
+  });
+
+  const emailMutation = useMutation({
+    mutationFn: ({ id, email }: { id: number; email: string }) =>
+      apiFetch('/api/AdultHealthCertificates/emailAdultHealthCertificate', {
+        method: 'POST',
+        tokenKey: 'admin_token',
+        body: JSON.stringify({ id }),
+        successMessage: email
+          ? `Certificate emailed successfully to ${email}.`
+          : 'Certificate emailed successfully.',
+        errorFallback: 'Failed to email certificate.',
+      }),
+  });
+
+  const openForm = () => {
+    reset(emptyForm);
+    setSelectedPatient(null);
+    setPatientSearch('');
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    reset(emptyForm);
+    setSelectedPatient(null);
+    setPatientSearch('');
+  };
+
+  const resetFormData = () => {
+    reset(emptyForm);
+    setSelectedPatient(null);
+    setPatientSearch('');
+  };
+
+  const searchPatient = async () => {
+    const val = patientSearch.trim();
+    if (!val) {
+      toastApiError('Enter a patient UID or mobile number.');
+      return;
+    }
+    try {
+      const patient = await searchPatientMutation.mutateAsync(val);
+      setSelectedPatient(patient);
+      setValue('patient_id', patient.id, { shouldValidate: true });
+      toastApiSuccess(`Patient selected: ${patient.name || patient.uid || patient.id}`);
+    } catch {
+      setSelectedPatient(null);
+      setValue('patient_id', '', { shouldValidate: true });
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this certificate?')) return;
+  const onSubmit = handleSubmit(async values => {
     try {
-      await fetch(`${API}/api/AdultHealthCertificates/${id}`, {
-        method: 'DELETE',
-        headers: { token: getToken() }
-      });
-      fetchData();
-    } catch (err) {
-      console.error(err);
+      await saveMutation.mutateAsync(values);
+      closeForm();
+      await queryClient.invalidateQueries({ queryKey: CERT_QUERY_KEY });
+    } catch {
+      /* toasted by apiFetch */
+    }
+  }, createInvalidHandler<AdultHealthCertificateFormValues>());
+
+  const handleDelete = async (cert: HealthCertificate) => {
+    const ok = await confirmDialog({
+      title: 'Delete certificate?',
+      message: `Delete Adult Health Certificate #${cert.id} for ${cert.name || 'this patient'}? This cannot be undone.`,
+      cancelText: 'Cancel',
+      confirmText: 'Delete',
+    });
+    if (!ok) return;
+
+    try {
+      await deleteMutation.mutateAsync(cert.id);
+      await queryClient.invalidateQueries({ queryKey: CERT_QUERY_KEY });
+    } catch {
+      /* toasted by apiFetch */
     }
   };
+
+  const emailCert = async (cert: HealthCertificate) => {
+    if (emailMutation.isPending) return;
+
+    const email = (cert.patient_email || '').trim();
+    const ok = await confirmDialog({
+      title: 'Send certificate by email?',
+      message: email
+        ? `Email the password-protected Adult Health Certificate to ${email}? The patient will need their birthdate digits (MMDD) to open the PDF.`
+        : 'Send Adult Health Certificate to the patient via email? The patient will need their birthdate digits (MMDD) to open the PDF.',
+      cancelText: 'Cancel',
+      confirmText: 'Send Email',
+    });
+    if (!ok) return;
+
+    try {
+      await emailMutation.mutateAsync({ id: cert.id, email });
+    } catch {
+      /* toasted by apiFetch — includes backend "No email address found for this patient" */
+    }
+  };
+
+  const saving = saveMutation.isPending;
+  const searching = searchPatientMutation.isPending;
+  const emailing = emailMutation.isPending;
+
+  const columns: ListingColumn<HealthCertificate>[] = [
+    {
+      key: 'id',
+      label: 'Cert ID',
+      sortable: true,
+      filterable: true,
+      width: '12%',
+      getValue: row => String(row.id),
+      render: row => `#${row.id}`,
+    },
+    {
+      key: 'name',
+      label: 'Patient Name',
+      sortable: true,
+      filterable: true,
+      width: '28%',
+      getValue: row => row.name || '',
+      render: row => (
+        <span>
+          <strong>{row.name || '—'}</strong>
+          {row.patient_uid ? (
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{row.patient_uid}</div>
+          ) : null}
+        </span>
+      ),
+    },
+    {
+      key: 'date_of_examination',
+      label: 'Exam Date',
+      sortable: true,
+      filterable: true,
+      width: '18%',
+      getValue: row => (row.date_of_examination ? formatDate(row.date_of_examination) : ''),
+      render: row => (row.date_of_examination ? formatDate(row.date_of_examination) : '—'),
+    },
+    {
+      key: 'clinician_name',
+      label: 'Clinician',
+      sortable: true,
+      filterable: true,
+      width: '22%',
+      getValue: row => row.clinician_name || '',
+      render: row => row.clinician_name || '—',
+    },
+  ];
 
   return (
-    <>
+    <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Adult Health Certificates" />
-      <div className="page-content">
-        <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 className="page-title">Health Certificates</h2>
-            <p className="page-subtitle">Manage and print Adult Health Certificates for patients.</p>
+
+      {emailing && (
+        <div className="test-reports-email-overlay" role="status" aria-live="polite" aria-busy="true">
+          <div className="test-reports-email-overlay-card">
+            <span className="test-reports-email-spinner" aria-hidden />
+            <div className="test-reports-email-overlay-title">Sending email...</div>
+            <div className="test-reports-email-overlay-text">
+              Please wait while we generate and send the certificate PDF.
+            </div>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(!showModal)}>
-            {showModal ? 'View Certificates List' : '+ Issue New Certificate'}
-          </button>
         </div>
+      )}
 
-        {/* Issue Certificate Form Inline */}
-        {showModal ? (
-          <div className="card" style={{ width: '100%', marginBottom: '24px' }}>
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 className="card-title">Issue Adult Health Certificate</h3>
+      <div className={`page-body${emailing ? ' test-reports-page-busy' : ''}`}>
+        {showForm ? (
+          <div className="card">
+            <div className="card-header cert-form-card-header">
+              <span className="card-title">Issue Adult Health Certificate</span>
+              <button type="button" className="btn btn-ghost" onClick={closeForm}>
+                View Certificates List
+              </button>
             </div>
-            <div className="card-body">
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Patient Selection</h4>
-                  <div className="form-group" style={{ display: 'flex', gap: '8px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label className="form-label">Search Patient (UID or Mobile)</label>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <input type="text" className="form-control" id="patientSearchInput" placeholder="Enter PT001 or 9999999999" />
-                        <button type="button" className="btn btn-secondary" onClick={async () => {
-                          const val = (document.getElementById('patientSearchInput') as HTMLInputElement).value;
-                          if(!val) return;
-                          const isMobile = /^\d+$/.test(val);
-                          const q = isMobile ? `mobile=${val}` : `uid=${val}`;
-                          try {
-                            const res = await fetch(`${API}/api/Patient/search?${q}`, { headers: { token: getToken() } });
-                            const data = await res.json();
-                            if(data.response_code === '200') {
-                              setFormData({...formData, patient_id: data.obj.id});
-                              alert(`Patient Selected: ${data.obj.name}`);
-                            } else {
-                              alert('Patient not found!');
+            <form onSubmit={onSubmit} noValidate>
+              <div className="card-body">
+                <div className="cert-form">
+                  <input type="hidden" data-field="patient_id" {...register('patient_id')} />
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Patient Selection</h4>
+                    <FormGroup
+                      label="Search Patient (UID or Mobile)"
+                      htmlFor="hc-patient-search"
+                      required
+                      error={errors.patient_id?.message as string | undefined}
+                    >
+                      <div className="cert-form-search">
+                        <input
+                          id="hc-patient-search"
+                          type="text"
+                          className="form-control"
+                          data-field="patient_id"
+                          placeholder="Enter PT001 or 9999999999"
+                          value={patientSearch}
+                          onChange={e => setPatientSearch(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              void searchPatient();
                             }
-                          } catch(e) { alert('Error searching patient'); }
-                        }}>Search</button>
+                          }}
+                          style={fieldStyle(!!errors.patient_id)}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => void searchPatient()}
+                          disabled={searching}
+                        >
+                          {searching ? 'Searching...' : 'Search'}
+                        </button>
+                      </div>
+                    </FormGroup>
+                    {(selectedPatient || patientId) && (
+                      <div className="cert-form-selected">
+                        Selected: {selectedPatient?.name || 'Patient'}
+                        {selectedPatient?.uid ? ` (${selectedPatient.uid})` : ''} — ID {String(patientId)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Physical Examination</h4>
+                    <label className="cert-form-check">
+                      <input type="checkbox" {...register('free_from_disease')} />
+                      <span>1. Free from disease in communicable form.</span>
+                    </label>
+                    <label className="cert-form-check">
+                      <input type="checkbox" {...register('satisfactory_physical')} />
+                      <span>
+                        2. In satisfactory physical condition, this will permit, close association with
+                        children/elderly without danger to them.
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="cert-form-grid cert-form-grid-2">
+                    <div className="cert-form-section">
+                      <h4 className="cert-form-section-title">Tuberculin Test</h4>
+                      <FormGroup label="Test Type" htmlFor="tuberculin_test_type">
+                        <select
+                          id="tuberculin_test_type"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('tuberculin_test_type')}
+                        >
+                          <option value="">None</option>
+                          <option value="Tine">Tine</option>
+                          <option value="PPD">PPD</option>
+                        </select>
+                      </FormGroup>
+                      <div className="cert-form-grid cert-form-grid-2">
+                        <FormGroup label="Date Planted" htmlFor="tuberculin_date_planted">
+                          <input
+                            id="tuberculin_date_planted"
+                            type="date"
+                            className="form-control"
+                            style={fieldStyle(false)}
+                            {...register('tuberculin_date_planted')}
+                          />
+                        </FormGroup>
+                        <FormGroup label="Date Read" htmlFor="tuberculin_date_read">
+                          <input
+                            id="tuberculin_date_read"
+                            type="date"
+                            className="form-control"
+                            style={fieldStyle(false)}
+                            {...register('tuberculin_date_read')}
+                          />
+                        </FormGroup>
+                      </div>
+                      <FormGroup label="Result" htmlFor="tuberculin_result">
+                        <input
+                          id="tuberculin_result"
+                          type="text"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('tuberculin_result')}
+                        />
+                      </FormGroup>
+                    </div>
+
+                    <div className="cert-form-section">
+                      <h4 className="cert-form-section-title">Chest X-Ray</h4>
+                      <FormGroup label="Date" htmlFor="chest_xray_date">
+                        <input
+                          id="chest_xray_date"
+                          type="date"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('chest_xray_date')}
+                        />
+                      </FormGroup>
+                      <FormGroup label="Result" htmlFor="chest_xray_result">
+                        <input
+                          id="chest_xray_result"
+                          type="text"
+                          className="form-control"
+                          style={fieldStyle(false)}
+                          {...register('chest_xray_result')}
+                        />
+                      </FormGroup>
+                    </div>
+                  </div>
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Additional Information</h4>
+                    <FormGroup label="Past Medical History, Current Medications" htmlFor="additional_info">
+                      <textarea
+                        id="additional_info"
+                        className="form-control"
+                        rows={3}
+                        style={{ ...fieldStyle(false), resize: 'vertical' }}
+                        {...register('additional_info')}
+                      />
+                    </FormGroup>
+                  </div>
+
+                  <div className="cert-form-section">
+                    <h4 className="cert-form-section-title">Clinician Details</h4>
+                    <div className="cert-form-grid cert-form-grid-3">
+                      <FormGroup
+                        label="Clinician Name"
+                        htmlFor="clinician_name"
+                        required
+                        error={errors.clinician_name?.message}
+                      >
+                        <input
+                          id="clinician_name"
+                          type="text"
+                          className="form-control"
+                          data-field="clinician_name"
+                          placeholder="e.g. Dr. John Doe"
+                          aria-invalid={!!errors.clinician_name}
+                          style={fieldStyle(!!errors.clinician_name)}
+                          {...register('clinician_name')}
+                        />
+                      </FormGroup>
+                      <div className="form-group">
+                        <label>
+                          Specialty<span className="required-star">*</span>
+                        </label>
+                        <div className="cert-radio-group" data-field="clinician_specialty">
+                          {(['MD', 'PA', 'NP'] as const).map(spec => (
+                            <label key={spec}>
+                              <input type="radio" value={spec} {...register('clinician_specialty')} />
+                              {spec}
+                            </label>
+                          ))}
+                        </div>
+                        <FieldError message={errors.clinician_specialty?.message} />
+                      </div>
+                      <FormGroup
+                        label="Date of Exam"
+                        htmlFor="date_of_examination"
+                        required
+                        error={errors.date_of_examination?.message}
+                      >
+                        <input
+                          id="date_of_examination"
+                          type="date"
+                          className="form-control"
+                          data-field="date_of_examination"
+                          aria-invalid={!!errors.date_of_examination}
+                          style={fieldStyle(!!errors.date_of_examination)}
+                          {...register('date_of_examination')}
+                        />
+                      </FormGroup>
+                      <div className="cert-form-span-full">
+                        <FormGroup label="Clinician Address" htmlFor="clinician_address">
+                          <input
+                            id="clinician_address"
+                            type="text"
+                            className="form-control"
+                            style={fieldStyle(false)}
+                            {...register('clinician_address')}
+                          />
+                        </FormGroup>
                       </div>
                     </div>
                   </div>
-                  {formData.patient_id && <div style={{ marginTop: '8px', color: 'green', fontWeight: 'bold' }}>✓ Patient ID {formData.patient_id} Selected</div>}
                 </div>
-
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Physical Examination</h4>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={formData.free_from_disease} onChange={e => setFormData({...formData, free_from_disease: e.target.checked})} />
-                    <span>1. Free from disease in communicable form.</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input type="checkbox" checked={formData.satisfactory_physical} onChange={e => setFormData({...formData, satisfactory_physical: e.target.checked})} />
-                    <span>2. In satisfactory physical condition, this will permit, close association with children/elderly without danger to them.</span>
-                  </label>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Tuberculin Test</h4>
-                    <div className="form-group">
-                      <label className="form-label">Test Type</label>
-                      <select className="form-control" value={formData.tuberculin_test_type} onChange={e => setFormData({...formData, tuberculin_test_type: e.target.value})}>
-                        <option value="">None</option>
-                        <option value="Tine">Tine</option>
-                        <option value="PPD">PPD</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Date Planted</label>
-                      <input type="date" className="form-control" value={formData.tuberculin_date_planted} onChange={e => setFormData({...formData, tuberculin_date_planted: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Date Read</label>
-                      <input type="date" className="form-control" value={formData.tuberculin_date_read} onChange={e => setFormData({...formData, tuberculin_date_read: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Result</label>
-                      <input type="text" className="form-control" value={formData.tuberculin_result} onChange={e => setFormData({...formData, tuberculin_result: e.target.value})} />
-                    </div>
-                  </div>
-
-                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Chest X-Ray</h4>
-                    <div className="form-group">
-                      <label className="form-label">Date</label>
-                      <input type="date" className="form-control" value={formData.chest_xray_date} onChange={e => setFormData({...formData, chest_xray_date: e.target.value})} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Result</label>
-                      <input type="text" className="form-control" value={formData.chest_xray_result} onChange={e => setFormData({...formData, chest_xray_result: e.target.value})} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Additional Information (Past Medical History, Current Medications)</label>
-                  <textarea className="form-control" rows={3} value={formData.additional_info} onChange={e => setFormData({...formData, additional_info: e.target.value})}></textarea>
-                </div>
-
-                <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '1rem' }}>Clinician Details</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-                    <div className="form-group">
-                      <label className="form-label">Clinician Name *</label>
-                      <input type="text" className="form-control" required value={formData.clinician_name} onChange={e => setFormData({...formData, clinician_name: e.target.value})} placeholder="e.g. Dr. John Doe" />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Specialty *</label>
-                      <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-                        {['MD', 'PA', 'NP'].map(spec => (
-                          <label key={spec} style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                            <input type="radio" name="clinician_specialty" value={spec} checked={formData.clinician_specialty === spec} onChange={e => setFormData({...formData, clinician_specialty: e.target.value})} />
-                            {spec}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Date of Exam *</label>
-                      <input type="date" className="form-control" required value={formData.date_of_examination} onChange={e => setFormData({...formData, date_of_examination: e.target.value})} />
-                    </div>
-                  </div>
-                  <div className="form-group" style={{ marginTop: '16px' }}>
-                    <label className="form-label">Clinician Address</label>
-                    <input type="text" className="form-control" value={formData.clinician_address} onChange={e => setFormData({...formData, clinician_address: e.target.value})} />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-                  <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary">Save & Issue Certificate</button>
-                </div>
-
-              </form>
-            </div>
+              </div>
+              <div className="cert-form-footer-actions">
+                <button type="submit" className="btn btn-primary" disabled={saving || !patientId}>
+                  {saving ? 'Saving...' : 'Save & Issue Certificate'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={resetFormData} disabled={saving}>
+                  Reset Data
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={closeForm} disabled={saving}>
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         ) : (
-          <div className="card">
-            <div className="card-body" style={{ padding: 0 }}>
-              <div className="table-responsive">
-                <table className="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: '13px', fontWeight: 600 }}>Cert ID</th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: '13px', fontWeight: 600 }}>Patient Name</th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: '13px', fontWeight: 600 }}>Exam Date</th>
-                      <th style={{ textAlign: 'left', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: '13px', fontWeight: 600 }}>Clinician</th>
-                      <th style={{ textAlign: 'right', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', color: '#64748b', fontSize: '13px', fontWeight: 600 }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loading ? (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px' }}>Loading...</td></tr>
-                    ) : certificates.length === 0 ? (
-                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>No certificates found.</td></tr>
-                    ) : (
-                      certificates.map((cert) => (
-                        <tr key={cert.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', color: '#0f172a' }}>#{cert.id}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', color: '#0f172a', fontWeight: 500 }}>{cert.name || 'Unknown'}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', color: '#64748b' }}>{cert.date_of_examination ? formatDate(cert.date_of_examination) : '—'}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '14px', color: '#64748b' }}>{cert.clinician_name || '—'}</td>
-                          <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                              <button 
-                                className="btn btn-sm" 
-                                style={{ padding: '4px 8px', background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1' }}
-                                disabled={emailingId === cert.id}
-                                onClick={async () => {
-                                  setEmailingId(cert.id);
-                                  try {
-                                    const res = await fetch(`${API}/api/AdultHealthCertificates/email`, {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json', token: getToken() },
-                                      body: JSON.stringify({ id: cert.id })
-                                    });
-                                    const data = await res.json();
-                                    if (data.response_code === '200') {
-                                      alert('Certificate emailed successfully!');
-                                    } else {
-                                      alert(data.obj || 'Failed to email certificate');
-                                    }
-                                  } catch(e) {
-                                    alert('Error sending email');
-                                  } finally {
-                                    setEmailingId(null);
-                                  }
-                                }}
-                              >
-                                {emailingId === cert.id ? '⏳' : '✉️ Email'}
-                              </button>
-                              <Link href={`/admin/dashboard/health-certificates/print/${cert.id}`} target="_blank" className="btn btn-sm btn-ghost" style={{ padding: '4px 8px' }}>
-                                🖨️ Print
-                              </Link>
-                              <button className="btn btn-sm" style={{ padding: '4px 8px', color: '#dc2626', background: 'transparent', border: '1px solid #dc2626' }} onClick={() => handleDelete(cert.id)}>
-                                🗑️
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
+          <ListingTable
+            title="Health Certificates"
+            columns={columns}
+            rows={certificates}
+            loading={loading}
+            emptyText="No certificates found."
+            actionsLabel="Actions"
+            actionsWidth={140}
+            defaultPageSize={25}
+            headerActions={
+              <ListingHeaderActions onAdd={openForm} addLabel="Issue New Certificate" />
+            }
+            rowActions={cert => (
+              <ActionIcons
+                onMail={() => void emailCert(cert)}
+                mailTitle={`Email certificate #${cert.id}`}
+                onView={() =>
+                  window.open(
+                    `/admin/dashboard/health-certificates/print/${cert.id}`,
+                    '_blank',
+                    'noopener,noreferrer',
+                  )
+                }
+                viewTitle="Print"
+                onDelete={() => void handleDelete(cert)}
+                deleteTitle="Delete"
+              />
+            )}
+          />
         )}
       </div>
-    </>
+    </div>
   );
 }

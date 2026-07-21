@@ -3,9 +3,10 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm, type SubmitErrorHandler } from 'react-hook-form';
-import { yupResolver } from '@hookform/resolvers/yup';
 import { useMutation } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { focusFirstInvalidField, formResolver } from '../../lib/formHelpers';
+import { FieldError } from '../components/FormField';
+import PasswordInput from './PasswordInput';
 import { apiFetch } from '../../lib/api';
 import { loginSchema, type LoginFormValues } from '../../lib/schemas';
 import { useAppDispatch } from '../../store/hooks';
@@ -35,8 +36,8 @@ export default function LoginLayout({
 }: LoginPageProps) {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { register, handleSubmit } = useForm<LoginFormValues>({
-    resolver: yupResolver(loginSchema),
+  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
+    resolver: formResolver<LoginFormValues>(loginSchema),
     defaultValues: { username: '', password: '' },
   });
 
@@ -58,8 +59,7 @@ export default function LoginLayout({
   });
 
   const handleInvalid: SubmitErrorHandler<LoginFormValues> = errors => {
-    const firstError = Object.values(errors)[0];
-    if (firstError?.message) toast.error(firstError.message);
+    focusFirstInvalidField(errors);
   };
 
   return (
@@ -85,22 +85,27 @@ export default function LoginLayout({
               type={usernameType}
               placeholder={usernamePlaceholder}
               autoComplete="username"
+              data-field="username"
+              aria-invalid={!!errors.username}
               className="w-full rounded-md border border-[#e6e9ed] bg-white px-[0.9rem] py-[0.6rem] text-[0.875rem] text-[#2c3e50] outline-none transition-colors focus:border-[#18BADD]"
               {...register('username')}
             />
+            <FieldError message={errors.username?.message} />
           </div>
 
           <div className="mb-5">
             <label className="mb-[0.35rem] block text-[0.82rem] font-medium text-[#2c3e50]">
               Password
             </label>
-            <input
-              type="password"
+            <PasswordInput
               placeholder="••••••••"
               autoComplete="current-password"
+              data-field="password"
+              aria-invalid={!!errors.password}
               className="w-full rounded-md border border-[#e6e9ed] bg-white px-[0.9rem] py-[0.6rem] text-[0.875rem] text-[#2c3e50] outline-none transition-colors focus:border-[#18BADD]"
               {...register('password')}
             />
+            <FieldError message={errors.password?.message} />
           </div>
 
           <button

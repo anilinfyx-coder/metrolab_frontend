@@ -65,7 +65,10 @@ export default function ManageRequestsPage() {
         headers: { token: getToken('admin_token'), 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      await handleApiResponse(res, { errorFallback: 'Failed to delete' });
+      await handleApiResponse(res, {
+        successMessage: 'Test request deleted successfully.',
+        errorFallback: 'Failed to delete',
+      });
       loadData();
     } catch {
       // Error toast handled by handleApiResponse
@@ -145,7 +148,7 @@ export default function ManageRequestsPage() {
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Manage Test Requests" />
 
-      <div style={{ padding: '1.5rem 1.75rem' }}>
+      <div className="page-body">
         <ListingTable
           className="test-requests-table"
           title="List of Test Requests"

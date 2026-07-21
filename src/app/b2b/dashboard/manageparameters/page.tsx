@@ -1,10 +1,14 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdHourglassEmpty, MdRefresh, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
+import { FormGroup } from '../../../components/FormField';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { b2bManageParameterSchema, type B2bManageParameterFormValues } from '../../../../lib/schemas';
 
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
@@ -30,7 +34,7 @@ interface TestResultParameter {
 
 const UNIT_OPTIONS = ['ng/mL', 'Quant', 'mg/dL', 'pg/mL', '%'];
 
-const emptyForm = {
+const emptyForm: B2bManageParameterFormValues = {
   name: '',
   placeholder: '',
   label: '',
@@ -44,10 +48,6 @@ const emptyForm = {
   lab_test_id: '',
 };
 
-type ParamForm = typeof emptyForm;
-type ParamField = keyof ParamForm;
-type ParamErrors = Partial<Record<ParamField, string>>;
-
 const INPUT_TYPE_LABELS: Record<string, string> = {
   '1': 'Textbox (Numeric)',
   '2': 'Dropdown',
@@ -58,10 +58,22 @@ export default function TestResultParameterPage() {
   const [params, setParams] = useState<TestResultParameter[]>([]);
   const [labTests, setLabTests] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<ParamForm>({ ...emptyForm });
-  const [errors, setErrors] = useState<ParamErrors>({});
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<B2bManageParameterFormValues>({
+    resolver: formResolver<B2bManageParameterFormValues>(b2bManageParameterSchema),
+    defaultValues: emptyForm,
+  });
+
+  const inputType = watch('input_type');
 
   const loadData = async () => {
     setLoading(true);
@@ -82,7 +94,7 @@ export default function TestResultParameterPage() {
 
   const loadLabTests = async () => {
     try {
-      const data = await apiFetch<{ id: number; name: string }[]>('/api/LabTests', {
+      const data = await apiFetch<{ id: number; name: string }[]>('/api/LabTests?status=true', {
         tokenKey: 'b2b_token',
         errorFallback: 'Unable to load lab tests.',
       });
@@ -99,52 +111,7 @@ export default function TestResultParameterPage() {
     });
   }, []);
 
-  const updateField = <K extends ParamField>(field: K, value: ParamForm[K]) => {
-    setForm(previous => ({ ...previous, [field]: value }));
-    setErrors(previous => {
-      if (!previous[field]) return previous;
-      const next = { ...previous };
-      delete next[field];
-      return next;
-    });
-  };
-
-  const validateForm = (): ParamErrors => {
-    const next: ParamErrors = {};
-    if (!form.name.trim()) next.name = 'Please enter the parameter name.';
-    if (!form.placeholder.trim()) next.placeholder = 'Please enter placeholder text.';
-    if (!form.label.trim()) next.label = 'Please enter the field label.';
-    if (!['1', '2'].includes(form.input_type)) next.input_type = 'Please select a valid input type.';
-    if (form.input_type === '2') {
-      const options = form.input_option.split(',').map(value => value.trim());
-      if (!form.input_option.trim()) {
-        next.input_option = 'Please enter at least one dropdown value.';
-      } else if (options.some(value => !value)) {
-        next.input_option = 'Dropdown values must be comma separated without empty values.';
-      }
-    }
-    if (!form.unit_text.trim()) next.unit_text = 'Please select or enter a unit.';
-    if (!form.screening_cutoff.trim()) next.screening_cutoff = 'Please enter the screening cutoff.';
-    if (!form.confirmation_cutoff.trim()) next.confirmation_cutoff = 'Please enter the confirmation cutoff.';
-    if (!form.is_mandatory) next.is_mandatory = 'Please check Is Mandatory. This field is required.';
-    if (!form.lab_test_id) next.lab_test_id = 'Please select a lab test.';
-    return next;
-  };
-
-  const save = async () => {
-    const nextErrors = validateForm();
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      toastApiError('Please correct the highlighted fields before saving.');
-      const firstInvalidField = Object.keys(nextErrors)[0];
-      window.setTimeout(() => {
-        const input = document.querySelector<HTMLElement>(`[data-param-field="${firstInvalidField}"]`);
-        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        input?.focus();
-      }, 0);
-      return;
-    }
-
+  const save = handleSubmit(async values => {
     setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
     const path = `/api/ReportRequestParameters${editingId ? `/${editingId}` : ''}`;
@@ -154,33 +121,31 @@ export default function TestResultParameterPage() {
         method,
         tokenKey: 'b2b_token',
         body: JSON.stringify({
-          name: form.name.trim(),
-          placeholder: form.placeholder.trim(),
-          label: form.label.trim(),
-          input_type: Number(form.input_type),
-          input_option: form.input_type === '2' ? form.input_option.trim() : '',
-          unit_text: form.unit_text.trim(),
-          screening_cutoff: form.screening_cutoff.trim(),
-          confirmation_cutoff: form.confirmation_cutoff.trim(),
-          description: form.description.trim(),
+          name: values.name.trim(),
+          placeholder: values.placeholder.trim(),
+          label: values.label.trim(),
+          input_type: Number(values.input_type),
+          input_option: values.input_type === '2' ? (values.input_option || '').trim() : '',
+          unit_text: values.unit_text.trim(),
+          screening_cutoff: values.screening_cutoff.trim(),
+          confirmation_cutoff: values.confirmation_cutoff.trim(),
+          description: (values.description || '').trim(),
           is_mandatory: true,
-          lab_test_id: Number(form.lab_test_id),
+          lab_test_id: Number(values.lab_test_id),
           b2b_client_id: user?.id,
           status: true,
         }),
         successMessage: `Parameter ${editingId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save the parameter. Please try again.',
       });
-      setForm({ ...emptyForm });
-      setErrors({});
-      setEditingId(null);
+      resetForm();
       loadData();
     } catch {
       /* toast handled by apiFetch */
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<B2bManageParameterFormValues>());
 
   const remove = async (id: number) => {
     const ok = await confirmDialog({
@@ -194,6 +159,7 @@ export default function TestResultParameterPage() {
       await apiFetch(`/api/ReportRequestParameters/${id}`, {
         method: 'DELETE',
         tokenKey: 'b2b_token',
+        successMessage: 'Parameter deleted successfully.',
         errorFallback: 'Unable to delete parameter.',
       });
       loadData();
@@ -203,11 +169,22 @@ export default function TestResultParameterPage() {
   };
 
   const toggleStatus = async (p: TestResultParameter) => {
+    const enabling = !p.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Parameter?' : 'Disable Parameter?',
+      message: enabling
+        ? `${p.name || 'This parameter'} will become active.`
+        : `${p.name || 'This parameter'} will become inactive. You can enable it again later.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/ReportRequestParameters/${p.id}`, {
         method: 'PUT',
         tokenKey: 'b2b_token',
         body: JSON.stringify({ status: !p.status }),
+        successMessage: 'Status Updated Successfully',
         errorFallback: 'Unable to update parameter status.',
       });
       loadData();
@@ -218,7 +195,7 @@ export default function TestResultParameterPage() {
 
   const openEdit = (p: TestResultParameter) => {
     setEditingId(p.id);
-    setForm({
+    reset({
       name: p.name || '',
       placeholder: p.placeholder || '',
       label: p.label || '',
@@ -231,14 +208,12 @@ export default function TestResultParameterPage() {
       is_mandatory: !!p.is_mandatory,
       lab_test_id: String(p.lab_test_id || ''),
     });
-    setErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const resetForm = () => {
     setEditingId(null);
-    setForm({ ...emptyForm });
-    setErrors({});
+    reset(emptyForm);
   };
 
   const getInputTypeLabel = (val: number | string) => INPUT_TYPE_LABELS[String(val)] || String(val);
@@ -264,29 +239,10 @@ export default function TestResultParameterPage() {
     { key: 'unit_text', label: 'Unit Text', sortable: true, width: '18%' },
   ];
 
-  const fieldStyle = {
-    width: '100%',
-    background: 'var(--bg-input)',
-    border: '1px solid var(--border)',
-    borderRadius: 6,
-    padding: '0.5rem',
-    color: 'var(--text)',
-  };
-  const fieldErrorStyle = (field: ParamField) => ({
-    ...fieldStyle,
-    borderColor: errors[field] ? '#ef4444' : 'var(--border)',
-    boxShadow: errors[field] ? '0 0 0 1px rgba(239,68,68,0.15)' : 'none',
-  });
-  const errorMessage = (field: ParamField) => errors[field] ? (
-    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>
-      {errors[field]}
-    </div>
-  ) : null;
-
   return (
     <div className="page-content">
       <TopNav title="Test Result Parameters" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         <div className="manage-parameters-split">
           <div className="card">
             <div className="card-header">
@@ -294,178 +250,84 @@ export default function TestResultParameterPage() {
                 {editingId ? 'Edit Test Result Parameter Detail' : 'Test Result Parameter Detail'}
               </span>
             </div>
-            <div className="card-body">
-              <div className="form-group">
-                <label>Lab Test <span style={{ color: '#ef4444' }}>*</span></label>
-                <select
-                  value={form.lab_test_id}
-                  data-param-field="lab_test_id"
-                  aria-invalid={!!errors.lab_test_id}
-                  onChange={e => updateField('lab_test_id', e.target.value)}
-                  style={fieldErrorStyle('lab_test_id')}
-                >
-                  <option value="">-- Select Lab Test --</option>
-                  {labTests.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-                {errorMessage('lab_test_id')}
-              </div>
+            <form onSubmit={save} noValidate>
+              <div className="card-body">
+                <FormGroup label="Lab Test" htmlFor="mp-lab-test" required error={errors.lab_test_id?.message}>
+                  <select id="mp-lab-test" data-field="lab_test_id" aria-invalid={!!errors.lab_test_id} style={fieldStyle(!!errors.lab_test_id)} {...register('lab_test_id')}>
+                    <option value="">-- Select Lab Test --</option>
+                    {labTests.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </FormGroup>
 
-              <div className="form-group">
-                <label>Name <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter Name"
-                  value={form.name}
-                  data-param-field="name"
-                  aria-invalid={!!errors.name}
-                  onChange={e => updateField('name', e.target.value)}
-                  style={fieldErrorStyle('name')}
-                />
-                {errorMessage('name')}
-              </div>
+                <FormGroup label="Name" htmlFor="mp-name" required error={errors.name?.message}>
+                  <input id="mp-name" type="text" placeholder="Enter Name" data-field="name" aria-invalid={!!errors.name} style={fieldStyle(!!errors.name)} {...register('name')} />
+                </FormGroup>
 
-              <div className="form-group">
-                <label>Placeholder <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter Placeholder"
-                  value={form.placeholder}
-                  data-param-field="placeholder"
-                  aria-invalid={!!errors.placeholder}
-                  onChange={e => updateField('placeholder', e.target.value)}
-                  style={fieldErrorStyle('placeholder')}
-                />
-                {errorMessage('placeholder')}
-              </div>
+                <FormGroup label="Placeholder" htmlFor="mp-placeholder" required error={errors.placeholder?.message}>
+                  <input id="mp-placeholder" type="text" placeholder="Enter Placeholder" data-field="placeholder" aria-invalid={!!errors.placeholder} style={fieldStyle(!!errors.placeholder)} {...register('placeholder')} />
+                </FormGroup>
 
-              <div className="form-group">
-                <label>Label <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter Label Name"
-                  value={form.label}
-                  data-param-field="label"
-                  aria-invalid={!!errors.label}
-                  onChange={e => updateField('label', e.target.value)}
-                  style={fieldErrorStyle('label')}
-                />
-                {errorMessage('label')}
-              </div>
+                <FormGroup label="Label" htmlFor="mp-label" required error={errors.label?.message}>
+                  <input id="mp-label" type="text" placeholder="Enter Label Name" data-field="label" aria-invalid={!!errors.label} style={fieldStyle(!!errors.label)} {...register('label')} />
+                </FormGroup>
 
-              <div className="form-group">
-                <label>Input Type</label>
-                <select
-                  value={form.input_type}
-                  data-param-field="input_type"
-                  aria-invalid={!!errors.input_type}
-                  onChange={e => updateField('input_type', e.target.value)}
-                  style={fieldErrorStyle('input_type')}
-                >
-                  <option value="1">Textbox (Numeric)</option>
-                  <option value="2">Dropdown</option>
-                </select>
-                {errorMessage('input_type')}
-              </div>
+                <FormGroup label="Input Type" htmlFor="mp-input-type" error={errors.input_type?.message}>
+                  <select id="mp-input-type" data-field="input_type" aria-invalid={!!errors.input_type} style={fieldStyle(!!errors.input_type)} {...register('input_type')}>
+                    <option value="1">Textbox (Numeric)</option>
+                    <option value="2">Dropdown</option>
+                  </select>
+                </FormGroup>
 
-              {form.input_type === '2' && (
+                {inputType === '2' && (
+                  <FormGroup label="Dropdown Values (Comma Separated)" htmlFor="mp-input-option" required error={errors.input_option?.message}>
+                    <input id="mp-input-option" type="text" placeholder="e.g. Negative, Positive" data-field="input_option" aria-invalid={!!errors.input_option} style={fieldStyle(!!errors.input_option)} {...register('input_option')} />
+                  </FormGroup>
+                )}
+
+                <FormGroup label="Unit Text" htmlFor="mp-unit" required error={errors.unit_text?.message}>
+                  <select
+                    value={UNIT_OPTIONS.includes(watch('unit_text')) ? watch('unit_text') : ''}
+                    onChange={e => setValue('unit_text', e.target.value, { shouldValidate: true })}
+                    aria-invalid={!!errors.unit_text}
+                    style={{ ...fieldStyle(!!errors.unit_text), marginBottom: '0.5rem' }}
+                  >
+                    <option value="">Select Unit</option>
+                    {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                  <input id="mp-unit" type="text" placeholder="Enter Unit Text" data-field="unit_text" aria-invalid={!!errors.unit_text} style={fieldStyle(!!errors.unit_text)} {...register('unit_text')} />
+                </FormGroup>
+
+                <FormGroup label="Screening Cutoff" htmlFor="mp-screening" required error={errors.screening_cutoff?.message}>
+                  <input id="mp-screening" type="text" placeholder="Enter Screening Cutoff" data-field="screening_cutoff" aria-invalid={!!errors.screening_cutoff} style={fieldStyle(!!errors.screening_cutoff)} {...register('screening_cutoff')} />
+                </FormGroup>
+
+                <FormGroup label="Confirmation Cutoff" htmlFor="mp-confirmation" required error={errors.confirmation_cutoff?.message}>
+                  <input id="mp-confirmation" type="text" placeholder="Enter Confirmation Cutoff" data-field="confirmation_cutoff" aria-invalid={!!errors.confirmation_cutoff} style={fieldStyle(!!errors.confirmation_cutoff)} {...register('confirmation_cutoff')} />
+                </FormGroup>
+
                 <div className="form-group">
-                  <label>Dropdown Values (Comma Separated) <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Negative, Positive"
-                    value={form.input_option}
-                    data-param-field="input_option"
-                    aria-invalid={!!errors.input_option}
-                    onChange={e => updateField('input_option', e.target.value)}
-                    style={fieldErrorStyle('input_option')}
-                  />
-                  {errorMessage('input_option')}
+                  <label htmlFor="mp-description">Description</label>
+                  <textarea id="mp-description" rows={3} data-field="description" style={{ ...fieldStyle(false), resize: 'vertical', fontFamily: 'inherit' }} {...register('description')} />
                 </div>
-              )}
 
-              <div className="form-group">
-                <label>Unit Text <span style={{ color: '#ef4444' }}>*</span></label>
-                <select
-                  value={UNIT_OPTIONS.includes(form.unit_text) ? form.unit_text : ''}
-                  onChange={e => updateField('unit_text', e.target.value)}
-                  aria-invalid={!!errors.unit_text}
-                  style={{ ...fieldErrorStyle('unit_text'), marginBottom: '0.5rem' }}
-                >
-                  <option value="">Select Unit</option>
-                  {UNIT_OPTIONS.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-                <input
-                  type="text"
-                  placeholder="Enter Unit Text"
-                  value={form.unit_text}
-                  data-param-field="unit_text"
-                  aria-invalid={!!errors.unit_text}
-                  onChange={e => updateField('unit_text', e.target.value)}
-                  style={fieldErrorStyle('unit_text')}
-                />
-                {errorMessage('unit_text')}
-              </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: errors.is_mandatory ? '#b91c1c' : undefined }}>
+                    <input type="checkbox" data-field="is_mandatory" aria-invalid={!!errors.is_mandatory} style={{ width: 16, height: 16, cursor: 'pointer', outline: errors.is_mandatory ? '2px solid #ef4444' : undefined }} {...register('is_mandatory')} />
+                    Is Mandatory <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  {errors.is_mandatory?.message && (
+                    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>{errors.is_mandatory.message}</div>
+                  )}
+                </div>
 
-              <div className="form-group">
-                <label>Screening Cutoff <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter Screening Cutoff"
-                  value={form.screening_cutoff}
-                  data-param-field="screening_cutoff"
-                  aria-invalid={!!errors.screening_cutoff}
-                  onChange={e => updateField('screening_cutoff', e.target.value)}
-                  style={fieldErrorStyle('screening_cutoff')}
-                />
-                {errorMessage('screening_cutoff')}
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
+                </div>
               </div>
-
-              <div className="form-group">
-                <label>Confirmation Cutoff <span style={{ color: '#ef4444' }}>*</span></label>
-                <input
-                  type="text"
-                  placeholder="Enter Confirmation Cutoff"
-                  value={form.confirmation_cutoff}
-                  data-param-field="confirmation_cutoff"
-                  aria-invalid={!!errors.confirmation_cutoff}
-                  onChange={e => updateField('confirmation_cutoff', e.target.value)}
-                  style={fieldErrorStyle('confirmation_cutoff')}
-                />
-                {errorMessage('confirmation_cutoff')}
-              </div>
-
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  rows={3}
-                  value={form.description}
-                  onChange={e => updateField('description', e.target.value)}
-                  style={{ ...fieldStyle, resize: 'vertical', fontFamily: 'inherit' }}
-                />
-              </div>
-
-              <div className="form-group">
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', color: errors.is_mandatory ? '#b91c1c' : undefined }}>
-                  <input
-                    type="checkbox"
-                    checked={form.is_mandatory}
-                    data-param-field="is_mandatory"
-                    aria-invalid={!!errors.is_mandatory}
-                    onChange={e => updateField('is_mandatory', e.target.checked)}
-                    style={{ width: 16, height: 16, cursor: 'pointer', outline: errors.is_mandatory ? '2px solid #ef4444' : undefined }}
-                  />
-                  Is Mandatory <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                {errorMessage('is_mandatory')}
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                <button className="btn btn-primary" onClick={save} disabled={saving}>
-                  {saving ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
-                </button>
-                <button className="btn btn-ghost" onClick={resetForm} disabled={saving}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
-              </div>
-            </div>
+            </form>
           </div>
           <ListingTable
             title="List of Test Result Parameters"
@@ -478,10 +340,7 @@ export default function TestResultParameterPage() {
             defaultPageSize={10}
             rowActions={p => (
               p.b2b_client_id == null ? (
-                <span
-                  title="Global parameter (read-only)"
-                  style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}
-                >
+                <span title="Global parameter (read-only)" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                   🔒 Global
                 </span>
               ) : (

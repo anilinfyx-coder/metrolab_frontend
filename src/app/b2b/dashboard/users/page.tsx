@@ -1,10 +1,20 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdDelete, MdEdit, MdToggleOff, MdToggleOn } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
 import TablePagination, { useClientPagination } from '../../../components/TablePagination';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  PASSWORD_HELPER_TEXT,
+  b2bStaffUserSchema,
+  type B2bStaffUserFormValues,
+} from '../../../../lib/schemas';
 
 function getUser() { return typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('b2b_user') || '{}') : {}; }
 
@@ -18,7 +28,14 @@ interface B2BUser {
   user_id?: number;
 }
 
-const emptyForm = { name: '', email: '', mobile: '', password: '', role_id: '6', id: null as number | null };
+const emptyForm: B2bStaffUserFormValues = {
+  name: '',
+  email: '',
+  mobile: '',
+  password: '',
+  role_id: '6',
+  id: null,
+};
 
 function roleLabel(roleId: number | string) {
   const id = Number(roleId);
@@ -27,22 +44,25 @@ function roleLabel(roleId: number | string) {
   return 'User';
 }
 
-/** Same rules as B2B Change Password: min 6 chars; only @ # as special chars */
-function validatePassword(password: string): string | null {
-  const pwd = password.trim();
-  if (!pwd) return 'Password is required.';
-  if (pwd.length < 6) return 'Password must be at least 6 characters.';
-  if (/[^a-zA-Z0-9@#]/.test(pwd)) return 'Only @ # are allowed as special characters in password.';
-  return null;
-}
-
 export default function B2BUsersPage() {
   const confirmDialog = useConfirm();
   const [users, setUsers] = useState<B2BUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ ...emptyForm });
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [filters, setFilters] = useState({ name: '', mobile: '', email: '', role: '' });
+
+  const schema = useMemo(() => b2bStaffUserSchema(!!editingId), [editingId]);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<B2bStaffUserFormValues>({
+    resolver: formResolver<B2bStaffUserFormValues>(schema),
+    defaultValues: emptyForm,
+  });
 
   const loadData = async () => {
     setLoading(true);
@@ -79,40 +99,27 @@ export default function B2BUsersPage() {
     useClientPagination(filteredUsers, 10);
 
   const resetForm = () => {
-    setForm({ ...emptyForm });
+    setEditingId(null);
+    reset(emptyForm);
   };
 
-  const save = async () => {
-    if (!form.name.trim() || !form.email.trim() || !form.mobile.trim() || !form.role_id) {
-      toastApiError('Name, Email, Mobile No. and Role are required.');
-      return;
-    }
-
-    // Password required on add; on edit validate only if provided
-    if (!form.id || form.password.trim()) {
-      const pwdError = validatePassword(form.password);
-      if (pwdError) {
-        toastApiError(pwdError);
-        return;
-      }
-    }
-
+  const save = handleSubmit(async values => {
     setSaving(true);
 
-    const method = form.id ? 'PUT' : 'POST';
-    const path = `/api/AdminUsers${form.id ? `/${form.id}` : ''}`;
+    const method = editingId ? 'PUT' : 'POST';
+    const path = `/api/AdminUsers${editingId ? `/${editingId}` : ''}`;
     const b2b_client_id = getUser().id;
 
     const payload: Record<string, unknown> = {
-      name: form.name.trim(),
-      email: form.email.trim(),
-      mobile: form.mobile.trim(),
-      role_id: form.role_id,
+      name: values.name.trim(),
+      email: values.email.trim(),
+      mobile: values.mobile.trim(),
+      role_id: values.role_id,
       user_id: b2b_client_id,
     };
 
-    if (form.password.trim()) {
-      payload.password = form.password.trim();
+    if (values.password?.trim()) {
+      payload.password = values.password.trim();
     }
 
     try {
@@ -120,7 +127,7 @@ export default function B2BUsersPage() {
         method,
         tokenKey: 'b2b_token',
         body: JSON.stringify(payload),
-        successMessage: `Staff user ${form.id ? 'updated' : 'added'}.`,
+        successMessage: `Staff user ${editingId ? 'updated' : 'added'}.`,
         errorFallback: 'Unable to save staff user.',
       });
       resetForm();
@@ -130,10 +137,11 @@ export default function B2BUsersPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<B2bStaffUserFormValues>());
 
   const editUser = (u: B2BUser) => {
-    setForm({
+    setEditingId(u.id);
+    reset({
       name: u.name || '',
       email: u.email || '',
       mobile: u.mobile || '',
@@ -158,7 +166,7 @@ export default function B2BUsersPage() {
         successMessage: 'User deleted successfully.',
         errorFallback: 'Unable to delete user.',
       });
-      if (form.id === id) resetForm();
+      if (editingId === id) resetForm();
       loadData();
     } catch {
       /* toast handled by apiFetch */
@@ -166,6 +174,16 @@ export default function B2BUsersPage() {
   };
 
   const toggleStatus = async (u: B2BUser) => {
+    const enabling = !u.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Staff User?' : 'Disable Staff User?',
+      message: enabling
+        ? `${u.name || 'This staff user'} will become active and can sign in.`
+        : `${u.name || 'This staff user'} will become inactive and cannot sign in until enabled again.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/AdminUsers/${u.id}`, {
         method: 'PUT',
@@ -191,91 +209,90 @@ export default function B2BUsersPage() {
             <div className="card-header">
               <span className="card-title section-title-accent">Staff Users Detail</span>
             </div>
-            <div className="card-body">
-              <div className="form-group">
-                <label htmlFor="staff-name">
-                  Name<span className="required-star">*</span>
-                </label>
-                <input
-                  id="staff-name"
-                  type="text"
-                  placeholder="Enter Name"
-                  value={form.name}
-                  onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                />
-              </div>
+            <form onSubmit={save} noValidate>
+              <div className="card-body">
+                <FormGroup label="Name" htmlFor="staff-name" required error={errors.name?.message}>
+                  <input
+                    id="staff-name"
+                    type="text"
+                    placeholder="Enter Name"
+                    data-field="name"
+                    aria-invalid={!!errors.name}
+                    style={fieldStyle(!!errors.name)}
+                    {...register('name')}
+                  />
+                </FormGroup>
 
-              <div className="form-group">
-                <label htmlFor="staff-email">
-                  Email<span className="required-star">*</span>
-                </label>
-                <input
-                  id="staff-email"
-                  type="email"
-                  placeholder="Enter Email"
-                  value={form.email}
-                  onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
-                />
-              </div>
+                <FormGroup label="Email" htmlFor="staff-email" required error={errors.email?.message}>
+                  <input
+                    id="staff-email"
+                    type="email"
+                    placeholder="Enter Email"
+                    data-field="email"
+                    aria-invalid={!!errors.email}
+                    style={fieldStyle(!!errors.email)}
+                    {...register('email')}
+                  />
+                </FormGroup>
 
-              <div className="form-group">
-                <label htmlFor="staff-mobile">
-                  Mobile No.<span className="required-star">*</span>
-                </label>
-                <input
-                  id="staff-mobile"
-                  type="text"
-                  placeholder="Enter Mobile No."
-                  value={form.mobile}
-                  onChange={e => setForm(p => ({ ...p, mobile: e.target.value }))}
-                />
-              </div>
+                <FormGroup label="Mobile No." htmlFor="staff-mobile" required error={errors.mobile?.message}>
+                  <input
+                    id="staff-mobile"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter Mobile No. (9-10 digits)"
+                    data-field="mobile"
+                    aria-invalid={!!errors.mobile}
+                    style={fieldStyle(!!errors.mobile)}
+                    {...register('mobile')}
+                  />
+                </FormGroup>
 
-              <div className="form-group">
-                <label htmlFor="staff-password">
-                  Password{!form.id && <span className="required-star">*</span>}
-                  {form.id && (
-                    <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                      {' '}(leave blank to keep current)
-                    </span>
+                <FormGroup
+                  label="Password"
+                  htmlFor="staff-password"
+                  required={!editingId}
+                  error={errors.password?.message}
+                >
+                  <PasswordInput
+                    id="staff-password"
+                    placeholder={editingId ? 'Leave blank to keep current' : 'Enter Password'}
+                    data-field="password"
+                    aria-invalid={!!errors.password}
+                    style={fieldStyle(!!errors.password)}
+                    autoComplete="new-password"
+                    {...register('password')}
+                  />
+                  {!editingId && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
+                      {PASSWORD_HELPER_TEXT}
+                    </div>
                   )}
-                </label>
-                <input
-                  id="staff-password"
-                  type="password"
-                  placeholder={form.id ? 'Leave blank to keep current' : 'Enter Password'}
-                  value={form.password}
-                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                  autoComplete="new-password"
-                />
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
-                  (Enter atleast 6 characters. Only @ # are allowed as special character)
+                </FormGroup>
+
+                <FormGroup label="Role" htmlFor="staff-role" required error={errors.role_id?.message}>
+                  <select
+                    id="staff-role"
+                    data-field="role_id"
+                    aria-invalid={!!errors.role_id}
+                    style={fieldStyle(!!errors.role_id)}
+                    {...register('role_id')}
+                  >
+                    <option value="6">Admin User</option>
+                    <option value="7">Admin User Staff</option>
+                  </select>
+                </FormGroup>
+
+                <div style={{ display: 'flex', gap: '0.65rem', marginTop: '0.5rem' }}>
+                  <button type="submit" className="btn btn-primary" disabled={saving}>
+                    {saving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button className="btn btn-reset" type="button" onClick={resetForm}>
+                    Reset Data
+                  </button>
                 </div>
               </div>
-
-              <div className="form-group">
-                <label htmlFor="staff-role">
-                  Role<span className="required-star">*</span>
-                </label>
-                <select
-                  id="staff-role"
-                  value={form.role_id}
-                  onChange={e => setForm(p => ({ ...p, role_id: e.target.value }))}
-                >
-                  <option value="6">Admin User</option>
-                  <option value="7">Admin User Staff</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '0.65rem', marginTop: '0.5rem' }}>
-                <button className="btn btn-primary" onClick={save} disabled={saving}>
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button className="btn btn-reset" type="button" onClick={resetForm}>
-                  Reset Data
-                </button>
-              </div>
-            </div>
+            </form>
           </div>
 
           {/* Right: List of Staff Users */}
@@ -285,7 +302,7 @@ export default function B2BUsersPage() {
             </div>
             <div className="card-body" style={{ padding: 0 }}>
               {loading ? (
-                <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+                <PageLoader message="Loading staff users..." />
               ) : (
                 <div className="table-wrap">
                   <table>

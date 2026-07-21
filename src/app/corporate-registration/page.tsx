@@ -1,37 +1,64 @@
 'use client';
-import { useState, FormEvent } from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { MdCheckCircle, MdHourglassEmpty } from 'react-icons/md';
 import Link from 'next/link';
+import { FormGroup } from '../components/FormField';
 import { apiFetch, toastApiError } from '../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../lib/formHelpers';
+import {
+  corporateRegistrationSchema,
+  type CorporateRegistrationFormValues,
+} from '../../lib/schemas';
+
+const emptyForm: CorporateRegistrationFormValues = {
+  company_name: '',
+  contact_person_name: '',
+  mobile: '',
+  email: '',
+  address: '',
+  country: '',
+  state: '',
+  city: '',
+  pincode: '',
+  otp: '',
+};
+
+const inputExtra = {
+  padding: '0.6rem 0.9rem',
+  background: '#fff',
+  borderRadius: 6,
+  color: '#2c3e50',
+  fontSize: '0.875rem',
+  fontFamily: 'inherit',
+  outline: 'none',
+  transition: 'border-color 0.15s',
+} as const;
 
 export default function CorporateRegistrationPage() {
-  const [form, setForm] = useState({
-    company_name: '',
-    contact_person_name: '',
-    mobile: '',
-    email: '',
-    address: '',
-    country: '',
-    state: '',
-    city: '',
-    pincode: '',
-    otp: ''
-  });
-  
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [otpGenerated, setOtpGenerated] = useState(false);
 
+  const {
+    register,
+    handleSubmit,
+    trigger,
+    formState: { errors },
+  } = useForm<CorporateRegistrationFormValues>({
+    resolver: formResolver<CorporateRegistrationFormValues>(corporateRegistrationSchema),
+    defaultValues: emptyForm,
+  });
+
   const handleGenerateOTP = async () => {
-    if (!form.email || !form.mobile) {
-      toastApiError('Please provide email and mobile to generate OTP.');
-      return;
-    }
+    const ok = await trigger(['email', 'mobile']);
+    if (!ok) return;
+
     setLoading(true);
     try {
       // In a real integration, call the actual OTP generation API
       // await apiFetch('/api/Auth/generate-otp', { skipAuth: true, method: 'POST', body: JSON.stringify({ email: form.email, mobile: form.mobile }) });
-      
+
       // Simulating API Call
       await new Promise(r => setTimeout(r, 1000));
       setOtpGenerated(true);
@@ -42,21 +69,16 @@ export default function CorporateRegistrationPage() {
     }
   };
 
-  const handleRegister = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!form.otp) {
-      toastApiError('Please enter the OTP.');
-      return;
-    }
-    
+  const handleRegister = handleSubmit(async values => {
     setLoading(true);
-    
+
     try {
       await apiFetch('/api/CorporateClient/register', {
         method: 'POST',
         skipAuth: true,
         acceptHttpOk: true,
-        body: JSON.stringify(form),
+        body: JSON.stringify(values),
+        successMessage: 'Registration submitted successfully.',
         errorFallback: 'Error registering account',
       });
       setSuccess(true);
@@ -65,30 +87,25 @@ export default function CorporateRegistrationPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, createInvalidHandler<CorporateRegistrationFormValues>());
 
-  const inp = (key: keyof typeof form, label: string, type = 'text', required = true) => (
-    <div style={{ marginBottom: '1.25rem' }}>
-      <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#2c3e50', marginBottom: '0.35rem' }}>
-        {label} {required && <span style={{ color: '#ef4444' }}>*</span>}
-      </label>
+  const field = (
+    name: keyof CorporateRegistrationFormValues,
+    label: string,
+    type = 'text',
+    required = true,
+  ) => (
+    <FormGroup label={label} htmlFor={`reg-${name}`} required={required} error={errors[name]?.message}>
       <input
+        id={`reg-${name}`}
         type={type}
         placeholder={`Enter ${label}`}
-        value={form[key]}
-        onChange={e => setForm({ ...form, [key]: e.target.value })}
-        required={required}
-        style={{
-          width: '100%', padding: '0.6rem 0.9rem',
-          background: '#fff', border: '1px solid #e6e9ed',
-          borderRadius: 6, color: '#2c3e50', fontSize: '0.875rem',
-          fontFamily: 'inherit', outline: 'none',
-          transition: 'border-color 0.15s',
-        }}
-        onFocus={e => e.target.style.borderColor = '#18BADD'}
-        onBlur={e => e.target.style.borderColor = '#e6e9ed'}
+        data-field={name}
+        aria-invalid={!!errors[name]}
+        style={fieldStyle(!!errors[name], inputExtra)}
+        {...register(name)}
       />
-    </div>
+    </FormGroup>
   );
 
   return (
@@ -137,17 +154,17 @@ export default function CorporateRegistrationPage() {
             </Link>
           </div>
         ) : (
-          <div>
+          <form onSubmit={handleRegister} noValidate>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '0 1.5rem' }}>
-              {inp('company_name', 'Company Name')}
-              {inp('contact_person_name', 'Contact Person Name')}
-              {inp('mobile', 'Mobile Number', 'tel')}
-              {inp('email', 'Email Address', 'email')}
-              {inp('address', 'Address')}
-              {inp('country', 'Country')}
-              {inp('state', 'State')}
-              {inp('city', 'City')}
-              {inp('pincode', 'Pincode')}
+              {field('company_name', 'Company Name')}
+              {field('contact_person_name', 'Contact Person Name')}
+              {field('mobile', 'Mobile Number', 'tel')}
+              {field('email', 'Email Address', 'email')}
+              {field('address', 'Address')}
+              {field('country', 'Country')}
+              {field('state', 'State')}
+              {field('city', 'City')}
+              {field('pincode', 'Pincode')}
             </div>
 
             <div style={{ marginTop: '1rem' }}>
@@ -167,8 +184,8 @@ export default function CorporateRegistrationPage() {
                   {loading ? <><MdHourglassEmpty size={16} aria-hidden /> Generating...</> : 'Generate OTP'}
                 </button>
               ) : (
-                <form onSubmit={handleRegister}>
-                  {inp('otp', 'Enter OTP')}
+                <>
+                  {field('otp', 'Enter OTP')}
                   <div style={{ display: 'flex', gap: '1rem' }}>
                     <button
                       type="submit"
@@ -196,7 +213,7 @@ export default function CorporateRegistrationPage() {
                       Resend OTP
                     </button>
                   </div>
-                </form>
+                </>
               )}
             </div>
 
@@ -205,7 +222,7 @@ export default function CorporateRegistrationPage() {
                 Already have an Account? Sign In Here
               </Link>
             </div>
-          </div>
+          </form>
         )}
       </div>
     </div>

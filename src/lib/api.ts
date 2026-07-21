@@ -2,6 +2,17 @@ import toast from 'react-hot-toast';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+export function getUploadUrl(
+  filename: string | null | undefined,
+  folder = 'b2bClients',
+): string {
+  if (!filename) return '';
+  if (filename.startsWith('http://') || filename.startsWith('https://')) return filename;
+  const normalized = filename.replace(/^\/+/, '');
+  const path = normalized.includes('/') ? normalized : `${folder}/${normalized}`;
+  return `${API_BASE}/uploads/${path}`;
+}
+
 export type ApiEnvelope<T = unknown> = {
   response_code: string;
   obj: T;
@@ -39,6 +50,15 @@ export function toastApiError(error: unknown, fallback = 'Request failed.') {
 
 export function toastApiSuccess(message: string) {
   toast.success(message);
+}
+
+function extractSuccessMessage(
+  data: ApiEnvelope<unknown> & { message?: string },
+  successMessage?: string,
+): string | undefined {
+  if (typeof data.message === 'string' && data.message.trim()) return data.message;
+  if (successMessage?.trim()) return successMessage;
+  return undefined;
 }
 
 type ApiFetchOptions = RequestInit & {
@@ -143,7 +163,8 @@ export async function apiFetch<T = unknown>(
     throw new ApiError(message);
   }
 
-  if (!silent && successMessage) toast.success(successMessage);
+  const successText = extractSuccessMessage(data, successMessage);
+  if (!silent && successText) toast.success(successText);
   return data.obj as T;
 }
 
@@ -185,6 +206,7 @@ export async function handleApiResponse<T = unknown>(
     throw new ApiError(message);
   }
 
-  if (!silent && successMessage) toast.success(successMessage);
+  const successText = extractSuccessMessage(data, successMessage);
+  if (!silent && successText) toast.success(successText);
   return data.obj as T;
 }

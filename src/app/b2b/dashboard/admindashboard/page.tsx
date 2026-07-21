@@ -1,6 +1,7 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
 import TopNav from '../../../components/TopNav';
+import PageLoader from '../../../components/PageLoader';
 import { apiFetch, toastApiError } from '../../../../lib/api';
 
 interface TestCount {
@@ -143,9 +144,9 @@ export default function B2BDashboardPage() {
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
       <TopNav title="Admin Dashboard" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading stats...</div>
+          <PageLoader message="Loading stats..." size="lg" />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
             

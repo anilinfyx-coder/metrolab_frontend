@@ -1,230 +1,644 @@
 'use client';
+
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { MdDownload } from 'react-icons/md';
+import { apiFetch, toastApiError, toastApiSuccess, getUploadUrl } from '../../../../../../lib/api';
+import { formatDate } from '../../../../../utils/dateFormat';
+import PageLoader from '../../../../../components/PageLoader';
+import { getStoredUser } from '../../../../../components/portalConfig';
 
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const METRO_FALLBACK = {
+  company: 'Metro Lab & Clinic LLC',
+  addressLine: '3422 Georgia Avenue NW • Washington, D.C. 20010',
+  addressShort: '3422 Georgia Ave NW Washington DC 20010',
+  phone: '202.234.1234',
+  fax: '202.234.1339',
+  email: 'manager@metrolabdc.com',
+  website: 'www.metrolabdc.com',
+};
+
+type LabBranding = {
+  company_name?: string | null;
+  address?: string | null;
+  public_phone_no?: string | null;
+  public_fax?: string | null;
+  public_email?: string | null;
+  website?: string | null;
+  logo_file?: string | null;
+  medical_officer_signature_file_name?: string | null;
+};
+
+function textOrNull(value: unknown): string | null {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined') return null;
+  return text;
+}
+
+function labOrFallback(labValue: unknown, fallback: string): string {
+  return textOrNull(labValue) || fallback;
+}
+
+function isMale(sex: unknown) {
+  return sex === 1 || sex === '1' || String(sex).toLowerCase() === 'male';
+}
+
+function isFemale(sex: unknown) {
+  return sex === 2 || sex === '2' || String(sex).toLowerCase() === 'female';
+}
+
+function Check({ checked }: { checked?: boolean }) {
+  return <span className={`ahc-check${checked ? ' checked' : ''}`} aria-hidden />;
+}
+
+function Underline({ value, className = '' }: { value?: string | null; className?: string }) {
+  return <span className={`ahc-line ${className}`.trim()}>{value || '\u00a0'}</span>;
+}
 
 export default function PrintAdultHealthCertificate() {
   const { id } = useParams();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<Record<string, any> | null>(null);
+  const [lab, setLab] = useState<LabBranding | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => {
-    const fetchCert = async () => {
+    if (!id) return;
+    let cancelled = false;
+
+    (async () => {
       try {
-        const token = localStorage.getItem('admin_token') || '';
-        const res = await fetch(`${API}/api/AdultHealthCertificates/${id}`, { headers: { token } });
-        const json = await res.json();
-        if (json.response_code === '200') {
-          setData(json.obj);
-          setTimeout(() => {
-            window.print();
-          }, 500);
-        }
+        const [cert, profile] = await Promise.all([
+          apiFetch<Record<string, any>>(`/api/AdultHealthCertificates/${id}`, {
+            tokenKey: 'admin_token',
+            errorFallback: 'Certificate not found.',
+            silent: true,
+          }),
+          (async () => {
+            const stored = getStoredUser('admin_user') as Record<string, unknown> | null;
+            if (!stored?.id) return null;
+            try {
+              return await apiFetch<LabBranding & Record<string, unknown>>('/api/AdminUsers/getProfile', {
+                method: 'POST',
+                tokenKey: 'admin_token',
+                body: JSON.stringify({ id: stored.id }),
+                silent: true,
+              });
+            } catch {
+              const b2bId = stored.user_id;
+              if (!b2bId) return null;
+              try {
+                return await apiFetch<LabBranding>(`/api/B2bClients/${b2bId}`, {
+                  tokenKey: 'admin_token',
+                  silent: true,
+                });
+              } catch {
+                return null;
+              }
+            }
+          })(),
+        ]);
+        if (cancelled) return;
+        setData(cert);
+        setLab(profile);
+        setLogoFailed(false);
       } catch (err) {
-        console.error(err);
+        if (!cancelled) {
+          setData(null);
+          toastApiError(err, 'Failed to load certificate.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
+    })();
+
+    return () => {
+      cancelled = true;
     };
-    fetchCert();
   }, [id]);
 
-  if (loading) return <div style={{ padding: '20px', textAlign: 'center' }}>Loading...</div>;
-  if (!data) return <div style={{ padding: '20px', textAlign: 'center' }}>Certificate not found</div>;
-
-  const formatDate = (d: string) => {
-    if (!d) return '';
-    const date = new Date(d);
-    return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}/${date.getFullYear()}`;
+  const downloadPdf = async () => {
+    if (!id || downloading) return;
+    setDownloading(true);
+    try {
+      const blob = await apiFetch<Blob>('/api/AdultHealthCertificates/downloadAdultHealthCertificate', {
+        method: 'POST',
+        tokenKey: 'admin_token',
+        body: JSON.stringify({ id: Number(id) }),
+        errorFallback: 'Failed to download certificate PDF.',
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Adult_Health_Certificate_${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toastApiSuccess('Certificate PDF downloaded.');
+    } catch {
+      /* toasted by apiFetch */
+    } finally {
+      setDownloading(false);
+    }
   };
 
-  const fullAddress = [data.street1, data.street2, data.city, data.state, data.zipcode].filter(Boolean).join(', ');
+  if (loading) return <PageLoader message="Loading certificate..." size="lg" />;
+  if (!data) return <div style={{ padding: 24, textAlign: 'center' }}>Certificate not found</div>;
+
+  const company = labOrFallback(lab?.company_name, METRO_FALLBACK.company);
+  const address = labOrFallback(lab?.address, METRO_FALLBACK.addressShort);
+  const phone = labOrFallback(lab?.public_phone_no, METRO_FALLBACK.phone);
+  const fax = labOrFallback(lab?.public_fax, METRO_FALLBACK.fax);
+  const email = labOrFallback(lab?.public_email, METRO_FALLBACK.email);
+  const website = labOrFallback(lab?.website, METRO_FALLBACK.website).replace(/^https?:\/\//i, '');
+  const bannerAddress = labOrFallback(lab?.address, METRO_FALLBACK.addressLine);
+  const labLogoUrl = textOrNull(lab?.logo_file) ? getUploadUrl(lab?.logo_file) : '';
+  const showLabLogo = Boolean(labLogoUrl) && !logoFailed;
+  const specialty = String(data.clinician_specialty || '').toUpperCase();
+  const signatureUrl = textOrNull(lab?.medical_officer_signature_file_name)
+    ? getUploadUrl(lab?.medical_officer_signature_file_name)
+    : '';
 
   return (
-    <div style={{ background: '#fff', minHeight: '100vh', padding: '20px', fontFamily: 'Arial, sans-serif' }}>
-      <style dangerouslySetInnerHTML={{__html: `
-        @media print {
-          body { -webkit-print-color-adjust: exact; margin: 0; padding: 0; }
-          .no-print { display: none !important; }
-        }
-        .print-container {
-          max-width: 800px;
-          margin: 40px auto;
-          padding: 40px;
-          background: white;
-          box-shadow: 0 0 10px rgba(0,0,0,0.1);
-          border: 1px solid #ddd;
-          font-family: 'Times New Roman', serif; /* Classic certificate font */
-          color: #000;
-        }
-        .header {
-          text-align: center;
-          margin-bottom: 30px;
-        }
-        .header h1 {
-          font-size: 32px;
-          font-weight: bold;
-          margin: 0;
-          color: #333;
-        }
-        .header p {
-          margin: 2px 0;
-          font-size: 14px;
-        }
-        .checkbox-box {
-          display: inline-block;
-          width: 12px;
-          height: 12px;
-          border: 1px solid #000;
-          margin-right: 8px;
-          position: relative;
-        }
-        .checkbox-box.checked::after {
-          content: '✓';
-          position: absolute;
-          top: -4px;
-          left: 1px;
-          font-size: 14px;
-          font-weight: bold;
-        }
-        .line-input {
-          border-bottom: 1px solid #000;
-          display: inline-block;
-          min-width: 100px;
-          text-align: center;
-          font-weight: bold;
-          font-family: Arial, sans-serif;
-        }
-      `}} />
+    <div className="ahc-page">
+      <style dangerouslySetInnerHTML={{ __html: AHC_STYLES }} />
 
-      <div className="no-print" style={{ textAlign: 'center', padding: '20px', background: '#f8fafc' }}>
-        <button onClick={() => window.print()} style={{ padding: '10px 20px', fontSize: '16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-          🖨️ Print Certificate
+      <div className="ahc-toolbar no-print">
+        <button
+          type="button"
+          className="ahc-print-btn"
+          onClick={downloadPdf}
+          disabled={downloading}
+        >
+          <MdDownload size={18} aria-hidden />
+          {downloading ? 'Downloading...' : 'Download PDF'}
         </button>
+        <span className="ahc-toolbar-hint">Same layout &amp; lab branding as Download PDF and email attachment</span>
       </div>
 
-      <div className="print-container">
-        
-        {/* HEADER */}
-        <div className="header">
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginBottom: '10px' }}>
-            {data.b2b_logo ? (
-              <img src={`${API}/uploads/${data.b2b_logo}`} alt="Logo" style={{ height: '60px' }} onError={(e) => e.currentTarget.style.display = 'none'} />
+      <div className="ahc-sheet">
+        <div className="ahc-watermark" aria-hidden>
+          METRO LAB
+        </div>
+
+        {/* Top banner */}
+        <header className="ahc-banner">
+          <div className="ahc-banner-logo">
+            {showLabLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={labLogoUrl}
+                alt={`${company} logo`}
+                onError={() => setLogoFailed(true)}
+              />
             ) : (
-              <img src="/metrolablogo.png" alt="Metro Lab Logo" style={{ height: '60px' }} onError={(e) => e.currentTarget.style.display = 'none'} />
-            )}
-            {!data.b2b_logo && (
-               <div>
-                  <h1 style={{ letterSpacing: '2px', color: '#666' }}>METRO <span style={{ color: '#d4af37' }}>LAB</span></h1>
-               </div>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src="/login-logo.png" alt="Metro Lab logo" />
             )}
           </div>
-          <div style={{ borderBottom: '2px solid #6c9cd4', borderTop: '2px solid #6c9cd4', padding: '5px 0' }}>
-            <p>{data.b2b_address || '3422 Georgia Avenue NW • Washington, D.C. 20010'}</p>
-            <p>Phone: {data.b2b_phone || '202.234.1234'} • Fax: {data.b2b_fax || '202.234.1339'} • {data.b2b_email || 'manager@metrolabdc.com'}</p>
-          </div>
-          <h2 style={{ marginTop: '20px', marginBottom: '5px' }}>{data.b2b_company_name || 'Metro Lab & Clinic LLC'}</h2>
-          <p>{data.b2b_address || '3422 Georgia Ave NW Washington DC 20010'}</p>
-          <p>(Tell) {data.b2b_phone || '202-234-1234'} (Fax) {data.b2b_fax || '202-234-1339'}</p>
-          <p>{data.b2b_website || 'www.metrolabdc.com'}</p>
-        </div>
-
-        <h3 style={{ textAlign: 'center', fontSize: '20px', textDecoration: 'underline', marginBottom: '30px' }}>
-          Adult Health Certificate
-        </h3>
-
-        {/* PATIENT INFO */}
-        <div style={{ marginBottom: '30px', fontSize: '14px', lineHeight: '2' }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <div style={{ flex: 1 }}>Name: <span className="line-input" style={{ width: '80%' }}>{data.name}</span></div>
-            <div style={{ width: '250px' }}>Sex: 
-              <span style={{ marginLeft: '10px' }}>
-                <span className="line-input" style={{ width: '40px' }}>{data.sex === 1 ? 'X' : ''}</span> Male 
-              </span>
-              <span style={{ marginLeft: '10px' }}>
-                <span className="line-input" style={{ width: '40px' }}>{data.sex === 2 ? 'X' : ''}</span> Female
-              </span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <div style={{ flex: 1 }}>DOB: <span className="line-input" style={{ width: '60%' }}>{formatDate(data.dob)}</span></div>
-            <div style={{ flex: 1 }}>Tel #: <span className="line-input" style={{ width: '80%' }}>{data.tel}</span></div>
-          </div>
-          <div>
-            Address: <span className="line-input" style={{ width: '90%' }}>{fullAddress || '_________________________________'}</span>
-          </div>
-        </div>
-
-        {/* Form Body */}
-        <div style={{ marginTop: '30px', paddingLeft: '20px' }}>
-          
-          <div style={{ marginBottom: '15px' }}>
-            <span className={`checkbox-box ${data.free_from_disease ? 'checked' : ''}`}></span>
-            Free from communicable diseases.
-          </div>
-
-          <div style={{ marginBottom: '15px' }}>
-            <span className={`checkbox-box ${data.satisfactory_physical ? 'checked' : ''}`}></span>
-            In satisfactory physical condition.
-          </div>
-
-          <div style={{ marginBottom: '25px', paddingLeft: '30px' }}>
-            <div style={{ marginBottom: '10px' }}>
-              Tuberculin test (check one): 
-              <span className="line-input" style={{ width: '50px', marginLeft: '10px', textAlign: 'center' }}>
-                 {data.tuberculin_test_type === 'Tine' ? 'X' : ''}
-              </span> Tine 
-              <span className="line-input" style={{ width: '50px', marginLeft: '20px', textAlign: 'center' }}>
-                 {data.tuberculin_test_type === 'PPD' ? 'X' : ''}
-              </span> PPD
-            </div>
-            
-            <div style={{ display: 'flex', gap: '40px', marginBottom: '10px' }}>
-              <div>Date planted: <span className="line-input">{formatDate(data.tuberculin_date_planted)}</span></div>
-              <div>Date read: <span className="line-input">{formatDate(data.tuberculin_date_read)}</span></div>
-            </div>
-            <div>Result: <span className="line-input" style={{ minWidth: '300px' }}>{data.tuberculin_result}</span></div>
-          </div>
-
-          <div style={{ marginBottom: '25px', paddingLeft: '30px' }}>
-            <div style={{ marginBottom: '10px' }}>Chest x-ray:</div>
-            <div style={{ display: 'flex', gap: '40px', marginBottom: '10px' }}>
-              <div>Date: <span className="line-input">{formatDate(data.chest_xray_date)}</span></div>
-              <div>Result: <span className="line-input" style={{ minWidth: '200px' }}>{data.chest_xray_result}</span></div>
-            </div>
-          </div>
-
-          <div style={{ marginBottom: '40px' }}>
-            <div>Additional information:</div>
-            <div className="line-input" style={{ width: '100%', marginTop: '5px', minHeight: '30px' }}>
-              {data.additional_info}
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', lineHeight: '2' }}>
-            <div style={{ flex: 1, paddingRight: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '5px' }}>
-                <div>Name/Signature:</div>
-                <div className="line-input" style={{ width: '60%', textAlign: 'center', position: 'relative' }}>
-                  {data.b2b_signature ? (
-                    <img src={`${API}/uploads/${data.b2b_signature}`} alt="Signature" style={{ maxHeight: '40px', position: 'absolute', bottom: '0', left: '50%', transform: 'translateX(-50%)' }} onError={(e) => e.currentTarget.style.display = 'none'} />
-                  ) : (
-                    <span style={{ fontFamily: "'Brush Script MT', cursive", fontSize: '24px' }}>{data.clinician_name}</span>
-                  )}
-                </div>
-                <div>MD/PA/NP</div>
+          <div className="ahc-banner-brand">
+            {!showLabLogo && (
+              <div className="ahc-wordmark">
+                <span className="ahc-wordmark-metro">METRO</span>{' '}
+                <span className="ahc-wordmark-lab">LAB</span>
               </div>
-              <div style={{ marginTop: '10px' }}>Date: <span className="line-input" style={{ width: '80%' }}>{formatDate(data.date_of_examination)}</span></div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div>Address: <span className="line-input" style={{ width: '80%' }}>{data.clinician_address}</span></div>
+            )}
+            {showLabLogo && <div className="ahc-wordmark-lab-name">{company}</div>}
+            <div className="ahc-banner-meta">{bannerAddress}</div>
+            <div className="ahc-banner-meta">
+              Phone: {phone} • Fax: {fax} • {email}
             </div>
           </div>
+        </header>
 
+        <div className="ahc-rule" />
+        <div className="ahc-rule ahc-rule-thin" />
+
+        <div className="ahc-org">
+          <div className="ahc-org-name">{company}</div>
+          <div>{address}</div>
+          <div>
+            (Tell) {phone} (Fax) {fax}
+          </div>
+          <div>{website}</div>
         </div>
 
+        <h1 className="ahc-title">Adult Health Certificate</h1>
+
+        {/* Patient */}
+        <section className="ahc-patient">
+          <div className="ahc-row">
+            <span className="ahc-label">Name:</span>
+            <Underline value={data.name} className="grow" />
+            <span className="ahc-label ahc-sex-label">Sex:</span>
+            <Check checked={isMale(data.sex)} />
+            <span className="ahc-inline">Male</span>
+            <Check checked={isFemale(data.sex)} />
+            <span className="ahc-inline">Female</span>
+          </div>
+
+          <div className="ahc-row">
+            <span className="ahc-label">DOB:</span>
+            <Underline value={formatDate(data.dob, '')} className="mid" />
+            <span className="ahc-label">Tel #:</span>
+            <Underline value={data.tel} className="mid" />
+          </div>
+
+          <div className="ahc-address-block">
+            <div className="ahc-row">
+              <span className="ahc-label">Address:</span>
+              <Underline value={data.street1} className="addr-street" />
+              <Underline value={data.street2} className="addr-apt" />
+              <Underline value={data.city} className="addr-city" />
+              <Underline value={data.state} className="addr-state" />
+              <Underline value={data.zipcode} className="addr-zip" />
+            </div>
+            <div className="ahc-addr-guides">
+              <span className="g-street">Street Name/Number</span>
+              <span className="g-apt">Apt#(if applicable)</span>
+              <span className="g-city">City</span>
+              <span className="g-state">State</span>
+              <span className="g-zip">Zip code</span>
+            </div>
+          </div>
+        </section>
+
+        <p className="ahc-certify">I have examined the above named person and certify that he/she is:</p>
+
+        <div className="ahc-check-list">
+          <div className="ahc-check-item">
+            <span className="ahc-num">1.</span>
+            <Check checked={!!data.free_from_disease} />
+            <span>Free from disease in communicable form.</span>
+          </div>
+          <div className="ahc-check-item">
+            <span className="ahc-num">2.</span>
+            <Check checked={!!data.satisfactory_physical} />
+            <span>
+              In satisfactory physical condition, this will permit, close association with children/elderly
+              without danger to them.
+            </span>
+          </div>
+        </div>
+
+        <p className="ahc-intro">
+          In addition to a general physical examination, the following test has been done:
+        </p>
+
+        <div className="ahc-tests">
+          <div className="ahc-row wrap">
+            <span className="ahc-label">Tuberculin test (check one):</span>
+            <Check checked={data.tuberculin_test_type === 'Tine'} />
+            <span className="ahc-inline">Tine</span>
+            <Check checked={data.tuberculin_test_type === 'PPD'} />
+            <span className="ahc-inline">PPD</span>
+          </div>
+
+          <div className="ahc-row wrap">
+            <span className="ahc-label">Date planted:</span>
+            <Underline value={formatDate(data.tuberculin_date_planted, '')} className="sm" />
+            <span className="ahc-label">Date read:</span>
+            <Underline value={formatDate(data.tuberculin_date_read, '')} className="sm" />
+            <span className="ahc-label">Result:</span>
+            <Underline value={data.tuberculin_result} className="sm grow" />
+          </div>
+
+          <div className="ahc-row wrap">
+            <Check checked={!!(data.chest_xray_date || data.chest_xray_result)} />
+            <span className="ahc-label">Chest x-ray:</span>
+            <span className="ahc-label">Date:</span>
+            <Underline value={formatDate(data.chest_xray_date, '')} className="sm" />
+            <span className="ahc-label">Result:</span>
+            <Underline value={data.chest_xray_result} className="sm grow" />
+          </div>
+
+          <div className="ahc-additional">
+            <div className="ahc-row">
+              <Check checked={!!data.additional_info} />
+              <span className="ahc-label">
+                Additional information, Past Medical History, Current Medications:
+              </span>
+            </div>
+            <div className="ahc-blank-lines">
+              <div className="ahc-blank-line">{data.additional_info || ''}</div>
+              <div className="ahc-blank-line" />
+            </div>
+          </div>
+        </div>
+
+        <section className="ahc-signature">
+          <div className="ahc-row">
+            <span className="ahc-label">Name/ Signature of examining Clinician:</span>
+            <span className="ahc-sig-wrap">
+              {signatureUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={signatureUrl}
+                  alt="Signature"
+                  className="ahc-sig-img"
+                  onError={e => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              ) : null}
+              <Underline value={data.clinician_name} className="sig" />
+            </span>
+            <span className="ahc-specialty">
+              <span className={specialty === 'MD' ? 'on' : ''}>MD</span>/
+              <span className={specialty === 'PA' ? 'on' : ''}>PA</span>/
+              <span className={specialty === 'NP' ? 'on' : ''}>NP</span>
+            </span>
+          </div>
+          <div className="ahc-row">
+            <span className="ahc-label">Date of examination:</span>
+            <Underline value={formatDate(data.date_of_examination, '')} className="mid" />
+          </div>
+          <div className="ahc-row">
+            <span className="ahc-label">Address:</span>
+            <Underline value={data.clinician_address} className="grow" />
+          </div>
+        </section>
+
+        <footer className="ahc-footer">{website}</footer>
       </div>
     </div>
   );
 }
+
+const AHC_STYLES = `
+  .ahc-page {
+    background: #e8eef5;
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+    font-family: 'Times New Roman', Times, serif;
+    color: #111;
+  }
+  .ahc-toolbar {
+    max-width: 820px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .ahc-print-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: #0f766e;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ahc-print-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  .ahc-toolbar-hint {
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    color: #64748b;
+  }
+  .ahc-sheet {
+    position: relative;
+    max-width: 820px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 32px 44px 40px;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+    overflow: visible;
+  }
+  .ahc-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 72px;
+    font-weight: 700;
+    letter-spacing: 8px;
+    color: rgba(100, 116, 139, 0.08);
+    transform: rotate(-28deg);
+    pointer-events: none;
+    z-index: 0;
+    white-space: nowrap;
+  }
+  .ahc-sheet > *:not(.ahc-watermark) {
+    position: relative;
+    z-index: 1;
+  }
+  .ahc-banner {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 12px;
+  }
+  .ahc-banner-logo img {
+    height: 72px;
+    width: auto;
+    max-width: 140px;
+    object-fit: contain;
+  }
+  .ahc-banner-brand {
+    flex: 1;
+    min-width: 0;
+  }
+  .ahc-wordmark {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    line-height: 1;
+    margin-bottom: 4px;
+    font-family: Arial Black, Arial, sans-serif;
+  }
+  .ahc-wordmark-metro {
+    color: transparent;
+    -webkit-text-stroke: 1.5px #1e293b;
+  }
+  .ahc-wordmark-lab {
+    color: #c9a227;
+    -webkit-text-stroke: 0;
+  }
+  .ahc-wordmark-lab-name {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .ahc-banner-meta {
+    font-size: 11px;
+    line-height: 1.4;
+    color: #222;
+  }
+  .ahc-rule {
+    height: 0;
+    border-top: 2px solid #6c9cd4;
+    margin: 8px 0 0;
+  }
+  .ahc-rule-thin {
+    border-top-width: 1px;
+    margin-top: 3px;
+    margin-bottom: 16px;
+  }
+  .ahc-org {
+    text-align: center;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 18px;
+  }
+  .ahc-org-name {
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .ahc-title {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+    margin: 8px 0 24px;
+  }
+  .ahc-patient,
+  .ahc-tests,
+  .ahc-signature {
+    font-size: 13.5px;
+  }
+  .ahc-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: nowrap;
+  }
+  .ahc-row.wrap {
+    flex-wrap: wrap;
+  }
+  .ahc-label {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .ahc-inline {
+    margin-right: 10px;
+  }
+  .ahc-sex-label {
+    margin-left: 18px;
+  }
+  .ahc-line {
+    display: inline-block;
+    border-bottom: 1px solid #111;
+    min-height: 1.2em;
+    padding: 0 6px 2px;
+    font-weight: 600;
+    font-family: Arial, sans-serif;
+    font-size: 12.5px;
+    text-align: center;
+    vertical-align: bottom;
+  }
+  .ahc-line.grow { flex: 1; min-width: 120px; }
+  .ahc-line.mid { flex: 1; min-width: 100px; max-width: 220px; }
+  .ahc-line.sm { min-width: 90px; flex: 0 1 140px; }
+  .ahc-line.sig { min-width: 180px; flex: 1; }
+  .ahc-line.addr-street { flex: 2.2; min-width: 0; }
+  .ahc-line.addr-apt { flex: 1.1; min-width: 0; }
+  .ahc-line.addr-city { flex: 1.1; min-width: 0; }
+  .ahc-line.addr-state { flex: 0.7; min-width: 0; }
+  .ahc-line.addr-zip { flex: 0.8; min-width: 0; }
+  .ahc-address-block { margin-bottom: 14px; }
+  .ahc-addr-guides {
+    display: grid;
+    grid-template-columns: 2.2fr 1.1fr 1.1fr 0.7fr 0.8fr;
+    gap: 8px;
+    margin-left: 62px;
+    margin-top: 4px;
+    font-size: 9.5px;
+    color: #555;
+    text-align: center;
+  }
+  .ahc-certify {
+    margin: 18px 0 12px;
+    font-size: 13.5px;
+  }
+  .ahc-check-list {
+    margin: 0 0 16px 8px;
+  }
+  .ahc-check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .ahc-num {
+    width: 18px;
+    flex-shrink: 0;
+  }
+  .ahc-check {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border: 1.5px solid #111;
+    flex-shrink: 0;
+    margin-top: 2px;
+    position: relative;
+    background: #fff;
+  }
+  .ahc-check.checked::after {
+    content: '✓';
+    position: absolute;
+    top: -4px;
+    left: 0.5px;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .ahc-intro {
+    margin: 12px 0 14px;
+    font-size: 13.5px;
+  }
+  .ahc-additional { margin-top: 8px; }
+  .ahc-blank-lines { margin: 10px 0 0 22px; }
+  .ahc-blank-line {
+    border-bottom: 1px solid #111;
+    min-height: 24px;
+    margin-bottom: 12px;
+    font-family: Arial, sans-serif;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 0 4px;
+  }
+  .ahc-signature { margin-top: 28px; }
+  .ahc-sig-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    min-width: 160px;
+  }
+  .ahc-sig-img {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-height: 36px;
+    max-width: 160px;
+    object-fit: contain;
+    pointer-events: none;
+  }
+  .ahc-specialty {
+    white-space: nowrap;
+    font-size: 13px;
+  }
+  .ahc-specialty .on {
+    font-weight: 700;
+    text-decoration: underline;
+  }
+  .ahc-footer {
+    text-align: center;
+    margin-top: 36px;
+    font-weight: 700;
+    font-size: 13px;
+  }
+`;

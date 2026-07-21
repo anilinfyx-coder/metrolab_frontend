@@ -1,15 +1,26 @@
-'use client';
-import { FormEvent, useEffect, useState } from 'react';
+﻿'use client';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { MdBusiness, MdSave, MdVpnKey } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
-import { apiFetch, toastApiError } from '../../../../lib/api';
+import PageLoader from '../../../components/PageLoader';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
+import { apiFetch } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  corporatePasswordChangeSchema,
+  corporateProfileUpdateSchema,
+  PASSWORD_HELPER_TEXT,
+  type CorporatePasswordChangeFormValues,
+  type CorporateProfileUpdateFormValues,
+} from '../../../../lib/schemas';
 
 function getStoredUser() {
   if (typeof window === 'undefined') return null;
   try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
 }
-
 
 export default function CorporateProfilePage() {
   const router = useRouter();
@@ -17,20 +28,29 @@ export default function CorporateProfilePage() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
-  
-  const [profile, setProfile] = useState({
+  const [readOnlyProfile, setReadOnlyProfile] = useState({
     company_name: '',
-    contact_person_name: '',
     email: '',
     mobile: '',
-    address: '',
-    pincode: '',
   });
 
-  const [password, setPassword] = useState({
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: '',
+  const {
+    register: registerProfile,
+    handleSubmit: handleProfileSubmit,
+    reset: resetProfile,
+  } = useForm<CorporateProfileUpdateFormValues>({
+    resolver: formResolver<CorporateProfileUpdateFormValues>(corporateProfileUpdateSchema),
+    defaultValues: { contact_person_name: '', address: '', pincode: '' },
+  });
+
+  const {
+    register: registerPassword,
+    handleSubmit: handlePasswordSubmit,
+    reset: resetPassword,
+    formState: { errors: passwordErrors },
+  } = useForm<CorporatePasswordChangeFormValues>({
+    resolver: formResolver<CorporatePasswordChangeFormValues>(corporatePasswordChangeSchema),
+    defaultValues: { oldPassword: '', newPassword: '', confirmPassword: '' },
   });
 
   useEffect(() => {
@@ -43,91 +63,83 @@ export default function CorporateProfilePage() {
       errorFallback: 'Unable to load profile.',
     })
       .then(u => {
-        setProfile({
+        setReadOnlyProfile({
           company_name: u.company_name || '',
-          contact_person_name: u.contact_person_name || '',
           email: u.email || '',
           mobile: u.mobile || '',
+        });
+        resetProfile({
+          contact_person_name: u.contact_person_name || '',
           address: u.address || '',
           pincode: u.pincode || '',
         });
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, resetProfile]);
 
-  const saveProfile = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!profile.email.trim()) { toastApiError('Email is required.'); return; }
+  const saveProfile = handleProfileSubmit(async values => {
     setSavingProfile(true);
-
     try {
       await apiFetch(`/api/CorporateClients/${userId}`, {
         method: 'PUT',
         tokenKey: 'corporate_token',
         body: JSON.stringify({
-          company_name: profile.company_name,
-          contact_person_name: profile.contact_person_name,
-          mobile: profile.mobile,
-          address: profile.address,
-          pincode: profile.pincode,
+          company_name: readOnlyProfile.company_name,
+          contact_person_name: values.contact_person_name,
+          mobile: readOnlyProfile.mobile,
+          address: values.address,
+          pincode: values.pincode,
         }),
         successMessage: 'Profile updated successfully.',
         errorFallback: 'Update failed.',
       });
       const stored = getStoredUser() || {};
-      localStorage.setItem('corporate_user', JSON.stringify({ ...stored, name: profile.company_name, email: profile.email }));
+      localStorage.setItem('corporate_user', JSON.stringify({ ...stored, name: readOnlyProfile.company_name, email: readOnlyProfile.email }));
     } catch {
       /* toast handled by apiFetch */
     } finally {
       setSavingProfile(false);
     }
-  };
+  });
 
-  const changePassword = async () => {
-    if (!password.newPassword) { toastApiError('New Password is required.'); return; }
-    if (password.newPassword.length < 6) { toastApiError('Password must be at least 6 characters.'); return; }
-    if (password.newPassword !== password.confirmPassword) { toastApiError('New Password and Confirm Password do not match.'); return; }
-
+  const changePassword = handlePasswordSubmit(async values => {
     setSavingPassword(true);
     try {
       await apiFetch(`/api/CorporateClients/${userId}`, {
         method: 'PUT',
         tokenKey: 'corporate_token',
-        body: JSON.stringify({ password: password.newPassword }),
+        body: JSON.stringify({ password: values.newPassword }),
         successMessage: 'Password changed successfully.',
         errorFallback: 'Password update failed.',
       });
-      setPassword({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      resetPassword({ oldPassword: '', newPassword: '', confirmPassword: '' });
     } catch {
       /* toast handled by apiFetch */
     } finally {
       setSavingPassword(false);
     }
-  };
+  }, createInvalidHandler<CorporatePasswordChangeFormValues>());
 
-  const inp = (key: keyof typeof profile, label: string, type = 'text', disabled = false) => (
-    <div className="form-group" style={{ marginBottom: '0.9rem' }}>
-      <label style={{ fontWeight: 500, fontSize: '0.875rem', marginBottom: '0.35rem', display: 'block' }}>{label}</label>
-      <input
-        type={type} disabled={disabled}
-        style={{ width: '100%', background: disabled ? 'var(--bg-card)' : 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)', opacity: disabled ? 0.7 : 1 }}
-        value={profile[key]} onChange={e => setProfile(p => ({ ...p, [key]: e.target.value }))}
-      />
-    </div>
-  );
+  const disabledInputStyle = { width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)', opacity: 0.7 };
 
   if (loading) {
-    return <div className="page-content"><TopNav title="Profile" /><div style={{ padding: '3rem', color: 'var(--text-muted)', textAlign: 'center' }}>Loading...</div></div>;
+    return (
+      <div className="page-content">
+        <TopNav title="Profile" />
+        <div className="page-body">
+          <PageLoader message="Loading profile..." size="lg" />
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="page-content">
       <TopNav title="Update Profile" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
 
-          {/* ── LEFT CARD: Profile ── */}
           <div className="card">
             <div className="card-header">
               <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -135,41 +147,32 @@ export default function CorporateProfilePage() {
               </span>
             </div>
             <div className="card-body">
-              <form onSubmit={saveProfile}>
+              <form onSubmit={saveProfile} noValidate>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Company Name</label>
-                    <input disabled style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)', opacity: 0.7 }}
-                      value={profile.company_name} onChange={e => setProfile(p => ({ ...p, company_name: e.target.value }))} />
+                    <input disabled style={disabledInputStyle} value={readOnlyProfile.company_name} readOnly />
                   </div>
-                  <div>
-                    <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Contact Person Name</label>
-                    <input style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)' }}
-                      value={profile.contact_person_name} onChange={e => setProfile(p => ({ ...p, contact_person_name: e.target.value }))} />
-                  </div>
+                  <FormGroup label="Contact Person Name" htmlFor="corp-contact">
+                    <input id="corp-contact" data-field="contact_person_name" style={fieldStyle(false)} {...registerProfile('contact_person_name')} />
+                  </FormGroup>
                   <div>
                     <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Email</label>
-                    <input type="email" disabled style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)', opacity: 0.7 }}
-                      value={profile.email} />
+                    <input type="email" disabled style={disabledInputStyle} value={readOnlyProfile.email} readOnly />
                   </div>
                   <div>
                     <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Mobile No.</label>
-                    <input disabled style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)', opacity: 0.7 }}
-                      value={profile.mobile} onChange={e => setProfile(p => ({ ...p, mobile: e.target.value }))} />
+                    <input disabled style={disabledInputStyle} value={readOnlyProfile.mobile} readOnly />
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginTop: '0.75rem' }}>
-                  <div>
-                    <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Address</label>
-                    <input style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)' }}
-                      placeholder="Enter Address" value={profile.address} onChange={e => setProfile(p => ({ ...p, address: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Pincode</label>
-                    <input style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)' }}
-                      placeholder="Pincode" value={profile.pincode} onChange={e => setProfile(p => ({ ...p, pincode: e.target.value }))} />
-                  </div>
+                  <FormGroup label="Address" htmlFor="corp-address">
+                    <input id="corp-address" placeholder="Enter Address" data-field="address" style={fieldStyle(false)} {...registerProfile('address')} />
+                  </FormGroup>
+                  <FormGroup label="Pincode" htmlFor="corp-pincode">
+                    <input id="corp-pincode" placeholder="Pincode" data-field="pincode" style={fieldStyle(false)} {...registerProfile('pincode')} />
+                  </FormGroup>
                 </div>
 
                 <div style={{ marginTop: '1.25rem' }}>
@@ -181,7 +184,6 @@ export default function CorporateProfilePage() {
             </div>
           </div>
 
-          {/* ── RIGHT CARD: Change Password ── */}
           <div className="card">
             <div className="card-header">
               <span className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -189,25 +191,21 @@ export default function CorporateProfilePage() {
               </span>
             </div>
             <div className="card-body">
-              <div style={{ marginBottom: '0.9rem' }}>
-                <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Old Password</label>
-                <input type="password" style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)' }}
-                  placeholder="Current password" value={password.oldPassword} onChange={e => setPassword(p => ({ ...p, oldPassword: e.target.value }))} />
-              </div>
-              <div style={{ marginBottom: '0.9rem' }}>
-                <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>New Password</label>
-                <input type="password" style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)' }}
-                  placeholder="Min. 6 characters. Only @, # allowed as special characters" value={password.newPassword} onChange={e => setPassword(p => ({ ...p, newPassword: e.target.value }))} />
-                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>(Enter at least 6 characters. Only @,# are allowed as special character)</small>
-              </div>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Confirm Password</label>
-                <input type="password" style={{ width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem 0.75rem', color: 'var(--text)' }}
-                  placeholder="Confirm new password" value={password.confirmPassword} onChange={e => setPassword(p => ({ ...p, confirmPassword: e.target.value }))} />
-              </div>
-              <button onClick={changePassword} disabled={savingPassword} style={{ background: '#17a2b8', color: '#fff', border: 'none', borderRadius: 6, padding: '0.5rem 1.5rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-                <MdVpnKey size={15} /> {savingPassword ? 'Changing...' : 'Change Password'}
-              </button>
+              <form onSubmit={changePassword} noValidate>
+                <FormGroup label="Old Password" htmlFor="corp-old-pwd">
+                  <PasswordInput id="corp-old-pwd" placeholder="Current password" data-field="oldPassword" style={fieldStyle(false)} autoComplete="current-password" {...registerPassword('oldPassword')} />
+                </FormGroup>
+                <FormGroup label="New Password" htmlFor="corp-new-pwd" required error={passwordErrors.newPassword?.message}>
+                  <PasswordInput id="corp-new-pwd" placeholder="Min. 6 characters. Only @, # allowed as special characters" data-field="newPassword" aria-invalid={!!passwordErrors.newPassword} style={fieldStyle(!!passwordErrors.newPassword)} autoComplete="new-password" {...registerPassword('newPassword')} />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{PASSWORD_HELPER_TEXT}</small>
+                </FormGroup>
+                <FormGroup label="Confirm Password" htmlFor="corp-confirm-pwd" required error={passwordErrors.confirmPassword?.message}>
+                  <PasswordInput id="corp-confirm-pwd" placeholder="Confirm new password" data-field="confirmPassword" aria-invalid={!!passwordErrors.confirmPassword} style={fieldStyle(!!passwordErrors.confirmPassword)} autoComplete="new-password" {...registerPassword('confirmPassword')} />
+                </FormGroup>
+                <button type="submit" disabled={savingPassword} style={{ background: '#17a2b8', color: '#fff', border: 'none', borderRadius: 6, padding: '0.5rem 1.5rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                  <MdVpnKey size={15} /> {savingPassword ? 'Changing...' : 'Change Password'}
+                </button>
+              </form>
             </div>
           </div>
 

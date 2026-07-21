@@ -1,6 +1,9 @@
 'use client';
 import { ReactNode, useMemo, useState } from 'react';
 import {
+  MdAdd,
+  MdArrowDownward,
+  MdArrowUpward,
   MdDelete,
   MdDescription,
   MdDownload,
@@ -10,9 +13,11 @@ import {
   MdLockOpen,
   MdToggleOff,
   MdToggleOn,
+  MdUnfoldMore,
   MdVisibility,
 } from 'react-icons/md';
 import TablePagination, { useClientPagination } from './TablePagination';
+import PageLoader from './PageLoader';
 
 export type ListingColumn<T> = {
   key: string;
@@ -114,7 +119,7 @@ export function ActionIcons({
     <button
       type="button"
       className={`action-btn action-btn-status${statusActive ? '' : ' inactive'}`}
-      title={statusTitle || (statusActive ? 'Active ΓÇö click to disable' : 'Inactive ΓÇö click to enable')}
+      title={statusTitle || (statusActive ? 'Active — click to disable' : 'Inactive — click to enable')}
       onClick={onToggleStatus}
     >
       {statusActive ? (
@@ -183,6 +188,8 @@ export function ActionIcons({
           {editBtn}
           {lockBtn}
           {mailBtn}
+          {onView && viewDocBtn}
+          {deleteBtn}
         </>
       ) : deleteFirst ? (
         <>
@@ -205,28 +212,19 @@ export function ActionIcons({
 
 export function ListingHeaderActions({
   onAdd,
-  onRefresh,
   addLabel = 'Add',
-  refreshLabel = 'Refresh',
 }: {
   onAdd?: () => void;
-  onRefresh?: () => void;
   addLabel?: string;
-  refreshLabel?: string;
 }) {
+  if (!onAdd) return null;
+
   return (
     <div className="listing-header-links">
-      {onAdd && (
-        <button type="button" className="listing-header-link" onClick={onAdd}>
-          {addLabel}
-        </button>
-      )}
-      {onAdd && onRefresh && <span className="listing-header-sep">|</span>}
-      {onRefresh && (
-        <button type="button" className="listing-header-link" onClick={onRefresh}>
-          {refreshLabel}
-        </button>
-      )}
+      <button type="button" className="listing-header-link" onClick={onAdd}>
+        <MdAdd size={18} aria-hidden />
+        {addLabel}
+      </button>
     </div>
   );
 }
@@ -304,11 +302,11 @@ export default function ListingTable<T extends { id: number | string }>({
 
       <div className="card-body" style={{ padding: 0 }}>
         {loading ? (
-          <div className="listing-loading">Loading...</div>
+          <PageLoader message="Loading data..." className="listing-loading" />
         ) : (
           <>
             <div className="table-wrap">
-              <table className="listing-table" style={{ tableLayout: 'fixed' }}>
+              <table className="listing-table">
                 <thead>
                   <tr>
                     {columns.map(col => (
@@ -318,20 +316,30 @@ export default function ListingTable<T extends { id: number | string }>({
                             type="button"
                             className="th-sort-btn"
                             onClick={() => toggleSort(col.key)}
+                            aria-label={`Sort by ${col.label}`}
                           >
-                            {col.label}
-                            {sortKey === col.key && (
-                              <span aria-hidden>{sortAsc ? 'Γû▓' : 'Γû╝'}</span>
-                            )}
-                            {sortKey !== col.key && <span className="th-sort-hint" aria-hidden>Γçà</span>}
+                            <span className="th-sort-label">{col.label}</span>
+                            <span className="th-sort-icon-wrap" aria-hidden>
+                              {sortKey === col.key ? (
+                                sortAsc ? (
+                                  <MdArrowUpward size={15} className="th-sort-icon active" />
+                                ) : (
+                                  <MdArrowDownward size={15} className="th-sort-icon active" />
+                                )
+                              ) : (
+                                <MdUnfoldMore size={15} className="th-sort-hint" />
+                              )}
+                            </span>
                           </button>
                         ) : (
-                          col.label
+                          <span className="th-col-label">{col.label}</span>
                         )}
                       </th>
                     ))}
                     {rowActions && (
-                      <th style={{ width: actionsWidth }}>{actionsLabel}</th>
+                      <th className="th-actions-col" style={{ width: actionsWidth }}>
+                        <span className="th-col-label">{actionsLabel}</span>
+                      </th>
                     )}
                   </tr>
                   <tr className="table-filter-row">
@@ -348,7 +356,7 @@ export default function ListingTable<T extends { id: number | string }>({
                         ) : null}
                       </td>
                     ))}
-                    {rowActions && <td style={{ width: actionsWidth }} />}
+                    {rowActions && <td className="td-actions-col" style={{ width: actionsWidth }} />}
                   </tr>
                 </thead>
                 <tbody>
@@ -366,7 +374,11 @@ export default function ListingTable<T extends { id: number | string }>({
                           {col.render ? col.render(row) : (getCellText(row, col) || '—')}
                         </td>
                       ))}
-                      {rowActions && <td style={{ width: actionsWidth }}>{rowActions(row)}</td>}
+                      {rowActions && (
+                        <td className="td-actions-col" style={{ width: actionsWidth }}>
+                          {rowActions(row)}
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {pageItems.length === 0 && (

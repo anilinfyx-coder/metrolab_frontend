@@ -1,6 +1,5 @@
-'use client';
+﻿'use client';
 import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
 import {
   MdAdd,
   MdClose,
@@ -16,7 +15,7 @@ import {
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-import { apiFetch, handleApiResponse, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
+import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../../lib/api';
 
 interface LabTest {
   id: number; name: string; description: string; status: boolean; default_view?: boolean; cost?: number; cpt_code?: string;
@@ -110,6 +109,7 @@ export default function LabTestCategoryPage() {
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<Record<string, string | boolean>>({ ...emptyForm });
+  const [formErrors, setFormErrors] = useState<{ name?: string }>({});
   const [saving, setSaving] = useState(false);
 
   // Specimen Type Mapping
@@ -163,7 +163,11 @@ export default function LabTestCategoryPage() {
     setView('form');
   };
   const save = async () => {
-    if (!form.name) { toast.error('Name is required.'); return; }
+    if (!form.name) {
+      setFormErrors({ name: 'Please enter the name.' });
+      return;
+    }
+    setFormErrors({});
     setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
     const path = `/api/LabTests${editingId ? `/${editingId}` : ''}`;
@@ -172,6 +176,7 @@ export default function LabTestCategoryPage() {
         method,
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ ...form, status: true, deleted: false }),
+        successMessage: `Lab test ${editingId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save lab test.',
       });
       setView('list');
@@ -191,18 +196,35 @@ export default function LabTestCategoryPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/LabTests/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/LabTests/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Lab test deleted successfully.',
+        errorFallback: 'Unable to delete lab test.',
+      });
       loadTests();
     } catch {
       /* error toasted by apiFetch */
     }
   };
   const toggleStatus = async (t: LabTest) => {
+    const enabling = !t.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Lab Test?' : 'Disable Lab Test?',
+      message: enabling
+        ? `${t.name || 'This lab test'} will become active and available for use.`
+        : `${t.name || 'This lab test'} will become inactive. You can enable it again later.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/LabTests/${t.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: !t.status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
       });
       loadTests();
     } catch {
@@ -215,7 +237,7 @@ export default function LabTestCategoryPage() {
     setSelectedTest(t);
     try {
       const [spRes, mapRes] = await Promise.all([
-        fetch(`${API_BASE}/api/SpecimenType`, { headers: { token: getToken('superadmin_token') } }),
+        fetch(`${API_BASE}/api/SpecimenType?status=true`, { headers: { token: getToken('superadmin_token') } }),
         fetch(`${API_BASE}/api/SpecimenTypeDrugLinking?lab_test_id=${t.id}`, { headers: { token: getToken('superadmin_token') } }),
       ]);
       const [allSpecimens, mappings] = await Promise.all([
@@ -250,6 +272,8 @@ export default function LabTestCategoryPage() {
           lab_test_id: selectedTest?.id,
           specimen_type_id: specimenForm.specimen_type_id,
         }),
+        successMessage: `Specimen mapping ${editingSpecimenId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save specimen mapping.',
       });
       if (selectedTest) openSpecimen(selectedTest);
     } catch {
@@ -263,11 +287,23 @@ export default function LabTestCategoryPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
   const toggleSpecimenStatus = async (mapping: SpecimenTypeMapping) => {
+    const enabling = mapping.status === false;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Specimen Link?' : 'Disable Specimen Link?',
+      message: enabling
+        ? 'This specimen type link will become active.'
+        : 'This specimen type link will become inactive. You can enable it again later.',
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/SpecimenTypeDrugLinking/${mapping.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: !mapping.status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
       });
       if (selectedTest) openSpecimen(selectedTest);
     } catch {
@@ -283,7 +319,12 @@ export default function LabTestCategoryPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/SpecimenTypeDrugLinking/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/SpecimenTypeDrugLinking/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Specimen mapping deleted successfully.',
+        errorFallback: 'Unable to delete specimen mapping.',
+      });
       if (selectedTest) openSpecimen(selectedTest);
     } catch {
       /* error toasted by apiFetch */
@@ -312,6 +353,8 @@ export default function LabTestCategoryPage() {
         method,
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ ...questionForm, lab_test_id: selectedTest?.id }),
+        successMessage: `Question ${editingQId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save question.',
       });
       setQuestionForm({ question_text: '', answer_type: '1', answer_option: '' });
       setEditingQId(null);
@@ -329,18 +372,35 @@ export default function LabTestCategoryPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/ReportQuestions/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/ReportQuestions/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Question deleted successfully.',
+        errorFallback: 'Unable to delete question.',
+      });
       if (selectedTest) openQuestions(selectedTest);
     } catch {
       /* error toasted by apiFetch */
     }
   };
   const toggleQuestionStatus = async (question: ReportQuestion) => {
+    const enabling = question.status === false;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Question?' : 'Disable Question?',
+      message: enabling
+        ? 'This report question will become active.'
+        : 'This report question will become inactive. You can enable it again later.',
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/ReportQuestions/${question.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: question.status === false }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
       });
       if (selectedTest) openQuestions(selectedTest);
     } catch {
@@ -362,12 +422,11 @@ export default function LabTestCategoryPage() {
     setEditingRId(null);
     setView('result');
   };
-  const refreshResultParams = async (successText?: string) => {
+  const refreshResultParams = async () => {
     if (!selectedTest) return;
     try {
       const data = await apiFetch<ResultParam[]>(`/api/ReportRequestParameters?lab_test_id=${selectedTest.id}`, { tokenKey: 'superadmin_token' });
       setResultParams(data || []);
-      if (successText) toastApiSuccess(successText);
     } catch {
       /* error toasted by apiFetch */
     }
@@ -393,7 +452,6 @@ export default function LabTestCategoryPage() {
 
     setResultErrors(errors);
     if (Object.keys(errors).length > 0) {
-      toast.error('Please correct the highlighted fields before saving.');
       const firstInvalidField = Object.keys(errors)[0];
       window.setTimeout(() => {
         const input = document.querySelector<HTMLElement>(`[data-result-field="${firstInvalidField}"]`);
@@ -417,13 +475,13 @@ export default function LabTestCategoryPage() {
           lab_test_id: selectedTest?.id,
           status: true,
         }),
+        successMessage: `Parameter ${editingRId ? 'updated' : 'saved'} successfully.`,
         errorFallback: 'Unable to save the parameter. Please try again.',
       });
-      const action = editingRId ? 'updated' : 'saved';
       setResultForm({ ...emptyResultForm });
       setResultErrors({});
       setEditingRId(null);
-      await refreshResultParams(`Parameter ${action} successfully.`);
+      await refreshResultParams();
     } catch {
       /* error toasted by apiFetch */
     } finally {
@@ -439,21 +497,37 @@ export default function LabTestCategoryPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/ReportRequestParameters/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
-      await refreshResultParams('Parameter deleted successfully.');
+      await apiFetch(`/api/ReportRequestParameters/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Parameter deleted successfully.',
+        errorFallback: 'Unable to delete parameter.',
+      });
+      await refreshResultParams();
     } catch {
       /* error toasted by apiFetch */
     }
   };
   const toggleResultStatus = async (r: ResultParam) => {
+    const enabling = !r.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Parameter?' : 'Disable Parameter?',
+      message: enabling
+        ? `${r.name || 'This parameter'} will become active.`
+        : `${r.name || 'This parameter'} will become inactive. You can enable it again later.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/ReportRequestParameters/${r.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: !r.status }),
+        successMessage: `Parameter ${r.status ? 'disabled' : 'enabled'} successfully.`,
         errorFallback: 'Unable to update parameter status.',
       });
-      await refreshResultParams(`Parameter ${r.status ? 'disabled' : 'enabled'} successfully.`);
+      await refreshResultParams();
     } catch {
       /* error toasted by apiFetch */
     }
@@ -490,7 +564,7 @@ export default function LabTestCategoryPage() {
             <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
           )}
         </TopNav>
-        <div style={{ padding: '1.5rem' }}>
+        <div className="page-body">
           <div className="card">
             <div
               className="card-header"
@@ -514,7 +588,31 @@ export default function LabTestCategoryPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div className="form-group" style={{ gridColumn: 'span 3' }}>
                   <label>Name <span style={{ color: '#ef4444' }}>*</span></label>
-                  <input type="text" placeholder="Enter Name" disabled={isReadOnly} value={form.name as string} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+                  <input
+                    type="text"
+                    placeholder="Enter Name"
+                    disabled={isReadOnly}
+                    data-field="name"
+                    aria-invalid={!!formErrors.name}
+                    value={form.name as string}
+                    onChange={e => {
+                      setForm(p => ({ ...p, name: e.target.value }));
+                      if (formErrors.name) setFormErrors({});
+                    }}
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-input)',
+                      border: `1px solid ${formErrors.name ? '#ef4444' : 'var(--border)'}`,
+                      borderRadius: 6,
+                      padding: '0.5rem',
+                      color: 'var(--text)',
+                    }}
+                  />
+                  {formErrors.name && (
+                    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>
+                      {formErrors.name}
+                    </div>
+                  )}
                 </div>
                 <div className="form-group" style={{ gridColumn: 'span 3' }}>
                   <label>Description</label>
@@ -582,7 +680,7 @@ export default function LabTestCategoryPage() {
     return (
       <div className="page-content">
         <TopNav title="Manage Lab Test Category" />
-        <div className="labtest-specimen-split" style={{ padding: '1.5rem' }}>
+        <div className="labtest-specimen-split page-body">
           <div className="card">
             <div className="card-header">
               <span className="card-title">
@@ -686,7 +784,7 @@ export default function LabTestCategoryPage() {
     return (
       <div className="page-content">
         <TopNav title="Manage Lab Test Category" />
-        <div className="labtest-question-split" style={{ padding: '1.5rem' }}>
+        <div className="labtest-question-split page-body">
           <div className="card">
             <div className="card-header"><span className="card-title">Test Report Question Detail</span></div>
             <div className="card-body">
@@ -796,7 +894,7 @@ export default function LabTestCategoryPage() {
         <TopNav title={`Lab Test Type Params — ${selectedTest?.name || ''}`}>
           <button className="btn btn-ghost" onClick={() => setView('list')}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
         </TopNav>
-        <div style={{ padding: '1.5rem', display: 'grid', gridTemplateColumns: '400px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+        <div className="page-body page-split-400">
           <div className="card">
             <div className="card-header"><span className="card-title">Lab Test Type Params</span></div>
             <div className="card-body">
@@ -995,14 +1093,14 @@ export default function LabTestCategoryPage() {
   return (
     <div className="page-content">
       <TopNav title="Manage Lab Test Category" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         <ListingTable
           title="List of Lab Test Categories"
           columns={labTestColumns}
           rows={tests}
           loading={loading}
           emptyText="No Lab Tests found."
-          headerActions={<ListingHeaderActions onAdd={openAdd} onRefresh={loadTests} />}
+          headerActions={<ListingHeaderActions onAdd={openAdd} />}
           actionsLabel="Actions"
           actionsWidth={150}
           defaultPageSize={10}

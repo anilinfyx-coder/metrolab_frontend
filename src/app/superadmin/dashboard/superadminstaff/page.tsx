@@ -1,26 +1,48 @@
-'use client';
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
+﻿'use client';
+import { useState, useEffect, useMemo } from 'react';
+import { useForm } from 'react-hook-form';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
-import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
-import { apiFetch } from '../../../../lib/api';
+import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
+import { FormGroup } from '../../../components/FormField';
+import PasswordInput from '../../../components/PasswordInput';
+import { apiFetch, toastApiError } from '../../../../lib/api';
+import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import {
+  PASSWORD_HELPER_TEXT,
+  superAdminStaffSchema,
+  type SuperAdminStaffFormValues,
+} from '../../../../lib/schemas';
 
 interface Staff { id: number; email: string; name: string; mobile: string; role_id: number; status: boolean; }
 
-const emptyStaff = { name: '', email: '', mobile: '', role_id: '', password: '' };
-type StaffForm = typeof emptyStaff;
-type StaffField = keyof StaffForm;
-type StaffErrors = Partial<Record<StaffField, string>>;
+const emptyStaff: SuperAdminStaffFormValues = {
+  name: '',
+  email: '',
+  mobile: '',
+  role_id: '',
+  password: '',
+  id: null,
+};
 
 export default function SuperAdminStaffPage() {
   const confirmDialog = useConfirm();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState<StaffForm>({ ...emptyStaff });
-  const [errors, setErrors] = useState<StaffErrors>({});
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const schema = useMemo(() => superAdminStaffSchema(!!editingId), [editingId]);
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<SuperAdminStaffFormValues>({
+    resolver: formResolver<SuperAdminStaffFormValues>(schema),
+    defaultValues: emptyStaff,
+  });
 
   const loadData = async () => {
     setLoading(true);
@@ -38,62 +60,22 @@ export default function SuperAdminStaffPage() {
     void loadData();
   }, []);
 
-  const updateField = <K extends StaffField>(field: K, value: StaffForm[K]) => {
-    setForm(previous => ({ ...previous, [field]: value }));
-    setErrors(previous => {
-      if (!previous[field]) return previous;
-      const next = { ...previous };
-      delete next[field];
-      return next;
-    });
+  const resetForm = () => {
+    setEditingId(null);
+    reset(emptyStaff);
   };
 
-  const validateForm = (): StaffErrors => {
-    const next: StaffErrors = {};
-    if (!form.name.trim()) next.name = 'Please enter the staff name.';
-    if (!form.email.trim()) {
-      next.email = 'Please enter the email address.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
-      next.email = 'Please enter a valid email address.';
-    }
-    if (!form.mobile.trim()) {
-      next.mobile = 'Please enter the mobile number.';
-    } else if (!/^[0-9()+\-\s]{7,20}$/.test(form.mobile.trim())) {
-      next.mobile = 'Please enter a valid mobile number.';
-    }
-    if (!['2', '3'].includes(form.role_id)) next.role_id = 'Please select a role.';
-    if (!editingId && !form.password.trim()) {
-      next.password = 'Please enter a password.';
-    } else if (form.password.trim() && form.password.trim().length < 6) {
-      next.password = 'Password must be at least 6 characters.';
-    }
-    return next;
-  };
-
-  const save = async () => {
-    const nextErrors = validateForm();
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) {
-      toast.error('Please correct the highlighted fields before saving.');
-      const firstInvalidField = Object.keys(nextErrors)[0];
-      window.setTimeout(() => {
-        const input = document.querySelector<HTMLElement>(`[data-staff-field="${firstInvalidField}"]`);
-        input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        input?.focus();
-      }, 0);
-      return;
-    }
-
+  const save = handleSubmit(async values => {
     setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
     const path = `/api/SuperAdmin${editingId ? `/${editingId}` : ''}`;
     const payload: Record<string, string | number> = {
-      name: form.name.trim(),
-      email: form.email.trim(),
-      mobile: form.mobile.trim(),
-      role_id: Number(form.role_id),
+      name: values.name.trim(),
+      email: values.email.trim(),
+      mobile: values.mobile.trim(),
+      role_id: Number(values.role_id),
     };
-    if (form.password.trim()) payload.password = form.password.trim();
+    if (values.password?.trim()) payload.password = values.password.trim();
 
     try {
       await apiFetch(path, {
@@ -103,16 +85,14 @@ export default function SuperAdminStaffPage() {
         successMessage: `Staff member ${editingId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save staff. Please try again.',
       });
-      setForm({ ...emptyStaff });
-      setErrors({});
-      setEditingId(null);
+      resetForm();
       loadData();
     } catch {
       /* error toasted by apiFetch */
     } finally {
       setSaving(false);
     }
-  };
+  }, createInvalidHandler<SuperAdminStaffFormValues>());
 
   const remove = async (id: number) => {
     const ok = await confirmDialog({
@@ -123,7 +103,13 @@ export default function SuperAdminStaffPage() {
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/SuperAdmin/${id}`, { method: 'DELETE', tokenKey: 'superadmin_token' });
+      await apiFetch(`/api/SuperAdmin/${id}`, {
+        method: 'DELETE',
+        tokenKey: 'superadmin_token',
+        successMessage: 'Staff member deleted successfully.',
+        errorFallback: 'Unable to delete staff member.',
+      });
+      if (editingId === id) resetForm();
       loadData();
     } catch {
       /* error toasted by apiFetch */
@@ -131,11 +117,27 @@ export default function SuperAdminStaffPage() {
   };
 
   const toggleStatus = async (s: Staff) => {
+    if (s.role_id === 2) {
+      toastApiError('Main Super Admin account cannot be disabled.');
+      return;
+    }
+    const enabling = !s.status;
+    const ok = await confirmDialog({
+      title: enabling ? 'Enable Staff User?' : 'Disable Staff User?',
+      message: enabling
+        ? `${s.name || 'This staff user'} will become active and can sign in.`
+        : `${s.name || 'This staff user'} will become inactive and cannot sign in until enabled again.`,
+      cancelText: 'Cancel',
+      confirmText: enabling ? 'Enable' : 'Disable',
+    });
+    if (!ok) return;
     try {
       await apiFetch(`/api/SuperAdmin/${s.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
         body: JSON.stringify({ status: !s.status }),
+        successMessage: 'Status Updated Successfully',
+        errorFallback: 'Failed to update status.',
       });
       loadData();
     } catch {
@@ -145,21 +147,15 @@ export default function SuperAdminStaffPage() {
 
   const openEdit = (s: Staff) => {
     setEditingId(s.id);
-    setForm({
+    reset({
       name: s.name || '',
       email: s.email || '',
       mobile: s.mobile || '',
       role_id: String(s.role_id || ''),
       password: '',
+      id: s.id,
     });
-    setErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const resetForm = () => {
-    setEditingId(null);
-    setForm({ ...emptyStaff });
-    setErrors({});
   };
 
   const roleName = (roleId: number) => (
@@ -167,41 +163,21 @@ export default function SuperAdminStaffPage() {
   );
 
   const columns: ListingColumn<Staff>[] = [
-    { key: 'name', label: 'Name', width: '23%' },
-    { key: 'mobile', label: 'Mobile', width: '19%' },
-    { key: 'email', label: 'Email', width: '25%' },
+    { key: 'name', label: 'Name' },
+    { key: 'mobile', label: 'Mobile' },
+    { key: 'email', label: 'Email' },
     {
       key: 'role',
       label: 'Role',
-      width: '21%',
       getValue: member => roleName(member.role_id),
       render: member => roleName(member.role_id),
     },
   ];
 
-  const fieldStyle = {
-    width: '100%',
-    background: 'var(--bg-input)',
-    border: '1px solid var(--border)',
-    borderRadius: 6,
-    padding: '0.5rem',
-    color: 'var(--text)',
-  };
-  const fieldErrorStyle = (field: StaffField) => ({
-    ...fieldStyle,
-    borderColor: errors[field] ? '#ef4444' : 'var(--border)',
-    boxShadow: errors[field] ? '0 0 0 1px rgba(239,68,68,0.15)' : 'none',
-  });
-  const errorMessage = (field: StaffField) => errors[field] ? (
-    <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: 500 }}>
-      {errors[field]}
-    </div>
-  ) : null;
-
   return (
     <div className="page-content">
       <TopNav title="Manage Super Admin Staff" />
-      <div style={{ padding: '1.5rem' }}>
+      <div className="page-body">
         <div className="superadmin-staff-split">
           <div className="card">
             <div className="card-header">
@@ -209,94 +185,90 @@ export default function SuperAdminStaffPage() {
                 {editingId ? 'Edit Super Admin Staff Detail' : 'Super Admin Staff Detail'}
               </span>
             </div>
-            <div className="card-body">
-              <div className="form-group">
-                <label htmlFor="sf-name">Name<span className="required-star">*</span></label>
-                <input
-                  id="sf-name"
-                  type="text"
-                  placeholder="Enter Name"
-                  value={form.name}
-                  data-staff-field="name"
-                  aria-invalid={!!errors.name}
-                  onChange={e => updateField('name', e.target.value)}
-                  style={fieldErrorStyle('name')}
-                />
-                {errorMessage('name')}
-              </div>
+            <form onSubmit={save} noValidate>
+              <div className="card-body">
+                <FormGroup label="Name" htmlFor="sf-name" required error={errors.name?.message}>
+                  <input
+                    id="sf-name"
+                    type="text"
+                    placeholder="Enter Name"
+                    data-field="name"
+                    aria-invalid={!!errors.name}
+                    style={fieldStyle(!!errors.name)}
+                    {...register('name')}
+                  />
+                </FormGroup>
 
-              <div className="form-group">
-                <label htmlFor="sf-email">Email<span className="required-star">*</span></label>
-                <input
-                  id="sf-email"
-                  type="email"
-                  placeholder="Enter Email"
-                  value={form.email}
-                  data-staff-field="email"
-                  aria-invalid={!!errors.email}
-                  onChange={e => updateField('email', e.target.value)}
-                  style={fieldErrorStyle('email')}
-                />
-                {errorMessage('email')}
-              </div>
+                <FormGroup label="Email" htmlFor="sf-email" required error={errors.email?.message}>
+                  <input
+                    id="sf-email"
+                    type="email"
+                    placeholder="Enter Email"
+                    data-field="email"
+                    aria-invalid={!!errors.email}
+                    style={fieldStyle(!!errors.email)}
+                    {...register('email')}
+                  />
+                </FormGroup>
 
-              <div className="form-group">
-                <label htmlFor="sf-mobile">Mobile No.<span className="required-star">*</span></label>
-                <input
-                  id="sf-mobile"
-                  type="text"
-                  placeholder="Enter Mobile No."
-                  value={form.mobile}
-                  data-staff-field="mobile"
-                  aria-invalid={!!errors.mobile}
-                  onChange={e => updateField('mobile', e.target.value)}
-                  style={fieldErrorStyle('mobile')}
-                />
-                {errorMessage('mobile')}
-              </div>
+                <FormGroup label="Mobile No." htmlFor="sf-mobile" required error={errors.mobile?.message}>
+                  <input
+                    id="sf-mobile"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter Mobile No. (9-10 digits)"
+                    data-field="mobile"
+                    aria-invalid={!!errors.mobile}
+                    style={fieldStyle(!!errors.mobile)}
+                    {...register('mobile')}
+                  />
+                </FormGroup>
 
-              <div className="form-group">
-                <label htmlFor="sf-password">
-                  Password{!editingId && <span className="required-star">*</span>}
-                </label>
-                <input
-                  id="sf-password"
-                  type="password"
-                  placeholder={editingId ? 'Leave blank to keep unchanged' : 'Enter Password'}
-                  value={form.password}
-                  data-staff-field="password"
-                  aria-invalid={!!errors.password}
-                  onChange={e => updateField('password', e.target.value)}
-                  style={fieldErrorStyle('password')}
-                />
-                {errorMessage('password')}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="sf-role">Role<span className="required-star">*</span></label>
-                <select
-                  id="sf-role"
-                  value={form.role_id}
-                  data-staff-field="role_id"
-                  aria-invalid={!!errors.role_id}
-                  onChange={e => updateField('role_id', e.target.value)}
-                  style={fieldErrorStyle('role_id')}
+                <FormGroup
+                  label="Password"
+                  htmlFor="sf-password"
+                  required={!editingId}
+                  error={errors.password?.message}
                 >
-                  <option value="">Select Role</option>
-                  <option value="2">Super Admin User</option>
-                  <option value="3">Super Admin User Staff</option>
-                </select>
-                {errorMessage('role_id')}
+                  <PasswordInput
+                    id="sf-password"
+                    placeholder={editingId ? 'Leave blank to keep unchanged' : 'Enter Password'}
+                    data-field="password"
+                    aria-invalid={!!errors.password}
+                    style={fieldStyle(!!errors.password)}
+                    autoComplete="new-password"
+                    {...register('password')}
+                  />
+                  {!editingId && (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                      {PASSWORD_HELPER_TEXT}
+                    </div>
+                  )}
+                </FormGroup>
+
+                <FormGroup label="Role" htmlFor="sf-role" required error={errors.role_id?.message}>
+                  <select
+                    id="sf-role"
+                    data-field="role_id"
+                    aria-invalid={!!errors.role_id}
+                    style={fieldStyle(!!errors.role_id)}
+                    {...register('role_id')}
+                  >
+                    <option value="">Select Role</option>
+                    <option value="2">Super Admin User</option>
+                    <option value="3">Super Admin User Staff</option>
+                  </select>
+                </FormGroup>
               </div>
-            </div>
-            <div className="superadmin-staff-form-actions">
-              <button id="save-staff-btn" className="btn btn-primary" onClick={save} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}>
-                Reset Data
-              </button>
-            </div>
+              <div className="superadmin-staff-form-actions">
+                <button id="save-staff-btn" type="submit" className="btn btn-primary" disabled={saving}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={resetForm} disabled={saving}>
+                  Reset Data
+                </button>
+              </div>
+            </form>
           </div>
 
           <ListingTable
@@ -305,18 +277,24 @@ export default function SuperAdminStaffPage() {
             rows={staff}
             loading={loading}
             emptyText="No staff members found."
-            headerActions={<ListingHeaderActions onRefresh={loadData} />}
             actionsLabel="Actions"
             actionsWidth={130}
             defaultPageSize={10}
             rowActions={member => (
               <ActionIcons
                 onEdit={() => openEdit(member)}
-                onToggleStatus={() => toggleStatus(member)}
+                onToggleStatus={member.role_id === 2 ? undefined : () => toggleStatus(member)}
                 onDelete={() => remove(member.id)}
                 statusActive={!!member.status}
                 editTitle="Edit Staff"
                 deleteTitle="Delete Staff"
+                statusTitle={
+                  member.role_id === 2
+                    ? 'Main Super Admin — cannot be disabled'
+                    : member.status
+                      ? 'Active — click to disable'
+                      : 'Inactive — click to enable'
+                }
               />
             )}
           />
