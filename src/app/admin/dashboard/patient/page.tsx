@@ -87,9 +87,11 @@ export default function PatientDemographicPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/LabTests?status=true`, { headers: { token: getToken('admin_token') } });
+        const res = await fetch(`${API_BASE}/api/LabTests/assigned?status=true`, {
+          headers: { token: getToken('admin_token') },
+        });
         const list = await handleApiResponse<LabTest[]>(res, {
-          errorFallback: 'Failed to load lab tests.',
+          errorFallback: 'Failed to load assigned lab tests.',
         });
         setLabTests(list.map((t: LabTest) => ({ ...t, is_selected: false })));
       } catch {

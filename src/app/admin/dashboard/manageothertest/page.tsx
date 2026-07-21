@@ -40,9 +40,9 @@ export default function TestsReportsPage() {
 
     (async () => {
       try {
-        const list = await apiFetch<{ id: number; name: string }[]>('/api/LabTests?status=true', {
+        const list = await apiFetch<{ id: number; name: string }[]>('/api/LabTests/assigned?status=true', {
           tokenKey: 'admin_token',
-          errorFallback: 'Failed to load lab tests',
+          errorFallback: 'Failed to load assigned lab tests',
         });
         if (!cancelled) setLabTests(list || []);
       } catch (err: unknown) {
