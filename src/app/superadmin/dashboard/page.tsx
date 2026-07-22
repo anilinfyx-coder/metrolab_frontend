@@ -13,9 +13,8 @@ import {
   MdWarningAmber,
 } from 'react-icons/md';
 import {
-  Area,
-  AreaChart,
   Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   ComposedChart,
@@ -265,13 +264,7 @@ export default function SuperAdminDashboard() {
                 </div>
                 <div className="sa-dash-chart-body">
                   <ResponsiveContainer width="100%" height={260}>
-                    <AreaChart data={activity} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="testsFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.28} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
+                    <BarChart data={activity} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                       <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
@@ -280,17 +273,14 @@ export default function SuperAdminDashboard() {
                         formatter={(value) => [Number(value || 0).toLocaleString(), 'Tests']}
                       />
                       <Legend formatter={() => 'Tests Completed'} />
-                      <Area
-                        type="monotone"
+                      <Bar
                         dataKey="count"
                         name="Tests Completed"
-                        stroke="#3b82f6"
-                        strokeWidth={2.5}
-                        fill="url(#testsFill)"
-                        dot={{ r: 3, fill: '#3b82f6', strokeWidth: 0 }}
-                        activeDot={{ r: 5 }}
+                        fill="#3b82f6"
+                        radius={[4, 4, 0, 0]}
+                        barSize={activityRange === '30d' ? 12 : 22}
                       />
-                    </AreaChart>
+                    </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
@@ -405,38 +395,8 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            {/* Alerts + existing tables */}
+            {/* Bottom tables: left = clients/tests, right = alerts/subscriptions */}
             <div className="sa-dash-bottom-row">
-              <div className="card" style={cardShell}>
-                <div className="sa-dash-card-header">
-                  <h3 className="sa-dash-card-title">Subscription & Wallet Alerts</h3>
-                  <Link href="/superadmin/dashboard/b2bclient" className="sa-dash-link">View All →</Link>
-                </div>
-                <div className="sa-dash-alerts">
-                  <AlertRow
-                    href="/superadmin/dashboard/b2bclient"
-                    icon={<MdWarningAmber size={18} />}
-                    tone="red"
-                    title={`${alerts.expiring_subscriptions} Subscriptions Expiring`}
-                    subtitle="Within next 7 days"
-                  />
-                  <AlertRow
-                    href="/superadmin/dashboard/b2bclient"
-                    icon={<MdErrorOutline size={18} />}
-                    tone="orange"
-                    title={`${alerts.expired_subscriptions} Expired Subscriptions`}
-                    subtitle="Action required"
-                  />
-                  <AlertRow
-                    href="/superadmin/dashboard/b2bclient"
-                    icon={<MdAccountBalanceWallet size={18} />}
-                    tone="yellow"
-                    title={`${alerts.low_wallets} Low Wallet Balances`}
-                    subtitle={`Below $${alerts.low_wallet_threshold}`}
-                  />
-                </div>
-              </div>
-
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
                   <h3 className="sa-dash-card-title">Latest B2B Clients</h3>
@@ -509,50 +469,31 @@ export default function SuperAdminDashboard() {
 
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
-                  <h3 className="sa-dash-card-title">Latest Active Subscriptions</h3>
+                  <h3 className="sa-dash-card-title">Subscription & Wallet Alerts</h3>
                   <Link href="/superadmin/dashboard/b2bclient" className="sa-dash-link">View All →</Link>
                 </div>
-                <div className="card-body" style={{ padding: 0 }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>B2B Client</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Period</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeSubscriptions.length === 0 ? (
-                          <tr>
-                            <td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>
-                              No active subscriptions found.
-                            </td>
-                          </tr>
-                        ) : (
-                          activeSubscriptions.slice(0, 5).map((sub) => (
-                            <tr key={sub.id} style={{ borderBottom: '1px solid #edf2f9' }}>
-                              <td style={{ padding: '16px 20px', color: '#334155' }}>
-                                <Link
-                                  href={`/superadmin/dashboard/b2bclient?view=subscription&clientId=${sub.b2b_client_id}`}
-                                  style={{ color: '#334155', textDecoration: 'none', fontWeight: 500 }}
-                                >
-                                  {sub.company_name || `Client #${sub.b2b_client_id}`}
-                                </Link>
-                                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{sub.email || sub.mobile || '—'}</div>
-                              </td>
-                              <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem' }}>
-                                {(sub.start_date ? formatDate(sub.start_date) : '—')} – {(sub.end_date ? formatDate(sub.end_date) : '—')}
-                              </td>
-                              <td style={{ padding: '16px 20px', color: '#0f172a', fontWeight: 600 }}>
-                                ${parseFloat(String(sub.amount || 0)).toFixed(2)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="sa-dash-alerts">
+                  <AlertRow
+                    href="/superadmin/dashboard/b2bclient"
+                    icon={<MdWarningAmber size={18} />}
+                    tone="red"
+                    title={`${alerts.expiring_subscriptions} Subscriptions Expiring`}
+                    subtitle="Within next 7 days"
+                  />
+                  <AlertRow
+                    href="/superadmin/dashboard/b2bclient"
+                    icon={<MdErrorOutline size={18} />}
+                    tone="orange"
+                    title={`${alerts.expired_subscriptions} Expired Subscriptions`}
+                    subtitle="Action required"
+                  />
+                  <AlertRow
+                    href="/superadmin/dashboard/b2bclient"
+                    icon={<MdAccountBalanceWallet size={18} />}
+                    tone="yellow"
+                    title={`${alerts.low_wallets} Low Wallet Balances`}
+                    subtitle={`Below $${alerts.low_wallet_threshold}`}
+                  />
                 </div>
               </div>
 
@@ -596,6 +537,55 @@ export default function SuperAdminDashboard() {
                                 }}>
                                   {test.completed_count}
                                 </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card" style={cardShell}>
+                <div className="sa-dash-card-header">
+                  <h3 className="sa-dash-card-title">Latest Active Subscriptions</h3>
+                  <Link href="/superadmin/dashboard/b2bclient" className="sa-dash-link">View All →</Link>
+                </div>
+                <div className="card-body" style={{ padding: 0 }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>B2B Client</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Period</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeSubscriptions.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>
+                              No active subscriptions found.
+                            </td>
+                          </tr>
+                        ) : (
+                          activeSubscriptions.slice(0, 5).map((sub) => (
+                            <tr key={sub.id} style={{ borderBottom: '1px solid #edf2f9' }}>
+                              <td style={{ padding: '16px 20px', color: '#334155' }}>
+                                <Link
+                                  href={`/superadmin/dashboard/b2bclient?view=subscription&clientId=${sub.b2b_client_id}`}
+                                  style={{ color: '#334155', textDecoration: 'none', fontWeight: 500 }}
+                                >
+                                  {sub.company_name || `Client #${sub.b2b_client_id}`}
+                                </Link>
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{sub.email || sub.mobile || '—'}</div>
+                              </td>
+                              <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem' }}>
+                                {(sub.start_date ? formatDate(sub.start_date) : '—')} – {(sub.end_date ? formatDate(sub.end_date) : '—')}
+                              </td>
+                              <td style={{ padding: '16px 20px', color: '#0f172a', fontWeight: 600 }}>
+                                ${parseFloat(String(sub.amount || 0)).toFixed(2)}
                               </td>
                             </tr>
                           ))
