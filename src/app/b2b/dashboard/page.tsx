@@ -32,6 +32,7 @@ export default function B2bDashboardPage() {
   const [corporateClients, setCorporateClients] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [testRequests, setTestRequests] = useState<any[]>([]);
+  const [completedTests, setCompletedTests] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export default function B2bDashboardPage() {
         setUser(currentUser);
 
         if (currentUser?.id) {
-          const [wallet, corp, patientList, testReqList] = await Promise.all([
+          const [wallet, corp, patientList, testReqList, stats] = await Promise.all([
             apiFetch<{ wallet_balance?: string | number }>(`/api/B2bClients/${currentUser.id}`, {
               tokenKey: 'b2b_token',
             }).catch(() => null),
@@ -54,12 +55,16 @@ export default function B2bDashboardPage() {
             apiFetch<unknown[]>(`/api/TestRequest?b2b_client_id=${currentUser.id}`, {
               tokenKey: 'b2b_token',
             }).catch(() => []),
+            apiFetch<{ total_completed_tests?: number }>('/api/B2bClients/dashboardStats', {
+              tokenKey: 'b2b_token',
+            }).catch(() => null),
           ]);
 
           if (wallet) setWalletBalance(parseFloat(String(wallet.wallet_balance || 0)));
           setCorporateClients((corp as any[]) || []);
           setPatients((patientList as any[]) || []);
           setTestRequests((testReqList as any[]) || []);
+          setCompletedTests(stats?.total_completed_tests ?? 0);
         }
       } finally {
         setLoading(false);
@@ -139,8 +144,8 @@ export default function B2bDashboardPage() {
                 gradient="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" 
               />
               <DashboardCard 
-                title="Test Requests" 
-                value={testRequests.length} 
+                title="Total Completed Tests" 
+                value={completedTests} 
                 icon="🧪" 
                 gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" 
               />

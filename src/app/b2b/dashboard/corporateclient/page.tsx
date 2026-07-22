@@ -7,6 +7,7 @@ import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import ListingTable, { ActionIcons, ListingHeaderActions, ListingColumn } from '../../../components/ListingTable';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
 import {
   corporateClientFormSchema,
@@ -241,7 +242,7 @@ export default function CorporateClientPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update corporate client status.',
       });
-      loadData();
+      setClients(prev => patchListItem(prev, c.id, { status: !c.status }));
     } catch {
       /* toast handled by apiFetch */
     }

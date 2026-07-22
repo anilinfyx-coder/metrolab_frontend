@@ -15,6 +15,7 @@ import { useConfirm } from '../../../components/ConfirmModal';
 import ViewLabTestForm from '../../../components/ViewLabTestForm';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { apiFetch, getToken, toastApiError, toastApiSuccess } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 
 interface B2BUser {
   id?: number;
@@ -68,6 +69,8 @@ interface ResultParam {
   is_mandatory?: boolean;
   status?: boolean;
   b2b_client_id?: number | null;
+  is_customized?: boolean;
+  global_parameter_id?: number | null;
 }
 
 type View = 'list' | 'form' | 'edit' | 'specimen' | 'question' | 'result';
@@ -194,7 +197,7 @@ export default function AssignedTestCategoryPage() {
           ...t,
           accessStatus: accessStatusMap.get(Number(t.id)) !== false,
         }))
-        : (allTests || []).map(t => ({ ...t, accessStatus: true }));
+        : [];
       setCategories(list);
     } catch {
       setCategories([]);
@@ -393,7 +396,7 @@ export default function AssignedTestCategoryPage() {
         tokenKey: 'b2b_token',
         body: JSON.stringify({ status: question.status === false }),
       });
-      if (selectedTest) await openQuestions(selectedTest);
+      setQuestions(prev => patchListItem(prev, question.id, { status: question.status === false }));
     } catch {
       /* toast handled */
     }
@@ -502,9 +505,9 @@ export default function AssignedTestCategoryPage() {
       await apiFetch(`/api/ReportRequestParameters/${row.id}`, {
         method: 'PUT',
         tokenKey: 'b2b_token',
-        body: JSON.stringify({ status: !row.status }),
+        body: JSON.stringify({ status: row.status === false }),
       });
-      await refreshResultParams();
+      await refreshResultParams('Status updated successfully.');
     } catch {
       /* toast handled */
     }
@@ -702,8 +705,13 @@ export default function AssignedTestCategoryPage() {
                 <ActionIcons
                   onEdit={() => { setEditingSpecimenId(mapping.id); setSpecimenForm({ specimen_type_id: String(mapping.specimen_type_id) }); setSpecimenError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                   onToggleStatus={async () => {
-                    await apiFetch(`/api/SpecimenTypeDrugLinking/${mapping.id}`, { method: 'PUT', tokenKey: 'b2b_token', body: JSON.stringify({ status: mapping.status === false }) });
-                    await openSpecimen(selectedTest);
+                    const nextStatus = mapping.status === false;
+                    await apiFetch(`/api/SpecimenTypeDrugLinking/${mapping.id}`, {
+                      method: 'PUT',
+                      tokenKey: 'b2b_token',
+                      body: JSON.stringify({ status: nextStatus }),
+                    });
+                    setSpecimenMappings(prev => patchListItem(prev, mapping.id, { status: nextStatus }));
                   }}
                   onDelete={async () => {
                     const ok = await confirmDialog({ title: 'Delete specimen type link?', message: 'This cannot be restored once deleted.', cancelText: 'Cancel', confirmText: 'Delete' });
@@ -834,14 +842,12 @@ export default function AssignedTestCategoryPage() {
             actionsWidth={130}
             defaultPageSize={10}
             rowActions={row => (
-              isGlobalRecord(row.b2b_client_id) ? globalAction(row) : (
-                <ActionIcons
-                  onEdit={() => loadResultFormFromRow(row)}
-                  onToggleStatus={() => toggleResultStatus(row)}
-                  onDelete={() => deleteResult(row.id)}
-                  statusActive={!!row.status}
-                />
-              )
+              <ActionIcons
+                onEdit={() => loadResultFormFromRow(row)}
+                onToggleStatus={() => toggleResultStatus(row)}
+                onDelete={row.b2b_client_id != null ? () => deleteResult(row.id) : undefined}
+                statusActive={row.status !== false}
+              />
             )}
           />
         </div>
@@ -899,18 +905,21 @@ export default function AssignedTestCategoryPage() {
               onEdit={!c.default_view ? () => openEdit(c) : undefined}
               editTitle="Edit Display Options"
               onToggleStatus={async () => {
+                const nextStatus = !c.accessStatus;
                 await apiFetch('/api/B2bClientLabTestAccess/status', {
                   method: 'PUT',
                   tokenKey: 'b2b_token',
                   body: JSON.stringify({
                     b2b_client_id: b2bId,
                     lab_test_id: c.id,
-                    status: !c.accessStatus,
+                    status: nextStatus,
                   }),
                   successMessage: c.accessStatus ? 'Test disabled for your account.' : 'Test enabled for your account.',
                   errorFallback: 'Unable to update test status.',
                 });
-                await loadData();
+                setCategories(prev => prev.map((item) =>
+                  item.id === c.id ? { ...item, accessStatus: nextStatus } : item,
+                ));
               }}
               statusActive={c.accessStatus !== false}
             />

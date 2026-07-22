@@ -30,6 +30,7 @@ interface TestResultParameter {
   status: boolean;
   lab_test_id: number;
   b2b_client_id: number | null;
+  is_customized?: boolean;
 }
 
 const UNIT_OPTIONS = ['ng/mL', 'Quant', 'mg/dL', 'pg/mL', '%'];
@@ -187,7 +188,7 @@ export default function TestResultParameterPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Unable to update parameter status.',
       });
-      loadData();
+      await loadData();
     } catch {
       /* toast handled by apiFetch */
     }
@@ -339,20 +340,14 @@ export default function TestResultParameterPage() {
             actionsWidth={130}
             defaultPageSize={10}
             rowActions={p => (
-              p.b2b_client_id == null ? (
-                <span title="Global parameter (read-only)" style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  🔒 Global
-                </span>
-              ) : (
-                <ActionIcons
-                  onEdit={() => openEdit(p)}
-                  onToggleStatus={() => toggleStatus(p)}
-                  onDelete={() => remove(p.id)}
-                  statusActive={!!p.status}
-                  editTitle="Edit Parameter"
-                  deleteTitle="Delete Parameter"
-                />
-              )
+              <ActionIcons
+                onEdit={() => openEdit(p)}
+                onToggleStatus={() => toggleStatus(p)}
+                onDelete={p.b2b_client_id != null ? () => remove(p.id) : undefined}
+                statusActive={p.status !== false}
+                editTitle="Edit Parameter"
+                deleteTitle="Delete Parameter"
+              />
             )}
           />
         </div>

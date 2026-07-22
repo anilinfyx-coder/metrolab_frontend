@@ -193,8 +193,9 @@ export const patientDemographicSchema = yup.object({
   driving_license: requiredTrimmed('the driving license number'),
   street1: requiredTrimmed('street address'),
   street2: yup.string().trim(),
-  city: requiredTrimmed('the city'),
-  state: requiredTrimmed('the state'),
+  country_id: yup.string().required('Please select a country.'),
+  state_id: yup.string().required('Please select a state.'),
+  city_id: yup.string().required('Please select a city.'),
   zipcode: requiredTrimmed('the zip code'),
   email: emailSchema,
   ssn: yup.string().trim(),
@@ -212,8 +213,9 @@ export type PatientDemographicFormValues = {
   driving_license: string;
   street1: string;
   street2: string;
-  city: string;
-  state: string;
+  country_id: string;
+  state_id: string;
+  city_id: string;
   zipcode: string;
   email: string;
   ssn: string;
@@ -230,7 +232,7 @@ export type NamedEntityWithIdFormValues = yup.InferType<typeof namedEntityWithId
 
 export const documentTypeSchema = yup.object({
   name: requiredTrimmed('the name'),
-  description: requiredTrimmed('the description'),
+  description: yup.string().trim(),
 });
 
 export type DocumentTypeFormValues = yup.InferType<typeof documentTypeSchema>;
@@ -329,9 +331,7 @@ export function b2bClientFormSchema(isEditing = false) {
     contact_person_name: requiredTrimmed('the contact person name'),
     mobile: mobileSchema,
     email: emailSchema,
-    password: isEditing
-      ? yup.string().trim().required('Password is required.')
-      : appPasswordSchema,
+    password: isEditing ? optionalAppPasswordSchema : appPasswordSchema,
     address: requiredTrimmed('the address'),
     country_id: yup.string().required('Please select a country.'),
     state_id: yup.string().required('Please select a state.'),

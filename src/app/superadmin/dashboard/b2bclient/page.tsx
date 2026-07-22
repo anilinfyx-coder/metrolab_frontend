@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -67,6 +67,27 @@ interface WalletTransaction {
   closing_balance: string | number;
   description?: string;
 }
+
+const B2B_CLIENT_REQUIRED_FIELDS = new Set<keyof B2bClientFormValues>([
+  'company_name',
+  'contact_person_name',
+  'mobile',
+  'email',
+  'address',
+  'country_id',
+  'state_id',
+  'city_id',
+  'pincode',
+  'public_email',
+  'public_phone_no',
+  'medical_officer_name',
+  'mrocc',
+  'clia_number',
+  'smtp_server',
+  'smtp_port',
+  'smtp_email',
+  'smtp_password',
+]);
 
 const emptyClient = {
   company_name: '', contact_person_name: '', mobile: '', email: '', address: '',
@@ -170,6 +191,14 @@ export default function B2BClientsPage() {
     fileName: '',
   });
   const [docFileError, setDocFileError] = useState('');
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+
+  const resetDocumentForm = () => {
+    resetDocForm({ typeDataId: '' });
+    setDocFormMeta({ id: null, file: null, fileName: '' });
+    setDocFileError('');
+    if (docFileInputRef.current) docFileInputRef.current.value = '';
+  };
 
   // File uploads for B2B Client
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -333,7 +362,7 @@ export default function B2BClientsPage() {
     enabled: view === 'labtestaccess' && !!selectedClientId,
     queryFn: async () => {
       try {
-        return await apiFetch<{ lab_test_id: number }[]>(
+        return await apiFetch<{ lab_test_id: number; creation_timestamp?: string }[]>(
           `/api/B2bClientLabTestAccess?b2b_client_id=${selectedClientId}`,
           { tokenKey: 'superadmin_token' },
         ) || [];
@@ -365,10 +394,28 @@ export default function B2BClientsPage() {
     [draftSelectedIds, accessList],
   );
 
-  const labTests = useMemo(
-    () => accessLabTests.map(t => ({ ...t, is_selected: selectedTestIds.has(t.id) })),
-    [accessLabTests, selectedTestIds],
+  const accessAssignedAt = useMemo(
+    () => new Map(accessList.map(a => [a.lab_test_id, a.creation_timestamp || ''])),
+    [accessList],
   );
+
+  const labTests = useMemo(() => {
+    const savedIds = new Set(accessList.map(a => a.lab_test_id));
+    const withSelection = accessLabTests.map(t => ({
+      ...t,
+      is_selected: selectedTestIds.has(t.id),
+    }));
+
+    return [...withSelection].sort((a, b) => {
+      const aAssigned = savedIds.has(a.id);
+      const bAssigned = savedIds.has(b.id);
+      if (aAssigned !== bAssigned) return aAssigned ? -1 : 1;
+      const aTs = accessAssignedAt.get(a.id) || '';
+      const bTs = accessAssignedAt.get(b.id) || '';
+      if (aTs !== bTs) return bTs.localeCompare(aTs);
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [accessLabTests, selectedTestIds, accessList, accessAssignedAt]);
 
   const walletBalance = useMemo(() => {
     if (walletBalanceOverride != null) return walletBalanceOverride;
@@ -379,8 +426,7 @@ export default function B2BClientsPage() {
     return 0;
   }, [walletBalanceOverride, clients, selectedClientId, selectedClient, walletHistory]);
 
-  // Deep-link: ?view=wallet&clientId=… opens wallet once client list is loaded.
-   
+  // Deep-link: ?view=wallet|subscription&clientId=… opens that view once client list is loaded.
   useEffect(() => {
     if (clients.length === 0 || initViewHandled || typeof window === 'undefined') return;
     const urlParams = new URLSearchParams(window.location.search);
@@ -397,15 +443,19 @@ export default function B2BClientsPage() {
       setReportFooterFile(null);
       setMedOfficerSigFile(null);
       setView('form');
-    } else if (v === 'wallet' && cid) {
+    } else if ((v === 'wallet' || v === 'subscription') && cid) {
       const c = clients.find(x => x.id.toString() === cid);
       if (c) {
         setSelectedClient(c);
-        setWalletBalanceOverride(
-          c.wallet_balance != null ? Number(c.wallet_balance) : 0,
-        );
-        resetWallet({ amount: '', description: '' });
-        setView('wallet');
+        if (v === 'wallet') {
+          setWalletBalanceOverride(
+            c.wallet_balance != null ? Number(c.wallet_balance) : 0,
+          );
+          resetWallet({ amount: '', description: '' });
+          setView('wallet');
+        } else {
+          setView('subscription');
+        }
       }
     }
     setInitViewHandled(true);
@@ -681,7 +731,11 @@ export default function B2BClientsPage() {
     if (!ok) return;
     try {
       await toggleStatusMutation.mutateAsync({ id: c.id, status: !c.status });
-      await invalidateClients();
+      queryClient.setQueryData<B2BClient[]>(B2B_CLIENTS_KEY, (old) =>
+        (old ?? []).map((client) =>
+          client.id === c.id ? { ...client, status: !c.status } : client,
+        ),
+      );
     } catch {
       /* error toasted by apiFetch */
     }
@@ -695,7 +749,10 @@ export default function B2BClientsPage() {
     setEditingSubId(null);
     setDraftCustomPrices(null);
     setIsFixedPrice(!!c.is_fixed_price);
-    setFixedPriceAmount(c.fixed_price_amount != null ? String(c.fixed_price_amount) : '');
+    const amount = c.fixed_price_amount;
+    setFixedPriceAmount(
+      amount != null && Number(amount) !== 0 ? String(amount) : '',
+    );
     setView('subscription');
   };
 
@@ -739,7 +796,7 @@ export default function B2BClientsPage() {
       await saveCustomPricingMutation.mutateAsync({
         clientId: selectedClientId,
         fixedPrice: isFixedPrice,
-        fixedAmount: fixedPriceAmount,
+        fixedAmount: fixedPriceAmount.trim() || '0',
         prices: customPrices,
       });
       toastApiSuccess('Custom Pricing saved successfully');
@@ -753,9 +810,7 @@ export default function B2BClientsPage() {
   // ── Documents ─────────────────────────────────────────────────────────────
   const openDocuments = (c: B2BClient) => {
     setSelectedClient(c);
-    resetDocForm({ typeDataId: '' });
-    setDocFormMeta({ id: null, file: null, fileName: '' });
-    setDocFileError('');
+    resetDocumentForm();
     setView('documents');
   };
 
@@ -777,8 +832,7 @@ export default function B2BClientsPage() {
         formData,
         isUpdate: !!docFormMeta.id,
       });
-      resetDocForm({ typeDataId: '' });
-      setDocFormMeta({ id: null, file: null, fileName: '' });
+      resetDocumentForm();
       if (selectedClientId) {
         await queryClient.invalidateQueries({ queryKey: b2bDocumentsKey(selectedClientId) });
       }
@@ -820,7 +874,7 @@ export default function B2BClientsPage() {
         clientId: selectedClientId,
         labTestIds: selected,
       });
-      setView('list');
+      setDraftSelectedIds(null);
       await queryClient.invalidateQueries({ queryKey: b2bLabTestAccessKey(selectedClientId) });
     } catch {
       /* error toasted by apiFetch */
@@ -882,8 +936,13 @@ export default function B2BClientsPage() {
     },
   ];
 
-  const inp = (key: keyof B2bClientFormValues, label: string, type = 'text', required = false, readOnly = false) => (
-    <FormGroup key={key} label={label} htmlFor={`b2b-${key}`} required={required} error={clientErrors[key]?.message}>
+  const isClientFieldRequired = (key: keyof B2bClientFormValues) => {
+    if (key === 'password') return !editingId;
+    return B2B_CLIENT_REQUIRED_FIELDS.has(key);
+  };
+
+  const inp = (key: keyof B2bClientFormValues, label: string, type = 'text', readOnly = false) => (
+    <FormGroup key={key} label={label} htmlFor={`b2b-${key}`} required={isClientFieldRequired(key)} error={clientErrors[key]?.message}>
       {type === 'password' ? (
         <PasswordInput
           id={`b2b-${key}`}
@@ -940,13 +999,13 @@ export default function B2BClientsPage() {
             <form onSubmit={saveClient} noValidate>
             <div className="card-body">
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                {inp('company_name', 'B2B Company Name', 'text', true)}
-                {inp('contact_person_name', 'Contact Person Name', 'text', true)}
-                {inp('mobile', 'Mobile', 'text', true)}
-                {inp('email', 'Login Email', 'email', true)}
-                {inp('password', 'Login Password', 'password', true, true)}
-                {inp('address', 'Address', 'text', true)}
-                <FormGroup label="Country" htmlFor="b2b-country" required error={clientErrors.country_id?.message}>
+                {inp('company_name', 'B2B Company Name')}
+                {inp('contact_person_name', 'Contact Person Name')}
+                {inp('mobile', 'Mobile')}
+                {inp('email', 'Login Email', 'email')}
+                {inp('password', 'Login Password', 'password', !!editingId)}
+                {inp('address', 'Address')}
+                <FormGroup label="Country" htmlFor="b2b-country" required={isClientFieldRequired('country_id')} error={clientErrors.country_id?.message}>
                   <select
                     id="b2b-country"
                     data-field="country_id"
@@ -964,7 +1023,7 @@ export default function B2BClientsPage() {
                     {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </FormGroup>
-                <FormGroup label="State" htmlFor="b2b-state" required error={clientErrors.state_id?.message}>
+                <FormGroup label="State" htmlFor="b2b-state" required={isClientFieldRequired('state_id')} error={clientErrors.state_id?.message}>
                   <select
                     id="b2b-state"
                     data-field="state_id"
@@ -982,7 +1041,7 @@ export default function B2BClientsPage() {
                     {filteredStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </FormGroup>
-                <FormGroup label="City" htmlFor="b2b-city" required error={clientErrors.city_id?.message}>
+                <FormGroup label="City" htmlFor="b2b-city" required={isClientFieldRequired('city_id')} error={clientErrors.city_id?.message}>
                   <select
                     id="b2b-city"
                     data-field="city_id"
@@ -995,9 +1054,9 @@ export default function B2BClientsPage() {
                     {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </FormGroup>
-                {inp('pincode', 'Pincode', 'text', true)}
-                {inp('public_email', 'Public Email', 'email', true)}
-                {inp('public_phone_no', 'Public Phone Number', 'text', true)}
+                {inp('pincode', 'Pincode')}
+                {inp('public_email', 'Public Email', 'email')}
+                {inp('public_phone_no', 'Public Phone Number')}
                 {inp('public_fax', 'Public Fax')}
                 {inp('support_email', 'Support Email')}
                 {inp('support_mobile', 'Support Mobile')}
@@ -1005,14 +1064,14 @@ export default function B2BClientsPage() {
                 {inp('website', 'Website')}
                 {inp('tagline', 'Tagline')}
                 {inp('primary_color_code', 'Primary Colour Code')}
-                {inp('medical_officer_name', 'Medical Officer Name', 'text', true)}
+                {inp('medical_officer_name', 'Medical Officer Name')}
                 {inp('medical_officer_position', 'Medical Officer Position')}
-                {inp('mrocc', 'MROCC', 'text', true)}
-                {inp('clia_number', 'CLIA Number', 'text', true)}
-                {inp('smtp_server', 'SMTP Server', 'text', true)}
-                {inp('smtp_port', 'SMTP Port', 'text', true)}
-                {inp('smtp_email', 'SMTP Email', 'email', true)}
-                {inp('smtp_password', 'SMTP Password', 'password', true)}
+                {inp('mrocc', 'MROCC')}
+                {inp('clia_number', 'CLIA Number')}
+                {inp('smtp_server', 'SMTP Server')}
+                {inp('smtp_port', 'SMTP Port')}
+                {inp('smtp_email', 'SMTP Email', 'email')}
+                {inp('smtp_password', 'SMTP Password', 'password')}
 
                 {/* Is Approval Toggle */}
                 <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
@@ -1030,7 +1089,7 @@ export default function B2BClientsPage() {
 
                 {/* File Upload Fields */}
                 <div className="form-group">
-                  <label>Logo File <span style={{ color: '#ef4444' }}>*</span></label>
+                  <label>Logo File</label>
                   <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files?.[0] || null)}
                     style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
                   {logoFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {logoFile.name}</small>}
@@ -1048,7 +1107,7 @@ export default function B2BClientsPage() {
                   {reportFooterFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {reportFooterFile.name}</small>}
                 </div>
                 <div className="form-group">
-                  <label>Medical Officer Signature <span style={{ color: '#ef4444' }}>*</span></label>
+                  <label>Medical Officer Signature</label>
                   <input type="file" accept="image/*" onChange={e => setMedOfficerSigFile(e.target.files?.[0] || null)}
                     style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
                   {medOfficerSigFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {medOfficerSigFile.name}</small>}
@@ -1189,7 +1248,21 @@ export default function B2BClientsPage() {
                 {isFixedPrice && (
                   <div className="form-group" style={{ maxWidth: '400px' }}>
                     <label>Fixed Price Amount ($)</label>
-                    <input type="number" value={fixedPriceAmount} onChange={e => setFixedPriceAmount(e.target.value)} placeholder="Enter Fixed Amount" />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={fixedPriceAmount}
+                      onChange={e => setFixedPriceAmount(e.target.value)}
+                      onFocus={e => {
+                        if (fixedPriceAmount === '0') {
+                          setFixedPriceAmount('');
+                        } else {
+                          e.target.select();
+                        }
+                      }}
+                      placeholder="Enter Fixed Amount"
+                    />
                   </div>
                 )}
 
@@ -1282,7 +1355,15 @@ export default function B2BClientsPage() {
                 </FormGroup>
                 <div className="form-group">
                   <label>File Upload<span style={{ color: '#ef4444' }}> *</span></label>
-                  <input type="file" data-field="file" onChange={e => { setDocFormMeta(p => ({ ...p, file: e.target.files ? e.target.files[0] : null })); setDocFileError(''); }} />
+                  <input
+                    ref={docFileInputRef}
+                    type="file"
+                    data-field="file"
+                    onChange={e => {
+                      setDocFormMeta(p => ({ ...p, file: e.target.files ? e.target.files[0] : null }));
+                      setDocFileError('');
+                    }}
+                  />
                   {docFileError && <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem' }}>{docFileError}</div>}
                   {docFormMeta.id && !docFormMeta.file && (
                     <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
@@ -1298,7 +1379,7 @@ export default function B2BClientsPage() {
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  onClick={() => { resetDocForm({ typeDataId: '' }); setDocFormMeta({ id: null, file: null, fileName: '' }); setDocFileError(''); }}
+                  onClick={resetDocumentForm}
                 >
                   Reset Data
                 </button>

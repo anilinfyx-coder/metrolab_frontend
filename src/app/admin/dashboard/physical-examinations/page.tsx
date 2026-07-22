@@ -9,6 +9,7 @@ import { FormGroup, FieldError } from '../../../components/FormField';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDate } from '../../../utils/dateFormat';
 import { apiFetch, toastApiError, toastApiSuccess } from '../../../../lib/api';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import {
   physicalExaminationCertificateSchema,
@@ -114,6 +115,8 @@ export default function PhysicalExaminationsPage() {
   const [previewData, setPreviewData] = useState<PhysicalExaminationCertificateFormValues | null>(null);
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   const {
     register,
@@ -129,20 +132,29 @@ export default function PhysicalExaminationsPage() {
 
   const patientId = watch('patient_id');
 
-  const { data: certificates = [], isLoading: loading } = useQuery({
-    queryKey: CERT_QUERY_KEY,
+  const { data: certData, isLoading: loading } = useQuery({
+    queryKey: [...CERT_QUERY_KEY, page, pageSize],
     queryFn: async () => {
       try {
-        const list = await apiFetch<PhysicalExamCertificate[]>('/api/PhysicalExaminationCertificates', {
-          tokenKey: 'admin_token',
-          errorFallback: 'Failed to load physical examination certificates.',
-        });
-        return list || [];
+        const result = await apiFetch<PaginatedResult<PhysicalExamCertificate> | PhysicalExamCertificate[]>(
+          `/api/PhysicalExaminationCertificates?${buildPageQuery(page, pageSize)}`,
+          {
+            tokenKey: 'admin_token',
+            errorFallback: 'Failed to load physical examination certificates.',
+          },
+        );
+        if (isPaginatedResult<PhysicalExamCertificate>(result)) {
+          return { items: result.items, total: result.total };
+        }
+        const list = result || [];
+        return { items: list, total: list.length };
       } catch {
-        return [];
+        return { items: [], total: 0 };
       }
     },
   });
+  const certificates = certData?.items ?? [];
+  const total = certData?.total ?? 0;
 
   const searchPatientMutation = useMutation({
     mutationFn: async (val: string) => {
@@ -663,6 +675,13 @@ export default function PhysicalExaminationsPage() {
             actionsLabel="Actions"
             actionsWidth={140}
             defaultPageSize={25}
+            showTotal
+            paginationMode="server"
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
             headerActions={
               <ListingHeaderActions onAdd={openForm} addLabel="Issue New Certificate" />
             }

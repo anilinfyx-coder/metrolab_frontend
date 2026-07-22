@@ -7,6 +7,7 @@ import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import { testReportQuestionSchema, type TestReportQuestionFormValues } from '../../../../lib/schemas';
 
@@ -124,7 +125,7 @@ export default function TestReportQuestionsPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadData();
+      setQuestions(prev => patchListItem(prev, q.id, { status: !q.status }));
     } catch {
       /* error toasted by apiFetch */
     }

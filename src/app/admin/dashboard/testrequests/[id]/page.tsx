@@ -370,7 +370,7 @@ export default function TestRequestDetailPage() {
   if (!id || Number.isNaN(id)) {
     return (
       <div className="page-content" style={{ paddingTop: 0 }}>
-        <TopNav title="Manage Test Requests" />
+        <TopNav title="Corporate Requests" />
         <div className="page-body">
           <p>Invalid test request.</p>
           <button type="button" className="btn btn-primary" onClick={goBack}>Back</button>
@@ -381,7 +381,7 @@ export default function TestRequestDetailPage() {
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
-      <TopNav title="Manage Test Requests" />
+      <TopNav title="Corporate Requests" />
 
       <div className="tr-detail-page">
         {loading ? (

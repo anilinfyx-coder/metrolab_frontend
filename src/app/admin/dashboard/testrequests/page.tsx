@@ -6,6 +6,7 @@ import ListingTable, { ActionIcons, ListingColumn } from '../../../components/Li
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDateTime } from '../../../utils/dateFormat';
 import { apiFetch, handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 
 interface TestRequest {
   id: number;
@@ -33,23 +34,36 @@ export default function ManageRequestsPage() {
   const confirmDialog = useConfirm();
   const [requests, setRequests] = useState<TestRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
 
-  const loadData = async () => {
+  const loadData = async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const list = await apiFetch<TestRequest[]>('/api/TestRequest', {
-        tokenKey: 'admin_token',
-        errorFallback: 'Failed to load test requests.',
-      });
-      setRequests(list || []);
+      const result = await apiFetch<PaginatedResult<TestRequest> | TestRequest[]>(
+        `/api/TestRequest?${buildPageQuery(p, ps)}`,
+        {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load test requests.',
+        },
+      );
+      if (isPaginatedResult<TestRequest>(result)) {
+        setRequests(result.items);
+        setTotal(result.total);
+      } else {
+        setRequests(result || []);
+        setTotal((result || []).length);
+      }
     } catch {
       setRequests([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(page, pageSize); }, [page, pageSize]);
 
   const handleDelete = async (id: number) => {
     const ok = await confirmDialog({
@@ -69,7 +83,7 @@ export default function ManageRequestsPage() {
         successMessage: 'Test request deleted successfully.',
         errorFallback: 'Failed to delete',
       });
-      loadData();
+      loadData(page, pageSize);
     } catch {
       // Error toast handled by handleApiResponse
     }
@@ -146,12 +160,12 @@ export default function ManageRequestsPage() {
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
-      <TopNav title="Manage Test Requests" />
+      <TopNav title="Corporate Requests" />
 
       <div className="page-body">
         <ListingTable
           className="test-requests-table"
-          title="List of Test Requests"
+          title="List of Corporate Requests"
           columns={columns}
           rows={requests}
           loading={loading}
@@ -159,6 +173,12 @@ export default function ManageRequestsPage() {
           actionsLabel="Actions"
           actionsWidth={140}
           defaultPageSize={25}
+          paginationMode="server"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
           rowActions={(r) => (
             <ActionIcons
               onDownload={() => handleDownload(r.id)}

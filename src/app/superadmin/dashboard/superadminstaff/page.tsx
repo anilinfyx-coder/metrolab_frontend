@@ -7,6 +7,7 @@ import ListingTable, { ActionIcons, ListingColumn } from '../../../components/Li
 import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import { apiFetch, toastApiError } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import {
   PASSWORD_HELPER_TEXT,
@@ -138,7 +139,7 @@ export default function SuperAdminStaffPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadData();
+      setStaff(prev => patchListItem(prev, s.id, { status: !s.status }));
     } catch {
       /* error toasted by apiFetch */
     }

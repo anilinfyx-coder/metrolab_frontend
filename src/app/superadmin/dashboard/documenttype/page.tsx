@@ -6,6 +6,7 @@ import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import { documentTypeSchema, type DocumentTypeFormValues } from '../../../../lib/schemas';
 
@@ -61,7 +62,7 @@ export default function DocumentTypePage() {
         tokenKey: 'superadmin_token',
         body: JSON.stringify({
           name: values.name.trim(),
-          description: values.description.trim(),
+          description: (values.description || '').trim(),
         }),
         successMessage: `Document type ${editingId ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save document type.',
@@ -116,7 +117,7 @@ export default function DocumentTypePage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadData();
+      setTypes(prev => patchListItem(prev, t.id, { status: !t.status }));
     } catch {
       /* error toasted by apiFetch */
     }
@@ -157,7 +158,7 @@ export default function DocumentTypePage() {
                   />
                 </FormGroup>
 
-                <FormGroup label="Description" htmlFor="document-type-description" required error={errors.description?.message}>
+                <FormGroup label="Description" htmlFor="document-type-description" error={errors.description?.message}>
                   <textarea
                     id="document-type-description"
                     rows={4}
