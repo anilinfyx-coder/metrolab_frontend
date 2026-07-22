@@ -4835,3 +4835,198 @@ select { cursor: pointer; }
   }
 }
 
+/* B2B Lab Test Access — search + sticky save */
+.b2b-lab-access-toolbar {
+  padding: 0.85rem 1rem 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.b2b-lab-access-search {
+  position: relative;
+  max-width: 420px;
+}
+
+.b2b-lab-access-search-icon {
+  position: absolute;
+  left: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.b2b-lab-access-search .patient-form-input {
+  padding-left: 2.1rem;
+  width: 100%;
+}
+
+.b2b-lab-access-footer {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  z-index: 2;
+}
+
+/* B2B Lab Profile (read-only overview) */
+.b2b-profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.b2b-profile-header-body {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.b2b-profile-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.b2b-profile-title {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.b2b-profile-contact {
+  margin-top: 0.45rem;
+  color: #64748b;
+  font-size: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.b2b-profile-dot {
+  opacity: 0.55;
+}
+
+.b2b-profile-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.b2b-profile-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.b2b-profile-kpi .card-body {
+  padding: 0.95rem 1rem;
+}
+
+.b2b-profile-kpi-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.b2b-profile-kpi-value {
+  margin-top: 0.45rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.b2b-profile-health-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.b2b-profile-page .sa-dash-charts-row {
+  grid-template-columns: 1.4fr 1fr;
+}
+
+.b2b-profile-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.b2b-profile-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.b2b-profile-pill-ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.b2b-profile-pill-warn {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.b2b-profile-pill-bad {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.b2b-profile-pill-muted {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.b2b-profile-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.b2b-profile-table th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  color: #64748b;
+  font-weight: 600;
+  border-bottom: 1px solid #edf2f9;
+  background: #f8fafc;
+}
+
+.b2b-profile-table td {
+  padding: 0.75rem 1rem;
+  color: #334155;
+  border-bottom: 1px solid #edf2f9;
+}
+
+@media (max-width: 1200px) {
+  .b2b-profile-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .b2b-profile-page .sa-dash-charts-row,
+  .b2b-profile-health-grid,
+  .b2b-profile-tables-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .b2b-profile-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+

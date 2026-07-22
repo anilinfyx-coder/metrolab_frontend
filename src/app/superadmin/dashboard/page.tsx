@@ -110,7 +110,7 @@ export default function SuperAdminDashboard() {
   const [activityRange, setActivityRange] = useState<'7d' | '30d'>('7d');
   const [activity, setActivity] = useState<ActivityPoint[]>([]);
   const [statusDist, setStatusDist] = useState<StatusDistribution>({ completed: 0, pending: 0, total: 0 });
-  const [revenueMonths] = useState(6);
+  const [revenueRange, setRevenueRange] = useState<'7d' | 'current_month' | 'last_month' | '6m'>('6m');
   const [revenue, setRevenue] = useState<RevenuePoint[]>([]);
   const [alerts, setAlerts] = useState<DashboardAlerts>({
     expiring_subscriptions: 0,
@@ -133,7 +133,7 @@ export default function SuperAdminDashboard() {
           status_distribution?: StatusDistribution;
           revenue?: { items?: RevenuePoint[] };
           alerts?: DashboardAlerts;
-        }>(`/api/SuperAdmin/dashboardOverview?activityRange=${activityRange}&months=${revenueMonths}`, {
+        }>(`/api/SuperAdmin/dashboardOverview?activityRange=${activityRange}&revenueRange=${revenueRange}`, {
           tokenKey: 'superadmin_token',
         }).catch(() => null);
 
@@ -154,9 +154,9 @@ export default function SuperAdminDashboard() {
     };
 
     void fetchBase();
-    // Initial range is intentional for first paint; later range changes use activity-only fetch.
+    // Initial ranges are intentional for first paint; later changes use dedicated fetches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [revenueMonths]);
+  }, []);
 
   useEffect(() => {
     if (!initialLoadDone.current) return;
@@ -174,6 +174,23 @@ export default function SuperAdminDashboard() {
     };
     void fetchActivity();
   }, [activityRange]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+
+    const fetchRevenue = async () => {
+      try {
+        const data = await apiFetch<{ items?: RevenuePoint[] }>(
+          `/api/SuperAdmin/revenueSubscriptionOverview?range=${revenueRange}`,
+          { tokenKey: 'superadmin_token' },
+        );
+        setRevenue(data?.items || []);
+      } catch {
+        setRevenue([]);
+      }
+    };
+    void fetchRevenue();
+  }, [revenueRange]);
 
   const statusChartData = useMemo(() => ([
     { name: 'Completed', value: statusDist.completed || 0, color: STATUS_COLORS.completed },
@@ -329,7 +346,17 @@ export default function SuperAdminDashboard() {
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
                   <h3 className="sa-dash-card-title">Revenue & Subscription Overview</h3>
-                  <span className="sa-dash-muted">Last {revenueMonths} Months</span>
+                  <select
+                    className="sa-dash-select"
+                    value={revenueRange}
+                    onChange={e => setRevenueRange(e.target.value as typeof revenueRange)}
+                    aria-label="Revenue and subscription range"
+                  >
+                    <option value="7d">Last 7 Days</option>
+                    <option value="current_month">Current month</option>
+                    <option value="last_month">Last Month</option>
+                    <option value="6m">Last 6 Months</option>
+                  </select>
                 </div>
                 <div className="sa-dash-chart-body">
                   <ResponsiveContainer width="100%" height={260}>
@@ -438,8 +465,8 @@ export default function SuperAdminDashboard() {
                             <tr key={client.id} style={{ borderBottom: '1px solid #edf2f9' }}>
                               <td style={{ padding: '16px 20px', color: '#334155' }}>
                                 <Link
-                                  href="/superadmin/dashboard/b2bclient"
-                                  style={{ color: '#10b981', textDecoration: 'none', fontWeight: 500 }}
+                                  href={`/superadmin/dashboard/b2bclient/${client.id}`}
+                                  style={{ color: '#334155', textDecoration: 'none', fontWeight: 600 }}
                                 >
                                   {client.company_name || `Client #${client.id}`}
                                 </Link>
