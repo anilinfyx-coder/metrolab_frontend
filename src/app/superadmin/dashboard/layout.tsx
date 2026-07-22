@@ -2,7 +2,8 @@
 import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 import {
   MdBiotech,
   MdBusiness,
@@ -12,6 +13,7 @@ import {
   MdScience,
   MdSettings,
   MdVpnKey,
+  MdAdd,
 } from 'react-icons/md';
 
 const superAdminNavItems: NavItem[] = [
@@ -29,6 +31,7 @@ const superAdminNavItems: NavItem[] = [
 
 export default function SuperAdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [navItems, setNavItems] = useState<NavItem[]>(superAdminNavItems);
 
   useEffect(() => {
@@ -55,6 +58,31 @@ export default function SuperAdminDashboardLayout({ children }: { children: Reac
       <div className="main-content">
         <div className="main-content-body">{children}</div>
         <AppFooter />
+      </div>
+
+      {/* Floating Action Button (Add B2B Lab) */}
+      <div style={{ position: 'fixed', bottom: '30px', right: '30px', zIndex: 9999 }}>
+        <Link 
+          href="/superadmin/dashboard/b2bclient?view=form"
+          title="Add B2B Lab"
+          style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--primary)',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textDecoration: 'none',
+            transition: 'transform 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <MdAdd size={28} />
+        </Link>
       </div>
     </div>
   );

@@ -188,13 +188,7 @@ export const patientDemographicSchema = yup.object({
   name: requiredTrimmed('the patient name'),
   mobile: mobileSchema,
   gender: yup.string().required('Please select gender.'),
-  dob_month: yup.string().required('Please enter date of birth.'),
-  dob_day: yup.string().required('Please enter date of birth.'),
-  dob_year: yup
-    .string()
-    .trim()
-    .required('Please enter date of birth.')
-    .matches(/^\d{4}$/, 'Please enter a valid year.'),
+  dob: yup.string().required('Please enter date of birth.'),
   driving_license_state: requiredTrimmed('the driving license state'),
   driving_license: requiredTrimmed('the driving license number'),
   street1: requiredTrimmed('street address'),
@@ -213,9 +207,7 @@ export type PatientDemographicFormValues = {
   name: string;
   mobile: string;
   gender: string;
-  dob_month: string;
-  dob_day: string;
-  dob_year: string;
+  dob: string;
   driving_license_state: string;
   driving_license: string;
   street1: string;

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -386,7 +386,18 @@ export default function B2BClientsPage() {
     const urlParams = new URLSearchParams(window.location.search);
     const v = urlParams.get('view');
     const cid = urlParams.get('clientId');
-    if (v === 'wallet' && cid) {
+    if (v === 'form') {
+      setEditingId(null);
+      resetClient({ ...emptyClient, password: generateAutoPassword() });
+      setIsApproval(false);
+      setIsFixedPrice(false);
+      setFixedPriceAmount('');
+      setLogoFile(null);
+      setReportHeaderFile(null);
+      setReportFooterFile(null);
+      setMedOfficerSigFile(null);
+      setView('form');
+    } else if (v === 'wallet' && cid) {
       const c = clients.find(x => x.id.toString() === cid);
       if (c) {
         setSelectedClient(c);
@@ -398,7 +409,7 @@ export default function B2BClientsPage() {
       }
     }
     setInitViewHandled(true);
-  }, [clients, initViewHandled, resetWallet]);
+  }, [clients, initViewHandled, resetWallet, resetClient]);
 
   const saveClientMutation = useMutation({
     mutationFn: async ({

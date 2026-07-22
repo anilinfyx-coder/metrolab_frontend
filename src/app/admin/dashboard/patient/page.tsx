@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -35,9 +35,7 @@ const emptyPatient: PatientDemographicFormValues = {
   name: '',
   mobile: '',
   gender: '1',
-  dob_month: '1',
-  dob_day: '1',
-  dob_year: '',
+  dob: '',
   driving_license_state: '',
   driving_license: '',
   street1: '',
@@ -118,9 +116,7 @@ export default function PatientDemographicPage() {
         name: p.name || '',
         mobile: p.mobile || '',
         gender: String(p.gender || '1'),
-        dob_year: dobParts[0] || '',
-        dob_month: String(parseInt(dobParts[1]) || 1),
-        dob_day: String(parseInt(dobParts[2]) || 1),
+        dob: p.dob ? p.dob.split('T')[0] : '',
         driving_license_state: p.driving_license_state || '',
         driving_license: p.driving_license || '',
         street1: p.street1 || '',
@@ -178,9 +174,7 @@ export default function PatientDemographicPage() {
 
     setSaving(true);
     setSaveError(null);
-    const dobString = values.dob_year
-      ? `${values.dob_year}-${String(values.dob_month).padStart(2, '0')}-${String(values.dob_day).padStart(2, '0')}`
-      : null;
+    const dobString = values.dob || null;
 
     const selectedTests = labTests.filter(t => t.is_selected).map(t => t.id);
     const reasonForTest = reason === 'Other' ? customReason : reason;
@@ -348,38 +342,15 @@ export default function PatientDemographicPage() {
 
               <div className="patient-form-row patient-form-row-3">
                 <div className="form-group">
-                  <label>DOB (mm/dd/yyyy) <span className="req">*</span></label>
-                  <div className="patient-dob-row">
-                    <select
-                      className={`patient-form-input patient-dob-month${errors.dob_year ? ' patient-form-input-error' : ''}`}
-                      data-field="dob_month"
-                      aria-invalid={!!errors.dob_year}
-                      {...register('dob_month')}
-                    >
-                      {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
-                        <option key={m} value={i + 1}>{m}</option>
-                      ))}
-                    </select>
-                    <select
-                      className={`patient-form-input patient-dob-day${errors.dob_year ? ' patient-form-input-error' : ''}`}
-                      data-field="dob_day"
-                      aria-invalid={!!errors.dob_year}
-                      {...register('dob_day')}
-                    >
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      className={`patient-form-input patient-dob-year${errors.dob_year ? ' patient-form-input-error' : ''}`}
-                      placeholder="Year"
-                      data-field="dob_year"
-                      aria-invalid={!!errors.dob_year}
-                      {...register('dob_year')}
-                    />
-                  </div>
-                  <FieldError message={errors.dob_year?.message} />
+                  <label>DOB <span className="req">*</span></label>
+                  <input
+                    type="date"
+                    className={inputClass('dob')}
+                    data-field="dob"
+                    aria-invalid={!!errors.dob}
+                    {...register('dob')}
+                  />
+                  <FieldError message={errors.dob?.message} />
                 </div>
                 <div className="form-group">
                   <label>State of Driving License / State ID <span className="req">*</span></label>

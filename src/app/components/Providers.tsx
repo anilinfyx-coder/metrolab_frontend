@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Provider as ReduxProvider } from 'react-redux';
 import { Toaster } from 'react-hot-toast';
@@ -20,6 +20,25 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       },
     },
   }));
+
+  // Global handler to open date pickers when clicking anywhere in the input field
+  useEffect(() => {
+    const handleDateClick = (e: MouseEvent) => {
+      const target = e.target as HTMLInputElement;
+      if (target && target.tagName === 'INPUT' && (target.type === 'date' || target.type === 'time')) {
+        try {
+          if ('showPicker' in target) {
+            target.showPicker();
+          }
+        } catch (err) {
+          // Ignore if picker is already open
+        }
+      }
+    };
+    
+    document.addEventListener('click', handleDateClick);
+    return () => document.removeEventListener('click', handleDateClick);
+  }, []);
 
   return (
     <ReduxProvider store={store}>
