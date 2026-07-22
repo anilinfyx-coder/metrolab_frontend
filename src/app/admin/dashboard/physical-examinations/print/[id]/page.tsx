@@ -8,25 +8,13 @@ import { formatDate } from '../../../../../utils/dateFormat';
 import PageLoader from '../../../../../components/PageLoader';
 import { getStoredUser } from '../../../../../components/portalConfig';
 
-const METRO_FALLBACK = {
-  company: 'Metro Lab & Clinic LLC',
-  addressLine: '3422 Georgia Avenue NW • Washington, D.C. 20010',
-  addressShort: '3422 Georgia Ave NW Washington DC 20010',
-  phone: '202.234.1234',
-  fax: '202.234.1339',
-  email: 'manager@metrolabdc.com',
-  website: 'www.metrolabdc.com',
-};
-
 type LabBranding = {
   company_name?: string | null;
   address?: string | null;
   public_phone_no?: string | null;
   public_fax?: string | null;
   public_email?: string | null;
-  website?: string | null;
   logo_file?: string | null;
-  medical_officer_signature_file_name?: string | null;
 };
 
 function textOrNull(value: unknown): string | null {
@@ -36,8 +24,8 @@ function textOrNull(value: unknown): string | null {
   return text;
 }
 
-function labOrFallback(labValue: unknown, fallback: string): string {
-  return textOrNull(labValue) || fallback;
+function labText(labValue: unknown): string {
+  return textOrNull(labValue) || '';
 }
 
 function sexLabel(sex: unknown) {
@@ -169,21 +157,21 @@ export default function PrintPhysicalExamination() {
   if (loading) return <PageLoader message="Loading certificate..." size="lg" />;
   if (!data) return <div style={{ padding: 24, textAlign: 'center' }}>Certificate not found</div>;
 
-  const company = labOrFallback(lab?.company_name, METRO_FALLBACK.company);
-  const address = labOrFallback(lab?.address, METRO_FALLBACK.addressShort);
-  const phone = labOrFallback(lab?.public_phone_no, METRO_FALLBACK.phone);
-  const fax = labOrFallback(lab?.public_fax, METRO_FALLBACK.fax);
-  const email = labOrFallback(lab?.public_email, METRO_FALLBACK.email);
-  const website = labOrFallback(lab?.website, METRO_FALLBACK.website).replace(/^https?:\/\//i, '');
-  const bannerAddress = labOrFallback(lab?.address, METRO_FALLBACK.addressLine);
-  const labLogoUrl = textOrNull(lab?.logo_file) ? getUploadUrl(lab?.logo_file) : '';
+  const company = labText(lab?.company_name) || labText(data.b2b_company_name);
+  const address = labText(lab?.address) || labText(data.b2b_address);
+  const phone = labText(lab?.public_phone_no) || labText(data.b2b_phone);
+  const fax = labText(lab?.public_fax) || labText(data.b2b_fax);
+  const email = labText(lab?.public_email) || labText(data.b2b_email);
+  const labLogoFile = lab?.logo_file || data.b2b_logo;
+  const labLogoUrl = textOrNull(labLogoFile) ? getUploadUrl(labLogoFile) : '';
   const showLabLogo = Boolean(labLogoUrl) && !logoFailed;
-  const signatureUrl = textOrNull(lab?.medical_officer_signature_file_name)
-    ? getUploadUrl(lab?.medical_officer_signature_file_name)
-    : '';
   const fullAddress = [data.street1, data.street2, data.city, data.state, data.zipcode]
     .filter(Boolean)
     .join(', ');
+  const tellLine = [
+    phone ? `(Tell) ${phone}` : '',
+    fax ? `(Fax) ${fax}` : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <div className="pec-page">
@@ -203,9 +191,11 @@ export default function PrintPhysicalExamination() {
       </div>
 
       <div className="pec-sheet">
-        <div className="pec-watermark" aria-hidden>
-          METRO LAB
-        </div>
+        {company ? (
+          <div className="pec-watermark" aria-hidden>
+            {company}
+          </div>
+        ) : null}
 
         <header className="pec-banner">
           <div className="pec-banner-logo">
@@ -216,37 +206,18 @@ export default function PrintPhysicalExamination() {
                 alt={`${company} logo`}
                 onError={() => setLogoFailed(true)}
               />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/login-logo.png" alt="Metro Lab logo" />
-            )}
+            ) : null}
           </div>
           <div className="pec-banner-brand">
-            {!showLabLogo && (
-              <div className="pec-wordmark">
-                <span className="pec-wordmark-metro">METRO</span>{' '}
-                <span className="pec-wordmark-lab">LAB</span>
-              </div>
-            )}
-            {showLabLogo && <div className="pec-wordmark-lab-name">{company}</div>}
-            <div className="pec-banner-meta">{bannerAddress}</div>
-            <div className="pec-banner-meta">
-              Phone: {phone} • Fax: {fax} • {email}
-            </div>
+            {company ? <div className="pec-banner-company">{company}</div> : null}
+            {address ? <div>{address}</div> : null}
+            {tellLine ? <div>{tellLine}</div> : null}
+            {email ? <div>{email}</div> : null}
           </div>
         </header>
 
         <div className="pec-rule" />
         <div className="pec-rule pec-rule-thin" />
-
-        <div className="pec-org">
-          <div className="pec-org-name">{company}</div>
-          <div>{address}</div>
-          <div>
-            (Tell) {phone} (Fax) {fax}
-          </div>
-          <div>{website}</div>
-        </div>
 
         <h1 className="pec-title">Physical Examination Certificate</h1>
 
@@ -309,8 +280,8 @@ export default function PrintPhysicalExamination() {
             <div key={item.key} className="pec-eval-row">
               <span className="pec-num">{item.num}</span>
               <span className="pec-eval-label">{item.label}</span>
-              <span className="pec-eval-mark">{isNormal(data[item.key]) ? 'X' : ''}</span>
-              <span className="pec-eval-mark">{isAbnormal(data[item.key]) ? 'X' : ''}</span>
+              <span className="pec-eval-mark">{isNormal(data[item.key]) ? <Check checked /> : null}</span>
+              <span className="pec-eval-mark">{isAbnormal(data[item.key]) ? <Check checked /> : null}</span>
             </div>
           ))}
         </div>
@@ -325,7 +296,7 @@ export default function PrintPhysicalExamination() {
           <div className="pec-blank-line">{data.additional_comments || '\u00a0'}</div>
         </div>
 
-        <div className="pec-row" style={{ marginTop: 16 }}>
+        <div className="pec-row pec-overall">
           <span className="pec-num">14.</span>
           <span className="pec-label">Overall Physical Condition</span>
           <Check checked={data.overall_condition === 'Fit'} />
@@ -334,31 +305,23 @@ export default function PrintPhysicalExamination() {
           <span className="pec-inline">Unfit</span>
         </div>
 
-        <section className="pec-signature">
-          <div className="pec-row">
-            <span className="pec-label">Name/ Signature of examining Clinician:</span>
-            <div className="pec-sig-wrap">
-              {signatureUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={signatureUrl} alt="" className="pec-sig-img" />
-              )}
-              <Underline value={data.clinician_name} className="sig" />
+        <section className="pec-digital-auth">
+          <div className="pec-digital-head">Electronically Authenticated Certificate</div>
+          <div className="pec-digital-body">
+            <div className="pec-digital-col">
+              <div className="pec-digital-label">Digitally Signed By</div>
+              <div className="pec-digital-value">{data.clinician_name || "-"}</div>
+              <div className="pec-digital-sub">{data.clinician_specialty || "MD / PA / NP"}</div>
             </div>
-            <span className="pec-specialty">{data.clinician_specialty || 'MD/PA/NP'}</span>
+            <div className="pec-digital-col">
+              <div className="pec-digital-label">Date of Examination</div>
+              <div className="pec-digital-value">{formatDate(data.date_of_examination, "") || "-"}</div>
+              <div className="pec-digital-label pec-digital-gap">Clinician Address</div>
+              <div className="pec-digital-sub">{data.clinician_address || "-"}</div>
+            </div>
           </div>
-
-          <div className="pec-row">
-            <span className="pec-label">Date of examination:</span>
-            <Underline value={formatDate(data.date_of_examination, '')} className="mid" />
-          </div>
-
-          <div className="pec-row">
-            <span className="pec-label">Address:</span>
-            <Underline value={data.clinician_address} className="grow" />
-          </div>
+          <div className="pec-digital-note">This document is electronically authenticated. No physical signature is required.</div>
         </section>
-
-        <footer className="pec-footer">{website}</footer>
       </div>
     </div>
   );
@@ -406,11 +369,15 @@ const PEC_STYLES = `
   .pec-sheet {
     position: relative;
     max-width: 820px;
+    min-height: 11in;
     margin: 0 auto;
     background: #fff;
-    padding: 28px 40px 36px;
+    padding: 24px 40px 28px;
     box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
     overflow: visible;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
   }
   .pec-watermark {
     position: absolute;
@@ -443,7 +410,18 @@ const PEC_STYLES = `
     max-width: 130px;
     object-fit: contain;
   }
-  .pec-banner-brand { flex: 1; min-width: 0; }
+  .pec-banner-brand {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .pec-banner-company {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 2px;
+  }
   .pec-wordmark {
     font-size: 30px;
     font-weight: 800;
@@ -488,17 +466,18 @@ const PEC_STYLES = `
     text-align: center;
     font-size: 18px;
     font-weight: 700;
-    margin: 6px 0 16px;
+    margin: 4px 0 12px;
   }
   .pec-patient { font-size: 13px; }
   .pec-row {
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
     flex-wrap: nowrap;
   }
   .pec-row.wrap { flex-wrap: wrap; }
+  .pec-overall { margin-top: 8px; margin-bottom: 0; }
   .pec-label { white-space: nowrap; flex-shrink: 0; }
   .pec-inline { margin-right: 10px; }
   .pec-line {
@@ -541,7 +520,7 @@ const PEC_STYLES = `
     grid-template-columns: 1fr 80px 90px;
     font-weight: 700;
     font-size: 12.5px;
-    margin: 14px 0 8px;
+    margin: 10px 0 6px;
     gap: 8px;
   }
   .pec-eval-col { text-align: center; }
@@ -550,7 +529,7 @@ const PEC_STYLES = `
     display: grid;
     grid-template-columns: 28px 1fr 80px 90px;
     align-items: center;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     gap: 4px;
   }
   .pec-num { width: 28px; flex-shrink: 0; }
@@ -559,18 +538,57 @@ const PEC_STYLES = `
     text-align: center;
     font-weight: 700;
     font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
   }
-  .pec-additional { margin-top: 10px; }
+  .pec-additional { margin-top: 6px; }
   .pec-blank-line {
     border-bottom: 1px solid #111;
-    min-height: 22px;
-    margin: 8px 0 0 28px;
+    min-height: 18px;
+    margin: 6px 0 0 28px;
     font-family: Arial, sans-serif;
     font-size: 12px;
     font-weight: 600;
     padding: 0 4px;
   }
-  .pec-signature { margin-top: 22px; font-size: 13px; }
+
+  .pec-digital-auth {
+    margin-top: auto;
+    border: 1.5px solid #1e40af;
+    border-radius: 4px;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  }
+  .pec-digital-head {
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    padding: 6px 8px;
+    text-transform: uppercase;
+  }
+  .pec-digital-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+  .pec-digital-label { font-size: 10px; color: #555; margin-bottom: 2px; }
+  .pec-digital-gap { margin-top: 8px; }
+  .pec-digital-value { font-size: 13px; font-weight: 700; color: #111; }
+  .pec-digital-sub { font-size: 11px; color: #333; margin-top: 2px; }
+  .pec-digital-note {
+    border-top: 1px solid #dbeafe;
+    padding: 8px 12px;
+    font-size: 10px;
+    font-style: italic;
+    color: #666;
+    text-align: center;
+  }
+
   .pec-sig-wrap {
     position: relative;
     flex: 1;
