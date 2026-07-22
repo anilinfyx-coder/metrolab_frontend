@@ -8,25 +8,13 @@ import { formatDate } from '../../../../../utils/dateFormat';
 import PageLoader from '../../../../../components/PageLoader';
 import { getStoredUser } from '../../../../../components/portalConfig';
 
-const METRO_FALLBACK = {
-  company: 'Metro Lab & Clinic LLC',
-  addressLine: '3422 Georgia Avenue NW • Washington, D.C. 20010',
-  addressShort: '3422 Georgia Ave NW Washington DC 20010',
-  phone: '202.234.1234',
-  fax: '202.234.1339',
-  email: 'manager@metrolabdc.com',
-  website: 'www.metrolabdc.com',
-};
-
 type LabBranding = {
   company_name?: string | null;
   address?: string | null;
   public_phone_no?: string | null;
   public_fax?: string | null;
   public_email?: string | null;
-  website?: string | null;
   logo_file?: string | null;
-  medical_officer_signature_file_name?: string | null;
 };
 
 function textOrNull(value: unknown): string | null {
@@ -36,8 +24,8 @@ function textOrNull(value: unknown): string | null {
   return text;
 }
 
-function labOrFallback(labValue: unknown, fallback: string): string {
-  return textOrNull(labValue) || fallback;
+function labText(labValue: unknown): string {
+  return textOrNull(labValue) || '';
 }
 
 function isMale(sex: unknown) {
@@ -146,19 +134,18 @@ export default function PrintAdultHealthCertificate() {
   if (loading) return <PageLoader message="Loading certificate..." size="lg" />;
   if (!data) return <div style={{ padding: 24, textAlign: 'center' }}>Certificate not found</div>;
 
-  const company = labOrFallback(lab?.company_name, METRO_FALLBACK.company);
-  const address = labOrFallback(lab?.address, METRO_FALLBACK.addressShort);
-  const phone = labOrFallback(lab?.public_phone_no, METRO_FALLBACK.phone);
-  const fax = labOrFallback(lab?.public_fax, METRO_FALLBACK.fax);
-  const email = labOrFallback(lab?.public_email, METRO_FALLBACK.email);
-  const website = labOrFallback(lab?.website, METRO_FALLBACK.website).replace(/^https?:\/\//i, '');
-  const bannerAddress = labOrFallback(lab?.address, METRO_FALLBACK.addressLine);
-  const labLogoUrl = textOrNull(lab?.logo_file) ? getUploadUrl(lab?.logo_file) : '';
+  const company = labText(lab?.company_name) || labText(data.b2b_company_name);
+  const address = labText(lab?.address) || labText(data.b2b_address);
+  const phone = labText(lab?.public_phone_no) || labText(data.b2b_phone);
+  const fax = labText(lab?.public_fax) || labText(data.b2b_fax);
+  const email = labText(lab?.public_email) || labText(data.b2b_email);
+  const labLogoFile = lab?.logo_file || data.b2b_logo;
+  const labLogoUrl = textOrNull(labLogoFile) ? getUploadUrl(labLogoFile) : '';
   const showLabLogo = Boolean(labLogoUrl) && !logoFailed;
-  const specialty = String(data.clinician_specialty || '').toUpperCase();
-  const signatureUrl = textOrNull(lab?.medical_officer_signature_file_name)
-    ? getUploadUrl(lab?.medical_officer_signature_file_name)
-    : '';
+  const tellLine = [
+    phone ? `(Tell) ${phone}` : '',
+    fax ? `(Fax) ${fax}` : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <div className="ahc-page">
@@ -178,11 +165,13 @@ export default function PrintAdultHealthCertificate() {
       </div>
 
       <div className="ahc-sheet">
-        <div className="ahc-watermark" aria-hidden>
-          METRO LAB
-        </div>
+        {company ? (
+          <div className="ahc-watermark" aria-hidden>
+            {company}
+          </div>
+        ) : null}
 
-        {/* Top banner */}
+        {/* Header: logo left, lab details right */}
         <header className="ahc-banner">
           <div className="ahc-banner-logo">
             {showLabLogo ? (
@@ -192,37 +181,18 @@ export default function PrintAdultHealthCertificate() {
                 alt={`${company} logo`}
                 onError={() => setLogoFailed(true)}
               />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src="/login-logo.png" alt="Metro Lab logo" />
-            )}
+            ) : null}
           </div>
           <div className="ahc-banner-brand">
-            {!showLabLogo && (
-              <div className="ahc-wordmark">
-                <span className="ahc-wordmark-metro">METRO</span>{' '}
-                <span className="ahc-wordmark-lab">LAB</span>
-              </div>
-            )}
-            {showLabLogo && <div className="ahc-wordmark-lab-name">{company}</div>}
-            <div className="ahc-banner-meta">{bannerAddress}</div>
-            <div className="ahc-banner-meta">
-              Phone: {phone} • Fax: {fax} • {email}
-            </div>
+            {company ? <div className="ahc-banner-company">{company}</div> : null}
+            {address ? <div>{address}</div> : null}
+            {tellLine ? <div>{tellLine}</div> : null}
+            {email ? <div>{email}</div> : null}
           </div>
         </header>
 
         <div className="ahc-rule" />
         <div className="ahc-rule ahc-rule-thin" />
-
-        <div className="ahc-org">
-          <div className="ahc-org-name">{company}</div>
-          <div>{address}</div>
-          <div>
-            (Tell) {phone} (Fax) {fax}
-          </div>
-          <div>{website}</div>
-        </div>
 
         <h1 className="ahc-title">Adult Health Certificate</h1>
 
@@ -327,40 +297,23 @@ export default function PrintAdultHealthCertificate() {
           </div>
         </div>
 
-        <section className="ahc-signature">
-          <div className="ahc-row">
-            <span className="ahc-label">Name/ Signature of examining Clinician:</span>
-            <span className="ahc-sig-wrap">
-              {signatureUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={signatureUrl}
-                  alt="Signature"
-                  className="ahc-sig-img"
-                  onError={e => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              ) : null}
-              <Underline value={data.clinician_name} className="sig" />
-            </span>
-            <span className="ahc-specialty">
-              <span className={specialty === 'MD' ? 'on' : ''}>MD</span>/
-              <span className={specialty === 'PA' ? 'on' : ''}>PA</span>/
-              <span className={specialty === 'NP' ? 'on' : ''}>NP</span>
-            </span>
+        <section className="ahc-digital-auth">
+          <div className="ahc-digital-head">Electronically Authenticated Certificate</div>
+          <div className="ahc-digital-body">
+            <div className="ahc-digital-col">
+              <div className="ahc-digital-label">Digitally Signed By</div>
+              <div className="ahc-digital-value">{data.clinician_name || "-"}</div>
+              <div className="ahc-digital-sub">{data.clinician_specialty || "MD / PA / NP"}</div>
+            </div>
+            <div className="ahc-digital-col">
+              <div className="ahc-digital-label">Date of Examination</div>
+              <div className="ahc-digital-value">{formatDate(data.date_of_examination, "") || "-"}</div>
+              <div className="ahc-digital-label ahc-digital-gap">Clinician Address</div>
+              <div className="ahc-digital-sub">{data.clinician_address || "-"}</div>
+            </div>
           </div>
-          <div className="ahc-row">
-            <span className="ahc-label">Date of examination:</span>
-            <Underline value={formatDate(data.date_of_examination, '')} className="mid" />
-          </div>
-          <div className="ahc-row">
-            <span className="ahc-label">Address:</span>
-            <Underline value={data.clinician_address} className="grow" />
-          </div>
+          <div className="ahc-digital-note">This document is electronically authenticated. No physical signature is required.</div>
         </section>
-
-        <footer className="ahc-footer">{website}</footer>
       </div>
     </div>
   );
@@ -435,19 +388,30 @@ const AHC_STYLES = `
   }
   .ahc-banner {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: 18px;
     margin-bottom: 12px;
+  }
+  .ahc-banner-logo {
+    flex-shrink: 0;
+  }
+  .ahc-banner-brand {
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .ahc-banner-company {
+    font-weight: 700;
+    font-size: 14px;
   }
   .ahc-banner-logo img {
     height: 72px;
     width: auto;
     max-width: 140px;
     object-fit: contain;
-  }
-  .ahc-banner-brand {
-    flex: 1;
-    min-width: 0;
   }
   .ahc-wordmark {
     font-size: 34px;
@@ -609,7 +573,56 @@ const AHC_STYLES = `
     font-weight: 600;
     padding: 0 4px;
   }
-  .ahc-signature { margin-top: 28px; }
+
+  .ahc-digital-auth {
+    margin-top: 28px;
+    border: 1.5px solid #1e40af;
+    border-radius: 4px;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+  }
+  .ahc-digital-head {
+    background: #eff6ff;
+    color: #1e40af;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-align: center;
+    padding: 6px 8px;
+    text-transform: uppercase;
+  }
+  .ahc-digital-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    padding: 12px 14px;
+    font-size: 12px;
+  }
+  .ahc-digital-label {
+    font-size: 10px;
+    color: #555;
+    margin-bottom: 2px;
+  }
+  .ahc-digital-gap { margin-top: 8px; }
+  .ahc-digital-value {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111;
+  }
+  .ahc-digital-sub {
+    font-size: 11px;
+    color: #333;
+    margin-top: 2px;
+  }
+  .ahc-digital-note {
+    border-top: 1px solid #dbeafe;
+    padding: 8px 12px;
+    font-size: 10px;
+    font-style: italic;
+    color: #666;
+    text-align: center;
+  }
+
   .ahc-sig-wrap {
     position: relative;
     flex: 1;
