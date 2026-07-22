@@ -9,6 +9,7 @@ import TablePagination, { useClientPagination } from '../../../components/TableP
 import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import {
   PASSWORD_HELPER_TEXT,
@@ -192,7 +193,7 @@ export default function B2BUsersPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadData();
+      setUsers(prev => patchListItem(prev, u.id, { status: !u.status }));
     } catch {
       /* toast handled by apiFetch */
     }

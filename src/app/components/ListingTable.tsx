@@ -44,6 +44,13 @@ type ListingTableProps<T extends { id: number | string }> = {
   actionsWidth?: number;
   defaultPageSize?: number;
   className?: string;
+  /** Client-side (default) slices rows in browser; server loads one page from API. */
+  paginationMode?: 'client' | 'server';
+  page?: number;
+  pageSize?: number;
+  total?: number;
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (size: number) => void;
 };
 
 function getCellText<T>(row: T, col: ListingColumn<T>): string {
@@ -242,14 +249,23 @@ export default function ListingTable<T extends { id: number | string }>({
   actionsWidth = 130,
   defaultPageSize = 10,
   className = '',
+  paginationMode = 'client',
+  page: serverPage,
+  pageSize: serverPageSize,
+  total: serverTotal,
+  onPageChange,
+  onPageSizeChange,
 }: ListingTableProps<T>) {
+  const isServerPagination = paginationMode === 'server';
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<string | null>(
-    columns.find(c => c.sortable)?.key || null
+    isServerPagination ? null : (columns.find(c => c.sortable)?.key || null)
   );
   const [sortAsc, setSortAsc] = useState(true);
 
   const filteredSorted = useMemo(() => {
+    if (isServerPagination) return rows;
+
     let list = [...rows];
 
     list = list.filter(row =>
@@ -275,12 +291,30 @@ export default function ListingTable<T extends { id: number | string }>({
     }
 
     return list;
-  }, [rows, columns, filters, sortKey, sortAsc]);
+  }, [rows, columns, filters, sortKey, sortAsc, isServerPagination]);
 
-  const { page, setPage, pageSize, setPageSize, totalPages, pageItems, total } =
-    useClientPagination(filteredSorted, defaultPageSize);
+  const clientPagination = useClientPagination(filteredSorted, defaultPageSize);
+
+  const page = isServerPagination ? (serverPage ?? 1) : clientPagination.page;
+  const pageSize = isServerPagination ? (serverPageSize ?? defaultPageSize) : clientPagination.pageSize;
+  const total = isServerPagination ? (serverTotal ?? 0) : clientPagination.total;
+  const totalPages = isServerPagination
+    ? Math.max(1, Math.ceil(total / pageSize) || 1)
+    : clientPagination.totalPages;
+  const pageItems = isServerPagination ? rows : clientPagination.pageItems;
+
+  const handlePageChange = (nextPage: number) => {
+    if (isServerPagination) onPageChange?.(nextPage);
+    else clientPagination.setPage(nextPage);
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    if (isServerPagination) onPageSizeChange?.(size);
+    else clientPagination.setPageSize(size);
+  };
 
   const toggleSort = (key: string) => {
+    if (isServerPagination) return;
     if (sortKey === key) setSortAsc(v => !v);
     else {
       setSortKey(key);
@@ -311,7 +345,7 @@ export default function ListingTable<T extends { id: number | string }>({
                   <tr>
                     {columns.map(col => (
                       <th key={col.key} style={{ width: col.width, textAlign: col.align || 'left' }}>
-                        {col.sortable !== false ? (
+                        {!isServerPagination && col.sortable !== false ? (
                           <button
                             type="button"
                             className="th-sort-btn"
@@ -342,6 +376,7 @@ export default function ListingTable<T extends { id: number | string }>({
                       </th>
                     )}
                   </tr>
+                  {!isServerPagination && (
                   <tr className="table-filter-row">
                     {columns.map(col => (
                       <td key={col.key} style={{ width: col.width }}>
@@ -358,6 +393,7 @@ export default function ListingTable<T extends { id: number | string }>({
                     ))}
                     {rowActions && <td className="td-actions-col" style={{ width: actionsWidth }} />}
                   </tr>
+                  )}
                 </thead>
                 <tbody>
                   {pageItems.map(row => (
@@ -394,10 +430,10 @@ export default function ListingTable<T extends { id: number | string }>({
 
             <TablePagination
               pageSize={pageSize}
-              onPageSizeChange={setPageSize}
+              onPageSizeChange={handlePageSizeChange}
               page={page}
               totalPages={totalPages}
-              onPageChange={setPage}
+              onPageChange={handlePageChange}
               total={total}
             />
           </>

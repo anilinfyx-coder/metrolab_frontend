@@ -16,6 +16,8 @@ import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../../lib/api';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
+import { patchListItem } from '../../../../lib/listState';
 
 interface LabTest {
   id: number; name: string; description: string; status: boolean; default_view?: boolean; cost?: number; cpt_code?: string;
@@ -105,6 +107,9 @@ export default function LabTestCategoryPage() {
   const confirmDialog = useConfirm();
   const [tests, setTests] = useState<LabTest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
   const [view, setView] = useState<View>('list');
   const [selectedTest, setSelectedTest] = useState<LabTest | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -131,21 +136,31 @@ export default function LabTestCategoryPage() {
   const [resultErrors, setResultErrors] = useState<ResultErrors>({});
   const [savingResult, setSavingResult] = useState(false);
 
-  const loadTests = async () => {
+  const loadTests = async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const data = await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' });
-      setTests(data || []);
+      const result = await apiFetch<PaginatedResult<LabTest> | LabTest[]>(
+        `/api/LabTests?${buildPageQuery(p, ps)}`,
+        { tokenKey: 'superadmin_token' },
+      );
+      if (isPaginatedResult<LabTest>(result)) {
+        setTests(result.items);
+        setTotal(result.total);
+      } else {
+        setTests(result || []);
+        setTotal((result || []).length);
+      }
     } catch {
       setTests([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    void Promise.resolve().then(loadTests);
-  }, []);
+    void loadTests(page, pageSize);
+  }, [page, pageSize]);
 
   const [isReadOnly, setIsReadOnly] = useState(false);
   
@@ -180,7 +195,7 @@ export default function LabTestCategoryPage() {
         errorFallback: 'Unable to save lab test.',
       });
       setView('list');
-      loadTests();
+      loadTests(page, pageSize);
     } catch {
       /* error toasted by apiFetch */
     } finally {
@@ -202,7 +217,7 @@ export default function LabTestCategoryPage() {
         successMessage: 'Lab test deleted successfully.',
         errorFallback: 'Unable to delete lab test.',
       });
-      loadTests();
+      loadTests(page, pageSize);
     } catch {
       /* error toasted by apiFetch */
     }
@@ -226,7 +241,7 @@ export default function LabTestCategoryPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadTests();
+      setTests(prev => patchListItem(prev, t.id, { status: !t.status }));
     } catch {
       /* error toasted by apiFetch */
     }
@@ -305,7 +320,8 @@ export default function LabTestCategoryPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      if (selectedTest) openSpecimen(selectedTest);
+      const nextStatus = mapping.status === false;
+      setSpecimenMappings(prev => patchListItem(prev, mapping.id, { status: nextStatus }));
     } catch {
       /* error toasted by apiFetch */
     }
@@ -402,7 +418,8 @@ export default function LabTestCategoryPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      if (selectedTest) openQuestions(selectedTest);
+      const nextStatus = question.status === false;
+      setQuestions(prev => patchListItem(prev, question.id, { status: nextStatus }));
     } catch {
       /* error toasted by apiFetch */
     }
@@ -527,7 +544,7 @@ export default function LabTestCategoryPage() {
         successMessage: `Parameter ${r.status ? 'disabled' : 'enabled'} successfully.`,
         errorFallback: 'Unable to update parameter status.',
       });
-      await refreshResultParams();
+      setResultParams(prev => patchListItem(prev, r.id, { status: !r.status }));
     } catch {
       /* error toasted by apiFetch */
     }
@@ -1109,6 +1126,13 @@ export default function LabTestCategoryPage() {
           actionsLabel="Actions"
           actionsWidth={150}
           defaultPageSize={10}
+          showTotal
+          paginationMode="server"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
           rowActions={test => (
             <ActionIcons
               editTitle="Edit Lab Test Category"

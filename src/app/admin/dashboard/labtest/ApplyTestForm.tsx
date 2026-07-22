@@ -1,6 +1,6 @@
 ﻿'use client';
 import { useState, useEffect } from 'react';
-import { MdClose } from 'react-icons/md';
+import { MdCheckCircle, MdClose, MdScience, MdChevronRight } from 'react-icons/md';
 import PageLoader from '../../../components/PageLoader';
 import { apiFetch, handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
 
@@ -240,21 +240,53 @@ export default function ApplyTestForm({
           </div>
         </div>
 
-        <div className="wl-test-list">
-          {data.labTestList.map((t: any) => (
-            <button
-              type="button"
-              key={t.id}
-              className={`wl-test-name-btn${selectedTestId === t.id ? ' active' : ''}${t.submitStatus ? ' submitted' : ''}`}
-              onClick={() => {
-                if (t.submitStatus) return;
-                setSelectedTestId(t.id);
-              }}
-              disabled={t.submitStatus}
-            >
-              {t.name}{t.submitStatus ? ' (Submitted)' : ''}
-            </button>
-          ))}
+        <div className="wl-test-picker">
+          <div className="wl-test-picker-header">
+            <div>
+              <h3 className="wl-test-picker-title">Assigned Lab Tests</h3>
+              <p className="wl-test-picker-hint">
+                {data.labTestList.length} test{data.labTestList.length === 1 ? '' : 's'} assigned — click a test to open its form
+              </p>
+            </div>
+          </div>
+
+          <div className="wl-test-list">
+            {data.labTestList.map((t: any) => {
+              const isActive = selectedTestId === t.id;
+              const isSubmitted = !!t.submitStatus;
+              return (
+                <button
+                  type="button"
+                  key={t.id}
+                  className={`wl-test-card${isActive ? ' active' : ''}${isSubmitted ? ' submitted' : ''}`}
+                  onClick={() => {
+                    if (isSubmitted) return;
+                    setSelectedTestId(t.id);
+                  }}
+                  disabled={isSubmitted}
+                  title={isSubmitted ? 'Already submitted' : `Open ${t.name} form`}
+                >
+                  <span className="wl-test-card-icon" aria-hidden>
+                    {isSubmitted ? <MdCheckCircle size={18} /> : <MdScience size={18} />}
+                  </span>
+                  <span className="wl-test-card-content">
+                    <span className="wl-test-card-name">{t.name}</span>
+                    <span className="wl-test-card-meta">
+                      {isSubmitted ? 'Submitted' : isActive ? 'Form open below' : 'Click to open form'}
+                    </span>
+                  </span>
+                  <span className={`wl-test-card-badge${isSubmitted ? ' done' : isActive ? ' open' : ''}`}>
+                    {isSubmitted ? 'Done' : isActive ? 'Open' : 'Pending'}
+                  </span>
+                  {!isSubmitted && (
+                    <span className="wl-test-card-arrow" aria-hidden>
+                      <MdChevronRight size={18} />
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {test && !test.submitStatus && selectedTestId === test.id ? (

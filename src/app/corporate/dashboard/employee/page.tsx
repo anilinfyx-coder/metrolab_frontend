@@ -7,6 +7,7 @@ import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import {
   corporateEmployeeSchema,
@@ -196,7 +197,7 @@ export default function EmployeePage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Unable to update employee status.',
       });
-      loadEmployees();
+      setEmployees(prev => patchListItem(prev, e.id, { status: !e.status }));
     } catch {
       /* toast handled by apiFetch */
     }

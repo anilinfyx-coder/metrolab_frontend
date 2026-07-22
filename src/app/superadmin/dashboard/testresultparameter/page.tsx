@@ -7,6 +7,7 @@ import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import { testResultParameterSchema, type TestResultParameterFormValues } from '../../../../lib/schemas';
 
@@ -150,7 +151,7 @@ export default function TestResultParameterPage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadData();
+      setParams(prev => patchListItem(prev, p.id, { status: !p.status }));
     } catch {
       /* error toasted by apiFetch */
     }

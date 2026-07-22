@@ -6,6 +6,7 @@ import ListingTable, { ActionIcons, ListingColumn } from '../../../components/Li
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDate } from '../../../utils/dateFormat';
 import { apiFetch, handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 
 interface Patient {
   id: number;
@@ -70,6 +71,9 @@ export default function PatientListPage() {
   const confirmDialog = useConfirm();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
   const [selected, setSelected] = useState<Patient | null>(null);
   const [history, setHistory] = useState<TestHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -77,19 +81,30 @@ export default function PatientListPage() {
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
-        const list = await apiFetch<Patient[]>('/api/Patient', {
-          tokenKey: 'admin_token',
-          errorFallback: 'Failed to load patients.',
-        });
-        setPatients(list || []);
+        const result = await apiFetch<PaginatedResult<Patient> | Patient[]>(
+          `/api/Patient?${buildPageQuery(page, pageSize)}`,
+          {
+            tokenKey: 'admin_token',
+            errorFallback: 'Failed to load patients.',
+          },
+        );
+        if (isPaginatedResult<Patient>(result)) {
+          setPatients(result.items);
+          setTotal(result.total);
+        } else {
+          setPatients(result || []);
+          setTotal((result || []).length);
+        }
       } catch {
         setPatients([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [page, pageSize]);
 
   const viewHistory = async (p: Patient) => {
     setSelected(p);
@@ -326,6 +341,13 @@ export default function PatientListPage() {
           loading={loading}
           emptyText="No patients found."
           defaultPageSize={25}
+          showTotal
+          paginationMode="server"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
         />
       </div>
     </div>

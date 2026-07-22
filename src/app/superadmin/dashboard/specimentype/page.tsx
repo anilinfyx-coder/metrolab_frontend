@@ -6,6 +6,7 @@ import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
+import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import { namedEntityWithIdSchema, type NamedEntityWithIdFormValues } from '../../../../lib/schemas';
 
@@ -114,7 +115,7 @@ export default function SpecimenTypePage() {
         successMessage: 'Status Updated Successfully',
         errorFallback: 'Failed to update status.',
       });
-      loadData();
+      setTypes(prev => patchListItem(prev, t.id, { status: !t.status }));
     } catch {
       /* error toasted by apiFetch */
     }

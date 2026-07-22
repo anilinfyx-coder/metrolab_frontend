@@ -6,6 +6,7 @@ import { useConfirm } from '../../../components/ConfirmModal';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
 import { formatDateTime } from '../../../utils/dateFormat';
 import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../../lib/api';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 
 interface WaitingEntry {
   id: number;
@@ -74,23 +75,36 @@ export default function WaitingListPage() {
   const confirmDialog = useConfirm();
   const [entries, setEntries] = useState<WaitingEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
 
-  const loadData = async () => {
+  const loadData = async (p = page, ps = pageSize) => {
     setLoading(true);
     try {
-      const list = await apiFetch<WaitingEntry[]>('/api/WaitingList', {
-        tokenKey: 'admin_token',
-        errorFallback: 'Failed to load waiting list.',
-      });
-      setEntries(list || []);
+      const result = await apiFetch<PaginatedResult<WaitingEntry> | WaitingEntry[]>(
+        `/api/WaitingList?${buildPageQuery(p, ps)}`,
+        {
+          tokenKey: 'admin_token',
+          errorFallback: 'Failed to load waiting list.',
+        },
+      );
+      if (isPaginatedResult<WaitingEntry>(result)) {
+        setEntries(result.items);
+        setTotal(result.total);
+      } else {
+        setEntries(result || []);
+        setTotal((result || []).length);
+      }
     } catch {
       setEntries([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(page, pageSize); }, [page, pageSize]);
 
   const remove = async (id: number) => {
     const ok = await confirmDialog({
@@ -109,7 +123,7 @@ export default function WaitingListPage() {
         successMessage: 'Waiting list entry deleted successfully.',
         errorFallback: 'Failed to delete waiting list entry.',
       });
-      loadData();
+      loadData(page, pageSize);
     } catch {
       // Error toast handled by handleApiResponse
     }
@@ -127,6 +141,12 @@ export default function WaitingListPage() {
           rows={entries}
           loading={loading}
           showTotal
+          paginationMode="server"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
           emptyText="Waiting list is empty. Add patients from Patient Demographic."
           actionsLabel="Actions"
           actionsWidth={100}

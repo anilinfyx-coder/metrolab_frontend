@@ -18,12 +18,6 @@ import PageLoader from '../../components/PageLoader';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
-interface AdminUser {
-  id?: number;
-  name?: string;
-  email?: string;
-}
-
 interface PatientRow {
   id: number;
   uid?: string;
@@ -62,19 +56,7 @@ interface TestRequestRow {
   creation_timestamp?: string;
 }
 
-function getAdminUser(): AdminUser | null {
-  if (typeof window === 'undefined') return null;
-  const raw = localStorage.getItem('admin_user');
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AdminUser;
-  } catch {
-    return null;
-  }
-}
-
 export default function AdminDashboardPage() {
-  const [user, setUser] = useState<AdminUser | null>(null);
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [waitingList, setWaitingList] = useState<WaitingListRow[]>([]);
   const [testReports, setTestReports] = useState<TestReportRow[]>([]);
@@ -86,8 +68,6 @@ export default function AdminDashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setUser(getAdminUser());
-
         const [
           patientData,
           waitingData,
@@ -133,13 +113,6 @@ export default function AdminDashboardPage() {
           <PageLoader message="Loading dashboard..." size="lg" />
         ) : (
           <div className="admin-dashboard-inner">
-            <div className="admin-dashboard-welcome">
-              <h2>Welcome back, {user?.name || 'Admin'}</h2>
-              <p>
-                Here is an overview of patients, waiting list, test reports, and corporate requests in your lab today.
-              </p>
-            </div>
-
             <div className="admin-dashboard-cards">
               <DashboardCard
                 title="Total Patients"
@@ -170,7 +143,7 @@ export default function AdminDashboardPage() {
                 link="/admin/dashboard/manageothertest"
               />
               <DashboardCard
-                title="Manage Requests"
+                title="Corporate Requests"
                 value={testRequests.length}
                 icon={<MdScience size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
@@ -230,10 +203,10 @@ export default function AdminDashboardPage() {
               />
 
               <DashboardTableCard
-                title="Recent Manage Requests"
+                title="Recent Corporate Requests"
                 viewHref="/admin/dashboard/testrequests"
                 headers={['Request ID', 'Title', 'Corporate Client', 'Date']}
-                emptyText="No manage requests found."
+                emptyText="No corporate requests found."
                 rows={recentRequests.map((row) => [
                   <span key="id" style={{ color: '#3b82f6', fontWeight: 500 }}>#{row.id}</span>,
                   <span key="title" style={{ color: '#334155', fontWeight: 500 }}>{row.title || 'N/A'}</span>,

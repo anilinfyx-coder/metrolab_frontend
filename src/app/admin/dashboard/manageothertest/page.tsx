@@ -6,6 +6,7 @@ import ListingTable, { ActionIcons, ListingColumn } from '../../../components/Li
 import { useConfirm } from '../../../components/ConfirmModal';
 import { formatDateTime } from '../../../utils/dateFormat';
 import { apiFetch, handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../lib/api';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 
 interface TestReport {
   id: number;
@@ -33,6 +34,9 @@ export default function TestsReportsPage() {
   const [loading, setLoading] = useState(false);
   const [testsLoading, setTestsLoading] = useState(true);
   const [emailing, setEmailing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [total, setTotal] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,29 +66,37 @@ export default function TestsReportsPage() {
     };
   }, []);
 
-  const loadReports = async (labTestId: string) => {
+  const loadReports = async (labTestId: string, p = page, ps = pageSize) => {
     if (!labTestId) {
       setReports([]);
+      setTotal(0);
       setLoading(false);
       return;
     }
     setLoading(true);
     try {
-      const list = await apiFetch<TestReport[]>(
-        `/api/LabTestCategoryReport?lab_test_id=${encodeURIComponent(labTestId)}`,
+      const result = await apiFetch<PaginatedResult<TestReport> | TestReport[]>(
+        `/api/LabTestCategoryReport?${buildPageQuery(p, ps, { lab_test_id: labTestId })}`,
         {
           tokenKey: 'admin_token',
           errorFallback: 'Failed to load test reports.',
         },
       );
-      setReports(
-        (list || []).map((r: TestReport) => ({
-          ...r,
-          patient_name: r.patient_name || (r.patient_id ? `Patient #${r.patient_id}` : '—'),
-        })),
-      );
+      const mapReport = (r: TestReport) => ({
+        ...r,
+        patient_name: r.patient_name || (r.patient_id ? `Patient #${r.patient_id}` : '—'),
+      });
+      if (isPaginatedResult<TestReport>(result)) {
+        setReports(result.items.map(mapReport));
+        setTotal(result.total);
+      } else {
+        const list = (result || []).map(mapReport);
+        setReports(list);
+        setTotal(list.length);
+      }
     } catch {
       setReports([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
@@ -92,8 +104,14 @@ export default function TestsReportsPage() {
 
   const onTestChange = (value: string) => {
     setSelectedTestId(value);
-    loadReports(value);
+    setPage(1);
   };
+
+  useEffect(() => {
+    if (selectedTestId) {
+      loadReports(selectedTestId, page, pageSize);
+    }
+  }, [selectedTestId, page, pageSize]);
 
   const toggleLock = async (report: TestReport) => {
     const newStatus = !report.status;
@@ -245,6 +263,13 @@ export default function TestsReportsPage() {
           actionsLabel="Actions"
           actionsWidth={170}
           defaultPageSize={25}
+          showTotal={!!selectedTestId}
+          paginationMode="server"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setPageSize(size); setPage(1); }}
           headerActions={
             <select
               className="test-report-filter-select"
