@@ -211,7 +211,7 @@ export default function SuperAdminDashboard() {
           <div className="page-body">
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
               gap: '20px',
               marginBottom: '24px',
             }}>
@@ -637,11 +637,13 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      gap: '12px',
       boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
       transition: 'transform 0.3s ease, box-shadow 0.3s ease',
       cursor: 'default',
       position: 'relative',
       overflow: 'hidden',
+      minWidth: 0,
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-5px)';
@@ -657,12 +659,28 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
         top: 0, left: 0, width: '100%', height: '4px',
         background: gradient,
       }} />
-      <div>
-        <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          color: '#64748b',
+          fontSize: '0.9rem',
+          fontWeight: 600,
+          marginBottom: '8px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          lineHeight: 1.3,
+          overflowWrap: 'break-word',
+          wordBreak: 'break-word',
+        }}>
           {title}
         </div>
-        <div style={{ color: '#0f172a', fontSize: '2rem', fontWeight: 800, lineHeight: 1 }}>
-          {value}
+        <div style={{
+          color: '#0f172a',
+          fontSize: '2rem',
+          fontWeight: 800,
+          lineHeight: 1.15,
+          overflowWrap: 'anywhere',
+        }}>
+          {Number(value || 0).toLocaleString()}
         </div>
       </div>
       <div style={{
