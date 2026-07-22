@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { MdDownload } from 'react-icons/md';
+import { MdDownload, MdCheckCircle, MdRadioButtonUnchecked, MdCancel } from 'react-icons/md';
 import { apiFetch, toastApiError, toastApiSuccess, getUploadUrl } from '../../../../../../lib/api';
 import { formatDate } from '../../../../../utils/dateFormat';
 import PageLoader from '../../../../../components/PageLoader';
@@ -44,28 +44,49 @@ function isAbnormal(val: unknown) {
   return s.toLowerCase() === 'abnormal' || s.toUpperCase() === 'AB';
 }
 
-function Check({ checked }: { checked?: boolean }) {
-  return <span className={`pec-check${checked ? ' checked' : ''}`} aria-hidden />;
-}
-
-function Underline({ value, className = '' }: { value?: string | null | number; className?: string }) {
-  return <span className={`pec-line ${className}`.trim()}>{value != null && value !== '' ? String(value) : '\u00a0'}</span>;
-}
-
-const EVAL_ITEMS: { key: string; num: string; label: string }[] = [
-  { key: 'eval_head', num: '1.', label: 'Head & Neck' },
-  { key: 'eval_nose', num: '2.', label: 'Nose & Sinus' },
-  { key: 'eval_mouth', num: '3.', label: 'Mouth & Throat' },
-  { key: 'eval_ears', num: '4.', label: 'Ears' },
-  { key: 'eval_eyes', num: '5.', label: 'Eyes' },
-  { key: 'eval_lungs', num: '6.', label: 'Lungs & Chest' },
-  { key: 'eval_heart', num: '7.', label: 'Heart' },
-  { key: 'eval_vascular', num: '8.', label: 'Vascular System' },
-  { key: 'eval_abdomen', num: '9.', label: 'Abdomen' },
-  { key: 'eval_spine', num: '10.', label: 'Spine' },
-  { key: 'eval_skin', num: '11.', label: 'Skin' },
-  { key: 'eval_neurologic', num: '12.', label: 'Neurologic' },
+const EVAL_ITEMS: { key: string; label: string }[] = [
+  { key: 'eval_head', label: 'Head, Neck, Face & Scalp' },
+  { key: 'eval_nose', label: 'Nose and Sinuses' },
+  { key: 'eval_mouth', label: 'Mouth and Throat' },
+  { key: 'eval_ears', label: 'Ears' },
+  { key: 'eval_eyes', label: 'Eyes, Pupils and Ocular Motion' },
+  { key: 'eval_lungs', label: 'Lungs, Chest, and Breasts' },
+  { key: 'eval_heart', label: 'Heart' },
+  { key: 'eval_vascular', label: 'Vascular System' },
+  { key: 'eval_abdomen', label: 'Abdomen and Viscera' },
+  { key: 'eval_spine', label: 'Spine, other Muscular Skeletal System' },
+  { key: 'eval_skin', label: 'Skin and Lymphatic' },
+  { key: 'eval_neurologic', label: 'Neurologic' },
 ];
+
+const Checkbox = ({ checked, label, onClick }: { checked: boolean; label?: string; onClick?: () => void }) => (
+  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
+    {checked ? <MdCheckCircle size={18} color="#0f172a" /> : <MdRadioButtonUnchecked size={18} color="#64748b" />}
+    {label && <span style={{ fontSize: '14px', fontWeight: 500, color: '#0f172a' }}>{label}</span>}
+  </div>
+);
+
+const UnderlineField = ({ label, value, flex, width, suffix }: any) => (
+  <div style={{ display: 'flex', alignItems: 'flex-end', flex: flex || (width ? 'none' : 1), width, margin: '6px 12px 6px 0', minWidth: 0 }}>
+    <span style={{ whiteSpace: 'nowrap', marginRight: 6, fontSize: '15px', color: '#1e293b' }}>{label}</span>
+    <span style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontSize: '15px', minHeight: '1.4em', minWidth: '40px', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600, color: '#0f172a' }}>{value || ''}</span>
+    {suffix && <span style={{ whiteSpace: 'nowrap', marginLeft: 6, fontSize: '15px', color: '#1e293b' }}>{suffix}</span>}
+  </div>
+);
+
+const METRO_FALLBACK = {
+  company: 'Metro Lab',
+  addressLine: '8424 Georgia Ave, Silver Spring, MD 20910',
+  phone: '301-448-1379',
+  fax: '240-644-8833',
+  email: 'results@metrolabwdc.com',
+  website: 'https://metrolabwdc.com',
+};
+
+function labOrFallback(labValue: unknown, fallback: string) {
+  const text = textOrNull(labValue);
+  return text ? text : fallback;
+}
 
 export default function PrintPhysicalExamination() {
   const { id } = useParams();
@@ -157,21 +178,26 @@ export default function PrintPhysicalExamination() {
   if (loading) return <PageLoader message="Loading certificate..." size="lg" />;
   if (!data) return <div style={{ padding: 24, textAlign: 'center' }}>Certificate not found</div>;
 
-  const company = labText(lab?.company_name) || labText(data.b2b_company_name);
-  const address = labText(lab?.address) || labText(data.b2b_address);
-  const phone = labText(lab?.public_phone_no) || labText(data.b2b_phone);
-  const fax = labText(lab?.public_fax) || labText(data.b2b_fax);
-  const email = labText(lab?.public_email) || labText(data.b2b_email);
-  const labLogoFile = lab?.logo_file || data.b2b_logo;
-  const labLogoUrl = textOrNull(labLogoFile) ? getUploadUrl(labLogoFile) : '';
-  const showLabLogo = Boolean(labLogoUrl) && !logoFailed;
+  const company = labOrFallback(lab?.company_name, METRO_FALLBACK.company);
+  const phone = labOrFallback(lab?.public_phone_no, METRO_FALLBACK.phone);
+  const fax = labOrFallback(lab?.public_fax, METRO_FALLBACK.fax);
+  const email = labOrFallback(lab?.public_email, METRO_FALLBACK.email);
+  const website = labOrFallback(lab?.website, METRO_FALLBACK.website).replace(/^https?:\/\//i, '');
+  const bannerAddress = labOrFallback(lab?.address, METRO_FALLBACK.addressLine);
+  const isSuperAdmin = !!getStoredUser('superadmin_user');
+  const labLogoUrl = textOrNull(lab?.logo_file) ? getUploadUrl(lab?.logo_file) : '';
+  const hasB2BLogo = Boolean(labLogoUrl) && !logoFailed;
+  const showMetroLabLogo = isSuperAdmin;
+  const showB2BLogo = !isSuperAdmin && hasB2BLogo;
+  const signatureUrl = textOrNull(lab?.medical_officer_signature_file_name)
+    ? getUploadUrl(lab?.medical_officer_signature_file_name)
+    : '';
   const fullAddress = [data.street1, data.street2, data.city, data.state, data.zipcode]
     .filter(Boolean)
     .join(', ');
-  const tellLine = [
-    phone ? `(Tell) ${phone}` : '',
-    fax ? `(Fax) ${fax}` : '',
-  ].filter(Boolean).join(' ');
+
+  const isFit = data.overall_condition === 'Fit';
+  const isUnfit = data.overall_condition === 'Unfit';
 
   return (
     <div className="pec-page">
@@ -187,7 +213,7 @@ export default function PrintPhysicalExamination() {
           <MdDownload size={18} aria-hidden />
           {downloading ? 'Downloading...' : 'Download PDF'}
         </button>
-        <span className="pec-toolbar-hint">Same layout &amp; lab branding as Download PDF and email attachment</span>
+        <span className="pec-toolbar-hint">Optimized digital layout for PDF generation</span>
       </div>
 
       <div className="pec-sheet">
@@ -197,131 +223,160 @@ export default function PrintPhysicalExamination() {
           </div>
         ) : null}
 
-        <header className="pec-banner">
-          <div className="pec-banner-logo">
-            {showLabLogo ? (
+        {/* Header matching the traditional image */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #60a5fa', paddingBottom: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+            {showMetroLabLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={labLogoUrl}
-                alt={`${company} logo`}
-                onError={() => setLogoFailed(true)}
-              />
-            ) : null}
+              <img src="/login-logo.png" alt="Metro Lab" style={{ height: '70px', objectFit: 'contain' }} />
+            ) : showB2BLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={labLogoUrl} alt="Logo" style={{ height: '70px', objectFit: 'contain' }} onError={() => setLogoFailed(true)} />
+            ) : (
+              <div style={{ width: '70px', height: '70px' }}></div>
+            )}
+            <div>
+              <div style={{ fontSize: '32px', fontWeight: 900, letterSpacing: '1px', marginBottom: '4px', fontFamily: 'Arial, sans-serif' }}>
+                {showMetroLabLogo || company === METRO_FALLBACK.company ? (
+                  <>
+                    <span style={{ color: '#fff', textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>METRO</span>
+                    {' '}
+                    <span style={{ color: '#fde047', textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>LAB</span>
+                  </>
+                ) : (
+                  <span style={{ color: '#0f172a' }}>{company.toUpperCase()}</span>
+                )}
+              </div>
+              <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 500, lineHeight: '1.6' }}>
+                {bannerAddress}<br />
+                Phone: {phone} • Fax: {fax} • {email}
+              </div>
+            </div>
           </div>
-          <div className="pec-banner-brand">
-            {company ? <div className="pec-banner-company">{company}</div> : null}
-            {address ? <div>{address}</div> : null}
-            {tellLine ? <div>{tellLine}</div> : null}
-            {email ? <div>{email}</div> : null}
-          </div>
-        </header>
-
-        <div className="pec-rule" />
-        <div className="pec-rule pec-rule-thin" />
-
-        <h1 className="pec-title">Physical Examination Certificate</h1>
-
-        <section className="pec-patient">
-          <div className="pec-row">
-            <span className="pec-label">Name:</span>
-            <Underline value={data.name} className="grow" />
-            <span className="pec-label">Age:</span>
-            <Underline value={data.age} className="xs" />
-            <span className="pec-label">Sex:</span>
-            <Underline value={sexLabel(data.sex)} className="sm" />
-          </div>
-
-          <div className="pec-row">
-            <span className="pec-label">Address:</span>
-            <Underline value={fullAddress} className="grow" />
-            <span className="pec-label">Tel #:</span>
-            <Underline value={data.tel} className="sm" />
-          </div>
-
-          <div className="pec-row wrap">
-            <span className="pec-label">Height:</span>
-            <Underline value={data.height} className="xs" />
-            <span className="pec-label">Weight:</span>
-            <Underline value={data.weight} className="xs" />
-            <span className="pec-label">B.P:</span>
-            <Underline value={data.bp} className="sm" />
-            <span className="pec-label">Pulse:</span>
-            <Underline value={data.pulse} className="sm" />
-          </div>
-
-          <div className="pec-row wrap">
-            <span className="pec-label">Hearing: Right</span>
-            <Underline value={data.hearing_right} className="xs" />
-            <span className="pec-label">Left</span>
-            <Underline value={data.hearing_left} className="xs" />
-            <span className="pec-label">Vision: Right</span>
-            <Underline value={data.vision_right} className="xs" />
-            <span className="pec-label">Left</span>
-            <Underline value={data.vision_left} className="xs" />
-          </div>
-
-          <div className="pec-row">
-            <span className="pec-label">Wear Glasses:</span>
-            <Check checked={!!data.wear_glasses} />
-            <span className="pec-inline">Yes</span>
-            <Check checked={!data.wear_glasses} />
-            <span className="pec-inline">No</span>
-          </div>
-        </section>
-
-        <div className="pec-eval-head">
-          <span>CLINICAL EVALUATION</span>
-          <span className="pec-eval-col">NORMAL</span>
-          <span className="pec-eval-col">ABNORMAL</span>
+          {/* Social icons removed per request */}
         </div>
 
-        <div className="pec-eval-list">
-          {EVAL_ITEMS.map(item => (
-            <div key={item.key} className="pec-eval-row">
-              <span className="pec-num">{item.num}</span>
-              <span className="pec-eval-label">{item.label}</span>
-              <span className="pec-eval-mark">{isNormal(data[item.key]) ? <Check checked /> : null}</span>
-              <span className="pec-eval-mark">{isAbnormal(data[item.key]) ? <Check checked /> : null}</span>
+        {/* Center Text */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h2 style={{ margin: '0', fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>Physical Examination Certificate</h2>
+        </div>
+
+        {/* Patient Details */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <UnderlineField label="Name:" value={data.name} flex={2.5} />
+            <UnderlineField label="DOB:" value={formatDate(data.dob, '')} flex={1} />
+            <UnderlineField label="Tel #:" value={data.tel} flex={1.5} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <UnderlineField label="Address:" value={fullAddress} flex={1} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <UnderlineField label="Sex:" value={sexLabel(data.sex)} flex={1} />
+            <UnderlineField label="Age:" value={data.age} flex={1} />
+            <UnderlineField label="Height:" value={data.height} flex={1} />
+            <UnderlineField label="Weight:" value={data.weight} flex={1} />
+          </div>
+        </div>
+
+        {/* Evaluation Key */}
+        <div style={{ marginBottom: '24px', marginLeft: '12px' }}>
+          <div style={{ fontWeight: 800, fontSize: '15px', color: '#0f172a', marginBottom: '4px' }}>EVALUATED with corresponding letter</div>
+          <div style={{ display: 'flex', gap: '64px', fontWeight: 800, fontSize: '15px', color: '#0f172a' }}>
+            <span>NORMAL = N</span>
+            <span>ABNORMAL = AB</span>
+          </div>
+        </div>
+
+        {/* Vitals */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <UnderlineField label="Blood pressure: -" value={data.bp} width="300px" />
+            <UnderlineField label="Pulse: -" value={data.pulse} width="250px" />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '8px' }}>
+            <UnderlineField label="Hearing: Right:" value={data.hearing_right} width="250px" />
+            <UnderlineField label="Left:" value={data.hearing_left} width="250px" />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center' }}>
+            <UnderlineField label="Vision: Right 20 /" value={data.vision_right} width="180px" />
+            <UnderlineField label="Left 20 /" value={data.vision_left} width="180px" />
+            <div style={{ display: 'flex', alignItems: 'center', marginLeft: '16px', fontSize: '15px', color: '#1e293b' }}>
+              <span style={{ marginRight: '12px' }}>Wear glasses:</span>
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <span style={{ marginRight: '6px' }}>Yes</span>
+                  <span style={{ borderBottom: '1px solid #334155', width: '40px', textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>
+                    {data.wear_glasses ? '✔' : ''}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <span style={{ marginRight: '6px' }}>No</span>
+                  <span style={{ borderBottom: '1px solid #334155', width: '40px', textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>
+                    {!data.wear_glasses && data.wear_glasses !== null ? '✔' : ''}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* List of Eval Items */}
+        <div style={{ paddingLeft: '24px', marginBottom: '32px', fontSize: '15px', color: '#1e293b' }}>
+          {EVAL_ITEMS.map((item, idx) => (
+            <div key={item.key} style={{ display: 'flex', marginBottom: '12px', alignItems: 'flex-end' }}>
+              <div style={{ width: '320px' }}>{idx + 1}. {item.label}</div>
+              <div style={{ borderBottom: '1px solid #334155', width: '200px', textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>
+                {isNormal(data[item.key]) ? 'N' : isAbnormal(data[item.key]) ? 'AB' : (data[item.key] || '')}
+              </div>
             </div>
           ))}
-        </div>
-
-        <div className="pec-additional">
-          <div className="pec-row">
-            <span className="pec-num">13.</span>
-            <span className="pec-label">
-              Additional Comment, Past medical history, current medications:
-            </span>
+          <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column' }}>
+            <div>13. Additional Comment, Past medical history, current medications:</div>
+            <div style={{ borderBottom: '1px solid #334155', minHeight: '30px', width: '100%', marginTop: '8px', fontWeight: 600, color: '#0f172a', paddingBottom: '4px' }}>{data.additional_comments || ''}</div>
+            <div style={{ borderBottom: '1px solid #334155', height: '30px', width: '100%', marginTop: '8px' }}></div>
           </div>
-          <div className="pec-blank-line">{data.additional_comments || '\u00a0'}</div>
-        </div>
 
-        <div className="pec-row pec-overall">
-          <span className="pec-num">14.</span>
-          <span className="pec-label">Overall Physical Condition</span>
-          <Check checked={data.overall_condition === 'Fit'} />
-          <span className="pec-inline">Fit</span>
-          <Check checked={data.overall_condition === 'Unfit'} />
-          <span className="pec-inline">Unfit</span>
-        </div>
-
-        <section className="pec-digital-auth">
-          <div className="pec-digital-head">Electronically Authenticated Certificate</div>
-          <div className="pec-digital-body">
-            <div className="pec-digital-col">
-              <div className="pec-digital-label">Digitally Signed By</div>
-              <div className="pec-digital-value">{data.clinician_name || "-"}</div>
-              <div className="pec-digital-sub">{data.clinician_specialty || "MD / PA / NP"}</div>
-            </div>
-            <div className="pec-digital-col">
-              <div className="pec-digital-label">Date of Examination</div>
-              <div className="pec-digital-value">{formatDate(data.date_of_examination, "") || "-"}</div>
-              <div className="pec-digital-label pec-digital-gap">Clinician Address</div>
-              <div className="pec-digital-sub">{data.clinician_address || "-"}</div>
+          <div style={{ marginTop: '32px', display: 'flex', alignItems: 'flex-end' }}>
+            <div style={{ marginRight: '16px' }}>14. Overall Physical Condition</div>
+            <div style={{ display: 'flex', flex: 1, gap: '32px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', width: '150px' }}>
+                <span style={{ marginRight: '8px' }}>Fit</span>
+                <div style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>{isFit ? '✔' : ''}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', width: '150px' }}>
+                <span style={{ marginRight: '8px' }}>Unfit</span>
+                <div style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>{isUnfit ? '✔' : ''}</div>
+              </div>
             </div>
           </div>
-          <div className="pec-digital-note">This document is electronically authenticated. No physical signature is required.</div>
-        </section>
+        </div>
+
+        {/* Signature Section */}
+        <div style={{ marginTop: '48px', paddingLeft: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '24px' }}>
+            <span style={{ fontSize: '15px', marginRight: '8px', color: '#1e293b' }}>Name/Signature of examining Clinician:</span>
+            <div style={{ borderBottom: '1px solid #334155', flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', height: '40px', maxWidth: '400px', paddingBottom: '4px' }}>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>{data.clinician_name}</span>
+            </div>
+            <span style={{ fontSize: '15px', marginLeft: '8px', color: '#1e293b' }}>{data.clinician_specialty || 'MD/PA/NP'}</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '24px', width: '400px' }}>
+            <span style={{ fontSize: '15px', marginRight: '8px', color: '#1e293b' }}>Date of examination</span>
+            <div style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>
+              {formatDate(data.date_of_examination, '')}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '24px', width: '600px' }}>
+            <span style={{ fontSize: '15px', marginRight: '8px', color: '#1e293b' }}>Address</span>
+            <div style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>
+              {data.clinician_address || ''}
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -329,14 +384,16 @@ export default function PrintPhysicalExamination() {
 
 const PEC_STYLES = `
   .pec-page {
-    background: #e8eef5;
+    background: #f1f5f9;
     min-height: 100vh;
-    padding: 24px 16px 48px;
+    padding: 32px 16px 48px;
     font-family: 'Times New Roman', Times, serif;
-    color: #111;
+    color: #0f172a;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .pec-toolbar {
-    max-width: 820px;
+    max-width: 850px;
     margin: 0 auto 16px;
     display: flex;
     align-items: center;
@@ -348,36 +405,29 @@ const PEC_STYLES = `
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    background: #0f766e;
+    background: #0ea5e9;
     color: #fff;
     border: none;
     border-radius: 6px;
     font-size: 14px;
-    font-family: Arial, sans-serif;
     font-weight: 600;
     cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.2);
+    transition: all 0.2s;
   }
-  .pec-print-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-  .pec-toolbar-hint {
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-    color: #64748b;
-  }
+  .pec-print-btn:hover { background: #0284c7; }
+  .pec-print-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+  .pec-toolbar-hint { font-size: 13px; color: #64748b; font-weight: 500; }
+  
   .pec-sheet {
     position: relative;
-    max-width: 820px;
-    min-height: 11in;
+    max-width: 850px;
     margin: 0 auto;
     background: #fff;
-    padding: 24px 40px 28px;
-    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
-    box-sizing: border-box;
+    padding: 64px;
+    border-radius: 4px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
   }
   .pec-watermark {
     position: absolute;
@@ -385,232 +435,21 @@ const PEC_STYLES = `
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 72px;
-    font-weight: 700;
-    letter-spacing: 8px;
-    color: rgba(100, 116, 139, 0.08);
-    transform: rotate(-28deg);
+    font-size: 120px;
+    font-weight: 900;
+    letter-spacing: 16px;
+    color: rgba(241, 245, 249, 0.6);
+    transform: rotate(-35deg);
     pointer-events: none;
     z-index: 0;
     white-space: nowrap;
   }
-  .pec-sheet > *:not(.pec-watermark) {
-    position: relative;
-    z-index: 1;
-  }
-  .pec-banner {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    margin-bottom: 10px;
-  }
-  .pec-banner-logo img {
-    height: 64px;
-    width: auto;
-    max-width: 130px;
-    object-fit: contain;
-  }
-  .pec-banner-brand {
-    flex: 1;
-    min-width: 0;
-    text-align: right;
-    font-size: 12px;
-    line-height: 1.45;
-  }
-  .pec-banner-company {
-    font-weight: 700;
-    font-size: 14px;
-    margin-bottom: 2px;
-  }
-  .pec-wordmark {
-    font-size: 30px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    line-height: 1;
-    margin-bottom: 4px;
-    font-family: Arial Black, Arial, sans-serif;
-  }
-  .pec-wordmark-metro {
-    color: transparent;
-    -webkit-text-stroke: 1.5px #1e293b;
-  }
-  .pec-wordmark-lab { color: #c9a227; }
-  .pec-wordmark-lab-name {
-    font-size: 20px;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-  .pec-banner-meta {
-    font-size: 11px;
-    line-height: 1.4;
-    color: #222;
-  }
-  .pec-rule {
-    height: 0;
-    border-top: 2px solid #6c9cd4;
-    margin: 8px 0 0;
-  }
-  .pec-rule-thin {
-    border-top-width: 1px;
-    margin-top: 3px;
-    margin-bottom: 12px;
-  }
-  .pec-org {
-    text-align: center;
-    font-size: 12.5px;
-    line-height: 1.45;
-    margin-bottom: 12px;
-  }
-  .pec-org-name { font-weight: 700; font-size: 14px; }
-  .pec-title {
-    text-align: center;
-    font-size: 18px;
-    font-weight: 700;
-    margin: 4px 0 12px;
-  }
-  .pec-patient { font-size: 13px; }
-  .pec-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    margin-bottom: 8px;
-    flex-wrap: nowrap;
-  }
-  .pec-row.wrap { flex-wrap: wrap; }
-  .pec-overall { margin-top: 8px; margin-bottom: 0; }
-  .pec-label { white-space: nowrap; flex-shrink: 0; }
-  .pec-inline { margin-right: 10px; }
-  .pec-line {
-    display: inline-block;
-    border-bottom: 1px solid #111;
-    min-height: 1.2em;
-    padding: 0 6px 2px;
-    font-weight: 600;
-    font-family: Arial, sans-serif;
-    font-size: 12px;
-    text-align: center;
-    vertical-align: bottom;
-  }
-  .pec-line.grow { flex: 1; min-width: 80px; }
-  .pec-line.mid { flex: 1; min-width: 100px; max-width: 220px; }
-  .pec-line.sm { min-width: 70px; flex: 0 1 110px; }
-  .pec-line.xs { min-width: 48px; flex: 0 0 56px; }
-  .pec-line.sig { min-width: 160px; flex: 1; }
-  .pec-check {
-    display: inline-block;
-    width: 13px;
-    height: 13px;
-    border: 1.5px solid #111;
-    flex-shrink: 0;
-    margin-top: 2px;
-    position: relative;
-    background: #fff;
-  }
-  .pec-check.checked::after {
-    content: '✓';
-    position: absolute;
-    top: -4px;
-    left: 0.5px;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .pec-eval-head {
-    display: grid;
-    grid-template-columns: 1fr 80px 90px;
-    font-weight: 700;
-    font-size: 12.5px;
-    margin: 10px 0 6px;
-    gap: 8px;
-  }
-  .pec-eval-col { text-align: center; }
-  .pec-eval-list { font-size: 13px; }
-  .pec-eval-row {
-    display: grid;
-    grid-template-columns: 28px 1fr 80px 90px;
-    align-items: center;
-    margin-bottom: 4px;
-    gap: 4px;
-  }
-  .pec-num { width: 28px; flex-shrink: 0; }
-  .pec-eval-label { }
-  .pec-eval-mark {
-    text-align: center;
-    font-weight: 700;
-    font-family: Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-  }
-  .pec-additional { margin-top: 6px; }
-  .pec-blank-line {
-    border-bottom: 1px solid #111;
-    min-height: 18px;
-    margin: 6px 0 0 28px;
-    font-family: Arial, sans-serif;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 0 4px;
-  }
-
-  .pec-digital-auth {
-    margin-top: auto;
-    border: 1.5px solid #1e40af;
-    border-radius: 4px;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
-  }
-  .pec-digital-head {
-    background: #eff6ff;
-    color: #1e40af;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-align: center;
-    padding: 6px 8px;
-    text-transform: uppercase;
-  }
-  .pec-digital-body {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    padding: 12px 14px;
-    font-size: 12px;
-  }
-  .pec-digital-label { font-size: 10px; color: #555; margin-bottom: 2px; }
-  .pec-digital-gap { margin-top: 8px; }
-  .pec-digital-value { font-size: 13px; font-weight: 700; color: #111; }
-  .pec-digital-sub { font-size: 11px; color: #333; margin-top: 2px; }
-  .pec-digital-note {
-    border-top: 1px solid #dbeafe;
-    padding: 8px 12px;
-    font-size: 10px;
-    font-style: italic;
-    color: #666;
-    text-align: center;
-  }
-
-  .pec-sig-wrap {
-    position: relative;
-    flex: 1;
-    display: flex;
-    align-items: flex-end;
-    min-width: 140px;
-  }
-  .pec-sig-img {
-    position: absolute;
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-height: 36px;
-    max-width: 160px;
-    object-fit: contain;
-    pointer-events: none;
-  }
-  .pec-specialty { white-space: nowrap; font-size: 13px; }
-  .pec-footer {
-    text-align: center;
-    margin-top: 28px;
-    font-weight: 700;
-    font-size: 13px;
+  .pec-sheet > *:not(.pec-watermark) { position: relative; z-index: 1; }
+  
+  @media print {
+    @page { margin: 0; size: auto; }
+    body { background: #fff; }
+    .pec-page { padding: 0; background: #fff; }
+    .pec-sheet { box-shadow: none; padding: 48px; border-radius: 0; max-width: 100%; }
   }
 `;

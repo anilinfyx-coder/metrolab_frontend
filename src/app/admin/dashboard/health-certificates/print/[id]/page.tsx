@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { MdDownload } from 'react-icons/md';
+import { MdDownload, MdCheckCircle, MdRadioButtonUnchecked } from 'react-icons/md';
 import { apiFetch, toastApiError, toastApiSuccess, getUploadUrl } from '../../../../../../lib/api';
 import { formatDate } from '../../../../../utils/dateFormat';
 import PageLoader from '../../../../../components/PageLoader';
@@ -36,12 +36,33 @@ function isFemale(sex: unknown) {
   return sex === 2 || sex === '2' || String(sex).toLowerCase() === 'female';
 }
 
-function Check({ checked }: { checked?: boolean }) {
-  return <span className={`ahc-check${checked ? ' checked' : ''}`} aria-hidden />;
-}
+const Checkbox = ({ checked, label, onClick }: { checked: boolean; label?: string; onClick?: () => void }) => (
+  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: onClick ? 'pointer' : 'default' }} onClick={onClick}>
+    {checked ? <MdCheckCircle size={20} color="#0f172a" /> : <MdRadioButtonUnchecked size={20} color="#64748b" />}
+    {label && <span style={{ fontSize: '15px', fontWeight: 500, color: '#0f172a' }}>{label}</span>}
+  </div>
+);
 
-function Underline({ value, className = '' }: { value?: string | null; className?: string }) {
-  return <span className={`ahc-line ${className}`.trim()}>{value || '\u00a0'}</span>;
+const UnderlineField = ({ label, value, flex, width, suffix }: any) => (
+  <div style={{ display: 'flex', alignItems: 'flex-end', flex: flex || (width ? 'none' : 1), width, margin: '6px 12px 6px 0', minWidth: 0 }}>
+    <span style={{ whiteSpace: 'nowrap', marginRight: 6, fontSize: '15px', color: '#1e293b' }}>{label}</span>
+    <span style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontSize: '15px', minHeight: '1.4em', minWidth: '40px', padding: '0 4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontWeight: 600, color: '#0f172a' }}>{value || ''}</span>
+    {suffix && <span style={{ whiteSpace: 'nowrap', marginLeft: 6, fontSize: '15px', color: '#1e293b' }}>{suffix}</span>}
+  </div>
+);
+
+const METRO_FALLBACK = {
+  company: 'Metro Lab',
+  addressLine: '8424 Georgia Ave, Silver Spring, MD 20910',
+  phone: '301-448-1379',
+  fax: '240-644-8833',
+  email: 'results@metrolabwdc.com',
+  website: 'https://metrolabwdc.com',
+};
+
+function labOrFallback(labValue: unknown, fallback: string) {
+  const text = textOrNull(labValue);
+  return text ? text : fallback;
 }
 
 export default function PrintAdultHealthCertificate() {
@@ -134,18 +155,21 @@ export default function PrintAdultHealthCertificate() {
   if (loading) return <PageLoader message="Loading certificate..." size="lg" />;
   if (!data) return <div style={{ padding: 24, textAlign: 'center' }}>Certificate not found</div>;
 
-  const company = labText(lab?.company_name) || labText(data.b2b_company_name);
-  const address = labText(lab?.address) || labText(data.b2b_address);
-  const phone = labText(lab?.public_phone_no) || labText(data.b2b_phone);
-  const fax = labText(lab?.public_fax) || labText(data.b2b_fax);
-  const email = labText(lab?.public_email) || labText(data.b2b_email);
-  const labLogoFile = lab?.logo_file || data.b2b_logo;
-  const labLogoUrl = textOrNull(labLogoFile) ? getUploadUrl(labLogoFile) : '';
-  const showLabLogo = Boolean(labLogoUrl) && !logoFailed;
-  const tellLine = [
-    phone ? `(Tell) ${phone}` : '',
-    fax ? `(Fax) ${fax}` : '',
-  ].filter(Boolean).join(' ');
+  const company = labOrFallback(lab?.company_name, METRO_FALLBACK.company);
+  const phone = labOrFallback(lab?.public_phone_no, METRO_FALLBACK.phone);
+  const fax = labOrFallback(lab?.public_fax, METRO_FALLBACK.fax);
+  const email = labOrFallback(lab?.public_email, METRO_FALLBACK.email);
+  const website = labOrFallback(lab?.website, METRO_FALLBACK.website).replace(/^https?:\/\//i, '');
+  const bannerAddress = labOrFallback(lab?.address, METRO_FALLBACK.addressLine);
+  const isSuperAdmin = !!getStoredUser('superadmin_user');
+  const labLogoUrl = textOrNull(lab?.logo_file) ? getUploadUrl(lab?.logo_file) : '';
+  const hasB2BLogo = Boolean(labLogoUrl) && !logoFailed;
+  const showMetroLabLogo = isSuperAdmin;
+  const showB2BLogo = !isSuperAdmin && hasB2BLogo;
+  const specialty = String(data.clinician_specialty || '').toUpperCase();
+  const signatureUrl = textOrNull(lab?.medical_officer_signature_file_name)
+    ? getUploadUrl(lab?.medical_officer_signature_file_name)
+    : '';
 
   return (
     <div className="ahc-page">
@@ -161,7 +185,7 @@ export default function PrintAdultHealthCertificate() {
           <MdDownload size={18} aria-hidden />
           {downloading ? 'Downloading...' : 'Download PDF'}
         </button>
-        <span className="ahc-toolbar-hint">Same layout &amp; lab branding as Download PDF and email attachment</span>
+        <span className="ahc-toolbar-hint">Optimized digital layout for PDF generation</span>
       </div>
 
       <div className="ahc-sheet">
@@ -171,149 +195,185 @@ export default function PrintAdultHealthCertificate() {
           </div>
         ) : null}
 
-        {/* Header: logo left, lab details right */}
-        <header className="ahc-banner">
-          <div className="ahc-banner-logo">
-            {showLabLogo ? (
+        {/* Header matching the traditional image */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '3px solid #60a5fa', paddingBottom: '16px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+            {showMetroLabLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={labLogoUrl}
-                alt={`${company} logo`}
-                onError={() => setLogoFailed(true)}
-              />
-            ) : null}
-          </div>
-          <div className="ahc-banner-brand">
-            {company ? <div className="ahc-banner-company">{company}</div> : null}
-            {address ? <div>{address}</div> : null}
-            {tellLine ? <div>{tellLine}</div> : null}
-            {email ? <div>{email}</div> : null}
-          </div>
-        </header>
-
-        <div className="ahc-rule" />
-        <div className="ahc-rule ahc-rule-thin" />
-
-        <h1 className="ahc-title">Adult Health Certificate</h1>
-
-        {/* Patient */}
-        <section className="ahc-patient">
-          <div className="ahc-row">
-            <span className="ahc-label">Name:</span>
-            <Underline value={data.name} className="grow" />
-            <span className="ahc-label ahc-sex-label">Sex:</span>
-            <Check checked={isMale(data.sex)} />
-            <span className="ahc-inline">Male</span>
-            <Check checked={isFemale(data.sex)} />
-            <span className="ahc-inline">Female</span>
-          </div>
-
-          <div className="ahc-row">
-            <span className="ahc-label">DOB:</span>
-            <Underline value={formatDate(data.dob, '')} className="mid" />
-            <span className="ahc-label">Tel #:</span>
-            <Underline value={data.tel} className="mid" />
-          </div>
-
-          <div className="ahc-address-block">
-            <div className="ahc-row">
-              <span className="ahc-label">Address:</span>
-              <Underline value={data.street1} className="addr-street" />
-              <Underline value={data.street2} className="addr-apt" />
-              <Underline value={data.city} className="addr-city" />
-              <Underline value={data.state} className="addr-state" />
-              <Underline value={data.zipcode} className="addr-zip" />
-            </div>
-            <div className="ahc-addr-guides">
-              <span className="g-street">Street Name/Number</span>
-              <span className="g-apt">Apt#(if applicable)</span>
-              <span className="g-city">City</span>
-              <span className="g-state">State</span>
-              <span className="g-zip">Zip code</span>
+              <img src="/login-logo.png" alt="Metro Lab" style={{ height: '70px', objectFit: 'contain' }} />
+            ) : showB2BLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={labLogoUrl} alt="Logo" style={{ height: '70px', objectFit: 'contain' }} onError={() => setLogoFailed(true)} />
+            ) : (
+              <div style={{ width: '70px', height: '70px' }}></div>
+            )}
+            <div>
+              <div style={{ fontSize: '32px', fontWeight: 900, letterSpacing: '1px', marginBottom: '4px', fontFamily: 'Arial, sans-serif' }}>
+                {showMetroLabLogo || company === METRO_FALLBACK.company ? (
+                  <>
+                    <span style={{ color: '#fff', textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>METRO</span>
+                    {' '}
+                    <span style={{ color: '#fde047', textShadow: '-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000' }}>LAB</span>
+                  </>
+                ) : (
+                  <span style={{ color: '#0f172a' }}>{company.toUpperCase()}</span>
+                )}
+              </div>
+              <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 500, lineHeight: '1.6' }}>
+                {bannerAddress}<br />
+                Phone: {phone} • Fax: {fax} • {email}
+              </div>
             </div>
           </div>
-        </section>
+          {/* Social icons removed per request */}
+        </div>
 
-        <p className="ahc-certify">I have examined the above named person and certify that he/she is:</p>
+        {/* Center Text */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h2 style={{ margin: '0', fontSize: '22px', fontWeight: 800, color: '#0f172a' }}>Adult Health Certificate</h2>
+        </div>
 
-        <div className="ahc-check-list">
-          <div className="ahc-check-item">
-            <span className="ahc-num">1.</span>
-            <Check checked={!!data.free_from_disease} />
-            <span>Free from disease in communicable form.</span>
+        {/* Patient Details */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '8px', alignItems: 'flex-end' }}>
+            <UnderlineField label="Name:" value={data.name} flex={2} />
+            <div style={{ display: 'flex', alignItems: 'flex-end', marginLeft: '16px' }}>
+              <span style={{ fontSize: '15px', marginRight: '16px', color: '#1e293b' }}>Sex:</span>
+              <div style={{ borderBottom: '1px solid #334155', width: '40px', textAlign: 'center', marginRight: '8px', fontWeight: 600, color: '#0f172a' }}>
+                {isMale(data.sex) ? '✔' : ''}
+              </div>
+              <span style={{ fontSize: '15px', marginRight: '16px', color: '#1e293b' }}>Male</span>
+              <div style={{ borderBottom: '1px solid #334155', width: '40px', textAlign: 'center', marginRight: '8px', fontWeight: 600, color: '#0f172a' }}>
+                {isFemale(data.sex) ? '✔' : ''}
+              </div>
+              <span style={{ fontSize: '15px', color: '#1e293b' }}>Female</span>
+            </div>
           </div>
-          <div className="ahc-check-item">
-            <span className="ahc-num">2.</span>
-            <Check checked={!!data.satisfactory_physical} />
-            <span>
-              In satisfactory physical condition, this will permit, close association with children/elderly
-              without danger to them.
-            </span>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <UnderlineField label="DOB:" value={formatDate(data.dob, '')} flex={1} />
+            <UnderlineField label="Tel #:" value={data.tel} flex={1.5} />
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '16px' }}>
+            <span style={{ fontSize: '15px', color: '#1e293b', marginTop: '4px' }}>Address:</span>
+            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, marginLeft: '8px' }}>
+              <div style={{ borderBottom: '1px solid #334155', display: 'flex', paddingBottom: '2px' }}>
+                <span style={{ flex: 2, textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>{data.street1 || ''}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>{data.street2 || ''}</span>
+                <span style={{ flex: 1.5, textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>{data.city || ''}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>{data.state || ''}</span>
+                <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a' }}>{data.zipcode || ''}</span>
+              </div>
+              <div style={{ display: 'flex', fontSize: '12px', color: '#475569', marginTop: '4px' }}>
+                <span style={{ flex: 2, textAlign: 'center' }}>Street Name/Number</span>
+                <span style={{ flex: 1, textAlign: 'center' }}>Apt#(if applicable)</span>
+                <span style={{ flex: 1.5, textAlign: 'center' }}>City</span>
+                <span style={{ flex: 1, textAlign: 'center' }}>State</span>
+                <span style={{ flex: 1, textAlign: 'center' }}>Zip code</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <p className="ahc-intro">
-          In addition to a general physical examination, the following test has been done:
-        </p>
-
-        <div className="ahc-tests">
-          <div className="ahc-row wrap">
-            <span className="ahc-label">Tuberculin test (check one):</span>
-            <Check checked={data.tuberculin_test_type === 'Tine'} />
-            <span className="ahc-inline">Tine</span>
-            <Check checked={data.tuberculin_test_type === 'PPD'} />
-            <span className="ahc-inline">PPD</span>
+        {/* Clinical Certification */}
+        <div style={{ marginBottom: '40px' }}>
+          <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '16px' }}>
+            I have examined the above named person and certify that he/she is:
           </div>
 
-          <div className="ahc-row wrap">
-            <span className="ahc-label">Date planted:</span>
-            <Underline value={formatDate(data.tuberculin_date_planted, '')} className="sm" />
-            <span className="ahc-label">Date read:</span>
-            <Underline value={formatDate(data.tuberculin_date_read, '')} className="sm" />
-            <span className="ahc-label">Result:</span>
-            <Underline value={data.tuberculin_result} className="sm grow" />
+          <div style={{ display: 'flex', alignItems: 'flex-start', marginBottom: '16px', paddingLeft: '16px' }}>
+            <div style={{ width: '24px', fontSize: '15px', color: '#1e293b', paddingTop: '2px' }}>1.</div>
+            <Checkbox checked={data.free_from_disease} />
+            <div style={{ marginLeft: '12px', fontSize: '15px', color: '#1e293b', paddingTop: '1px' }}>
+              Free from disease in communicable form.
+            </div>
           </div>
 
-          <div className="ahc-row wrap">
-            <Check checked={!!(data.chest_xray_date || data.chest_xray_result)} />
-            <span className="ahc-label">Chest x-ray:</span>
-            <span className="ahc-label">Date:</span>
-            <Underline value={formatDate(data.chest_xray_date, '')} className="sm" />
-            <span className="ahc-label">Result:</span>
-            <Underline value={data.chest_xray_result} className="sm grow" />
+          <div style={{ display: 'flex', alignItems: 'flex-start', paddingLeft: '16px' }}>
+            <div style={{ width: '24px', fontSize: '15px', color: '#1e293b', paddingTop: '2px' }}>2.</div>
+            <Checkbox checked={data.satisfactory_physical} />
+            <div style={{ marginLeft: '12px', fontSize: '15px', color: '#1e293b', lineHeight: '1.5', paddingTop: '1px' }}>
+              In satisfactory physical condition, this will permit, close association with<br />
+              children/elderly without danger to them.
+            </div>
+          </div>
+        </div>
+
+        {/* Tests */}
+        <div style={{ marginBottom: '40px' }}>
+          <div style={{ fontSize: '15px', color: '#1e293b', marginBottom: '24px' }}>
+            In addition to a general physical examination, the following test has been done:
           </div>
 
-          <div className="ahc-additional">
-            <div className="ahc-row">
-              <Check checked={!!data.additional_info} />
-              <span className="ahc-label">
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '16px' }}>
+              <span style={{ fontSize: '15px', color: '#1e293b', marginRight: '16px' }}>Tuberculin test (check one):</span>
+              <div style={{ borderBottom: '1px solid #334155', width: '40px', textAlign: 'center', marginRight: '8px', fontWeight: 600, color: '#0f172a' }}>
+                {data.tuberculin_test_type === 'Tine' ? '✔' : ''}
+              </div>
+              <span style={{ fontSize: '15px', marginRight: '24px', color: '#1e293b' }}>Tine</span>
+
+              <div style={{ borderBottom: '1px solid #334155', width: '40px', textAlign: 'center', marginRight: '8px', fontWeight: 600, color: '#0f172a' }}>
+                {data.tuberculin_test_type === 'PPD' ? '✔' : ''}
+              </div>
+              <span style={{ fontSize: '15px', color: '#1e293b' }}>PPD</span>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+              <UnderlineField label="Date planted:" value={formatDate(data.tuberculin_date_planted, '')} flex={1} />
+              <UnderlineField label="Date read:" value={formatDate(data.tuberculin_date_read, '')} flex={1} />
+              <UnderlineField label="Result:" value={data.tuberculin_result} flex={1} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '32px' }}>
+            <Checkbox checked={!!data.chest_xray_date || !!data.chest_xray_result} />
+            <div style={{ display: 'flex', flex: 1, marginLeft: '12px' }}>
+              <UnderlineField label="Chest x-ray: Date:" value={formatDate(data.chest_xray_date, '')} flex={1} />
+              <UnderlineField label="Result:" value={data.chest_xray_result} flex={1.5} />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              <Checkbox checked={!!data.additional_info} />
+              <div style={{ marginLeft: '12px', fontSize: '15px', color: '#1e293b' }}>
                 Additional information, Past Medical History, Current Medications:
-              </span>
+              </div>
             </div>
-            <div className="ahc-blank-lines">
-              <div className="ahc-blank-line">{data.additional_info || ''}</div>
-              <div className="ahc-blank-line" />
+            <div style={{ borderBottom: '1px solid #334155', minHeight: '32px', width: '100%', marginTop: '8px', fontWeight: 600, color: '#0f172a', paddingBottom: '4px' }}>
+              {data.additional_info || ''}
+            </div>
+            <div style={{ borderBottom: '1px solid #334155', height: '32px', width: '100%', marginTop: '8px' }}></div>
+          </div>
+        </div>
+
+        {/* Signature Section */}
+        <div style={{ marginTop: '64px', paddingLeft: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '24px' }}>
+            <span style={{ fontSize: '15px', marginRight: '8px', color: '#1e293b' }}>Name/Signature of examining Clinician:</span>
+            <div style={{ borderBottom: '1px solid #334155', flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'flex-end', height: '40px', maxWidth: '400px', paddingBottom: '4px' }}>
+              <span style={{ fontWeight: 600, color: '#0f172a' }}>{data.clinician_name}</span>
+            </div>
+            <span style={{ fontSize: '15px', marginLeft: '8px', color: '#1e293b' }}>{specialty || 'MD/PA/NP'}</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '24px', width: '400px' }}>
+            <span style={{ fontSize: '15px', marginRight: '8px', color: '#1e293b' }}>Date of examination</span>
+            <div style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>
+              {formatDate(data.date_of_examination, '')}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '24px', width: '600px' }}>
+            <span style={{ fontSize: '15px', marginRight: '8px', color: '#1e293b' }}>Address</span>
+            <div style={{ borderBottom: '1px solid #334155', flex: 1, textAlign: 'center', fontWeight: 600, color: '#0f172a', paddingBottom: '2px' }}>
+              {data.clinician_address || ''}
             </div>
           </div>
         </div>
 
-        <section className="ahc-digital-auth">
-          <div className="ahc-digital-head">Electronically Authenticated Certificate</div>
-          <div className="ahc-digital-body">
-            <div className="ahc-digital-col">
-              <div className="ahc-digital-label">Digitally Signed By</div>
-              <div className="ahc-digital-value">{data.clinician_name || "-"}</div>
-              <div className="ahc-digital-sub">{data.clinician_specialty || "MD / PA / NP"}</div>
-            </div>
-            <div className="ahc-digital-col">
-              <div className="ahc-digital-label">Date of Examination</div>
-              <div className="ahc-digital-value">{formatDate(data.date_of_examination, "") || "-"}</div>
-              <div className="ahc-digital-label ahc-digital-gap">Clinician Address</div>
-              <div className="ahc-digital-sub">{data.clinician_address || "-"}</div>
-            </div>
-          </div>
-          <div className="ahc-digital-note">This document is electronically authenticated. No physical signature is required.</div>
-        </section>
       </div>
     </div>
   );
@@ -321,14 +381,16 @@ export default function PrintAdultHealthCertificate() {
 
 const AHC_STYLES = `
   .ahc-page {
-    background: #e8eef5;
+    background: #f1f5f9;
     min-height: 100vh;
-    padding: 24px 16px 48px;
+    padding: 32px 16px 48px;
     font-family: 'Times New Roman', Times, serif;
-    color: #111;
+    color: #0f172a;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
   .ahc-toolbar {
-    max-width: 820px;
+    max-width: 850px;
     margin: 0 auto 16px;
     display: flex;
     align-items: center;
@@ -340,32 +402,29 @@ const AHC_STYLES = `
     align-items: center;
     gap: 8px;
     padding: 10px 18px;
-    background: #0f766e;
+    background: #0ea5e9;
     color: #fff;
     border: none;
     border-radius: 6px;
     font-size: 14px;
-    font-family: Arial, sans-serif;
     font-weight: 600;
     cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.2);
+    transition: all 0.2s;
   }
-  .ahc-print-btn:disabled {
-    opacity: 0.7;
-    cursor: not-allowed;
-  }
-  .ahc-toolbar-hint {
-    font-family: Arial, sans-serif;
-    font-size: 13px;
-    color: #64748b;
-  }
+  .ahc-print-btn:hover { background: #0284c7; }
+  .ahc-print-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+  .ahc-toolbar-hint { font-size: 13px; color: #64748b; font-weight: 500; }
+  
   .ahc-sheet {
     position: relative;
-    max-width: 820px;
+    max-width: 850px;
     margin: 0 auto;
     background: #fff;
-    padding: 32px 44px 40px;
-    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
-    overflow: visible;
+    padding: 64px;
+    border-radius: 4px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
   }
   .ahc-watermark {
     position: absolute;
@@ -373,285 +432,21 @@ const AHC_STYLES = `
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 72px;
-    font-weight: 700;
-    letter-spacing: 8px;
-    color: rgba(100, 116, 139, 0.08);
-    transform: rotate(-28deg);
+    font-size: 120px;
+    font-weight: 900;
+    letter-spacing: 16px;
+    color: rgba(241, 245, 249, 0.6);
+    transform: rotate(-35deg);
     pointer-events: none;
     z-index: 0;
     white-space: nowrap;
   }
-  .ahc-sheet > *:not(.ahc-watermark) {
-    position: relative;
-    z-index: 1;
-  }
-  .ahc-banner {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 12px;
-  }
-  .ahc-banner-logo {
-    flex-shrink: 0;
-  }
-  .ahc-banner-brand {
-    flex: 1;
-    min-width: 0;
-    text-align: right;
-    font-size: 13px;
-    line-height: 1.45;
-  }
-  .ahc-banner-company {
-    font-weight: 700;
-    font-size: 14px;
-  }
-  .ahc-banner-logo img {
-    height: 72px;
-    width: auto;
-    max-width: 140px;
-    object-fit: contain;
-  }
-  .ahc-wordmark {
-    font-size: 34px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    line-height: 1;
-    margin-bottom: 4px;
-    font-family: Arial Black, Arial, sans-serif;
-  }
-  .ahc-wordmark-metro {
-    color: transparent;
-    -webkit-text-stroke: 1.5px #1e293b;
-  }
-  .ahc-wordmark-lab {
-    color: #c9a227;
-    -webkit-text-stroke: 0;
-  }
-  .ahc-wordmark-lab-name {
-    font-size: 22px;
-    font-weight: 700;
-    margin-bottom: 4px;
-  }
-  .ahc-banner-meta {
-    font-size: 11px;
-    line-height: 1.4;
-    color: #222;
-  }
-  .ahc-rule {
-    height: 0;
-    border-top: 2px solid #6c9cd4;
-    margin: 8px 0 0;
-  }
-  .ahc-rule-thin {
-    border-top-width: 1px;
-    margin-top: 3px;
-    margin-bottom: 16px;
-  }
-  .ahc-org {
-    text-align: center;
-    font-size: 13px;
-    line-height: 1.5;
-    margin-bottom: 18px;
-  }
-  .ahc-org-name {
-    font-weight: 700;
-    font-size: 15px;
-  }
-  .ahc-title {
-    text-align: center;
-    font-size: 20px;
-    font-weight: 700;
-    margin: 8px 0 24px;
-  }
-  .ahc-patient,
-  .ahc-tests,
-  .ahc-signature {
-    font-size: 13.5px;
-  }
-  .ahc-row {
-    display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    margin-bottom: 14px;
-    flex-wrap: nowrap;
-  }
-  .ahc-row.wrap {
-    flex-wrap: wrap;
-  }
-  .ahc-label {
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-  .ahc-inline {
-    margin-right: 10px;
-  }
-  .ahc-sex-label {
-    margin-left: 18px;
-  }
-  .ahc-line {
-    display: inline-block;
-    border-bottom: 1px solid #111;
-    min-height: 1.2em;
-    padding: 0 6px 2px;
-    font-weight: 600;
-    font-family: Arial, sans-serif;
-    font-size: 12.5px;
-    text-align: center;
-    vertical-align: bottom;
-  }
-  .ahc-line.grow { flex: 1; min-width: 120px; }
-  .ahc-line.mid { flex: 1; min-width: 100px; max-width: 220px; }
-  .ahc-line.sm { min-width: 90px; flex: 0 1 140px; }
-  .ahc-line.sig { min-width: 180px; flex: 1; }
-  .ahc-line.addr-street { flex: 2.2; min-width: 0; }
-  .ahc-line.addr-apt { flex: 1.1; min-width: 0; }
-  .ahc-line.addr-city { flex: 1.1; min-width: 0; }
-  .ahc-line.addr-state { flex: 0.7; min-width: 0; }
-  .ahc-line.addr-zip { flex: 0.8; min-width: 0; }
-  .ahc-address-block { margin-bottom: 14px; }
-  .ahc-addr-guides {
-    display: grid;
-    grid-template-columns: 2.2fr 1.1fr 1.1fr 0.7fr 0.8fr;
-    gap: 8px;
-    margin-left: 62px;
-    margin-top: 4px;
-    font-size: 9.5px;
-    color: #555;
-    text-align: center;
-  }
-  .ahc-certify {
-    margin: 18px 0 12px;
-    font-size: 13.5px;
-  }
-  .ahc-check-list {
-    margin: 0 0 16px 8px;
-  }
-  .ahc-check-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    margin-bottom: 10px;
-    line-height: 1.4;
-  }
-  .ahc-num {
-    width: 18px;
-    flex-shrink: 0;
-  }
-  .ahc-check {
-    display: inline-block;
-    width: 13px;
-    height: 13px;
-    border: 1.5px solid #111;
-    flex-shrink: 0;
-    margin-top: 2px;
-    position: relative;
-    background: #fff;
-  }
-  .ahc-check.checked::after {
-    content: '✓';
-    position: absolute;
-    top: -4px;
-    left: 0.5px;
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1;
-  }
-  .ahc-intro {
-    margin: 12px 0 14px;
-    font-size: 13.5px;
-  }
-  .ahc-additional { margin-top: 8px; }
-  .ahc-blank-lines { margin: 10px 0 0 22px; }
-  .ahc-blank-line {
-    border-bottom: 1px solid #111;
-    min-height: 24px;
-    margin-bottom: 12px;
-    font-family: Arial, sans-serif;
-    font-size: 12.5px;
-    font-weight: 600;
-    padding: 0 4px;
-  }
-
-  .ahc-digital-auth {
-    margin-top: 28px;
-    border: 1.5px solid #1e40af;
-    border-radius: 4px;
-    overflow: hidden;
-    font-family: Arial, sans-serif;
-  }
-  .ahc-digital-head {
-    background: #eff6ff;
-    color: #1e40af;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-align: center;
-    padding: 6px 8px;
-    text-transform: uppercase;
-  }
-  .ahc-digital-body {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-    padding: 12px 14px;
-    font-size: 12px;
-  }
-  .ahc-digital-label {
-    font-size: 10px;
-    color: #555;
-    margin-bottom: 2px;
-  }
-  .ahc-digital-gap { margin-top: 8px; }
-  .ahc-digital-value {
-    font-size: 13px;
-    font-weight: 700;
-    color: #111;
-  }
-  .ahc-digital-sub {
-    font-size: 11px;
-    color: #333;
-    margin-top: 2px;
-  }
-  .ahc-digital-note {
-    border-top: 1px solid #dbeafe;
-    padding: 8px 12px;
-    font-size: 10px;
-    font-style: italic;
-    color: #666;
-    text-align: center;
-  }
-
-  .ahc-sig-wrap {
-    position: relative;
-    flex: 1;
-    display: flex;
-    align-items: flex-end;
-    min-width: 160px;
-  }
-  .ahc-sig-img {
-    position: absolute;
-    bottom: 4px;
-    left: 50%;
-    transform: translateX(-50%);
-    max-height: 36px;
-    max-width: 160px;
-    object-fit: contain;
-    pointer-events: none;
-  }
-  .ahc-specialty {
-    white-space: nowrap;
-    font-size: 13px;
-  }
-  .ahc-specialty .on {
-    font-weight: 700;
-    text-decoration: underline;
-  }
-  .ahc-footer {
-    text-align: center;
-    margin-top: 36px;
-    font-weight: 700;
-    font-size: 13px;
+  .ahc-sheet > *:not(.ahc-watermark) { position: relative; z-index: 1; }
+  
+  @media print {
+    @page { margin: 0; size: auto; }
+    body { background: #fff; }
+    .ahc-page { padding: 0; background: #fff; }
+    .ahc-sheet { box-shadow: none; padding: 48px; border-radius: 0; max-width: 100%; }
   }
 `;
