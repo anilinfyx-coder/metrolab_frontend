@@ -55,6 +55,8 @@ export default function HealthCertificatesPage() {
   const confirmDialog = useConfirm();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<AdultHealthCertificateFormValues | null>(null);
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
 
@@ -137,10 +139,14 @@ export default function HealthCertificatesPage() {
     setSelectedPatient(null);
     setPatientSearch('');
     setShowForm(true);
+    setShowPreview(false);
+    setPreviewData(null);
   };
 
   const closeForm = () => {
     setShowForm(false);
+    setShowPreview(false);
+    setPreviewData(null);
     reset(emptyForm);
     setSelectedPatient(null);
     setPatientSearch('');
@@ -150,6 +156,8 @@ export default function HealthCertificatesPage() {
     reset(emptyForm);
     setSelectedPatient(null);
     setPatientSearch('');
+    setShowPreview(false);
+    setPreviewData(null);
   };
 
   const searchPatient = async () => {
@@ -169,15 +177,21 @@ export default function HealthCertificatesPage() {
     }
   };
 
-  const onSubmit = handleSubmit(async values => {
+  const onSubmit = handleSubmit(values => {
+    setPreviewData(values);
+    setShowPreview(true);
+  }, createInvalidHandler<AdultHealthCertificateFormValues>());
+
+  const handleGenerateCertificate = async () => {
+    if (!previewData) return;
     try {
-      await saveMutation.mutateAsync(values);
+      await saveMutation.mutateAsync(previewData);
       closeForm();
       await queryClient.invalidateQueries({ queryKey: CERT_QUERY_KEY });
     } catch {
       /* toasted by apiFetch */
     }
-  }, createInvalidHandler<AdultHealthCertificateFormValues>());
+  };
 
   const handleDelete = async (cert: HealthCertificate) => {
     const ok = await confirmDialog({
@@ -284,7 +298,7 @@ export default function HealthCertificatesPage() {
       )}
 
       <div className={`page-body${emailing ? ' test-reports-page-busy' : ''}`}>
-        {showForm ? (
+        {showForm && !showPreview ? (
           <div className="card">
             <div className="card-header cert-form-card-header">
               <span className="card-title">Issue Adult Health Certificate</span>
@@ -359,16 +373,20 @@ export default function HealthCertificatesPage() {
                     <div className="cert-form-section">
                       <h4 className="cert-form-section-title">Tuberculin Test</h4>
                       <FormGroup label="Test Type" htmlFor="tuberculin_test_type">
-                        <select
-                          id="tuberculin_test_type"
-                          className="form-control"
-                          style={fieldStyle(false)}
-                          {...register('tuberculin_test_type')}
-                        >
-                          <option value="">None</option>
-                          <option value="Tine">Tine</option>
-                          <option value="PPD">PPD</option>
-                        </select>
+                        <div style={{ display: 'flex', gap: '1rem', marginTop: '0.25rem' }}>
+                          <label className="cert-form-check" style={{ marginBottom: 0 }}>
+                            <input type="radio" value="" {...register('tuberculin_test_type')} />
+                            <span>None</span>
+                          </label>
+                          <label className="cert-form-check" style={{ marginBottom: 0 }}>
+                            <input type="radio" value="Tine" {...register('tuberculin_test_type')} />
+                            <span>Tine</span>
+                          </label>
+                          <label className="cert-form-check" style={{ marginBottom: 0 }}>
+                            <input type="radio" value="PPD" {...register('tuberculin_test_type')} />
+                            <span>PPD</span>
+                          </label>
+                        </div>
                       </FormGroup>
                       <div className="cert-form-grid cert-form-grid-2">
                         <FormGroup label="Date Planted" htmlFor="tuberculin_date_planted">
@@ -461,10 +479,15 @@ export default function HealthCertificatesPage() {
                         <label>
                           Specialty<span className="required-star">*</span>
                         </label>
-                        <div className="cert-radio-group" data-field="clinician_specialty">
+                        <div className="cert-radio-group" data-field="clinician_specialty" style={{ display: 'flex', gap: '1.25rem', marginTop: '0.5rem' }}>
                           {(['MD', 'PA', 'NP'] as const).map(spec => (
-                            <label key={spec}>
-                              <input type="radio" value={spec} {...register('clinician_specialty')} />
+                            <label key={spec} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem', cursor: 'pointer' }}>
+                              <input 
+                                type="radio" 
+                                value={spec} 
+                                {...register('clinician_specialty')} 
+                                style={{ transform: 'scale(1.3)' }} 
+                              />
                               {spec}
                             </label>
                           ))}
@@ -488,7 +511,7 @@ export default function HealthCertificatesPage() {
                         />
                       </FormGroup>
                       <div className="cert-form-span-full">
-                        <FormGroup label="Clinician Address" htmlFor="clinician_address">
+                        <FormGroup label="Address" htmlFor="clinician_address">
                           <input
                             id="clinician_address"
                             type="text"
@@ -504,7 +527,7 @@ export default function HealthCertificatesPage() {
               </div>
               <div className="cert-form-footer-actions">
                 <button type="submit" className="btn btn-primary" disabled={saving || !patientId}>
-                  {saving ? 'Saving...' : 'Save & Issue Certificate'}
+                  Preview Certificate
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={resetFormData} disabled={saving}>
                   Reset Data
@@ -514,6 +537,59 @@ export default function HealthCertificatesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        ) : showForm && showPreview && previewData ? (
+          <div className="card">
+            <div className="card-header cert-form-card-header">
+              <span className="card-title">Preview Adult Health Certificate</span>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowPreview(false)} disabled={saving}>
+                Back to Form
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Patient Details</h4>
+                <p><strong>Patient:</strong> {selectedPatient?.name || 'Unknown'} (ID: {String(previewData.patient_id)})</p>
+              </div>
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Physical Examination</h4>
+                <p><strong>Free from communicable disease:</strong> {previewData.free_from_disease ? 'Yes' : 'No'}</p>
+                <p><strong>Satisfactory physical condition:</strong> {previewData.satisfactory_physical ? 'Yes' : 'No'}</p>
+              </div>
+              <div className="cert-form-grid cert-form-grid-2">
+                <div className="cert-form-section">
+                  <h4 className="cert-form-section-title">Tuberculin Test</h4>
+                  <p><strong>Test Type:</strong> {previewData.tuberculin_test_type || 'None'}</p>
+                  <p><strong>Date Planted:</strong> {previewData.tuberculin_date_planted ? formatDate(previewData.tuberculin_date_planted) : '—'}</p>
+                  <p><strong>Date Read:</strong> {previewData.tuberculin_date_read ? formatDate(previewData.tuberculin_date_read) : '—'}</p>
+                  <p><strong>Result:</strong> {previewData.tuberculin_result || '—'}</p>
+                </div>
+                <div className="cert-form-section">
+                  <h4 className="cert-form-section-title">Chest X-Ray</h4>
+                  <p><strong>Date:</strong> {previewData.chest_xray_date ? formatDate(previewData.chest_xray_date) : '—'}</p>
+                  <p><strong>Result:</strong> {previewData.chest_xray_result || '—'}</p>
+                </div>
+              </div>
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Additional Information</h4>
+                <p>{previewData.additional_info || '—'}</p>
+              </div>
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Clinician Details</h4>
+                <p><strong>Name:</strong> {previewData.clinician_name}</p>
+                <p><strong>Specialty:</strong> {previewData.clinician_specialty}</p>
+                <p><strong>Date of Exam:</strong> {formatDate(previewData.date_of_examination)}</p>
+                <p><strong>Address:</strong> {previewData.clinician_address || '—'}</p>
+              </div>
+            </div>
+            <div className="cert-form-footer-actions">
+              <button type="button" className="btn btn-primary" onClick={() => void handleGenerateCertificate()} disabled={saving}>
+                {saving ? 'Generating...' : 'Generate Certificate'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowPreview(false)} disabled={saving}>
+                Cancel
+              </button>
+            </div>
           </div>
         ) : (
           <ListingTable

@@ -152,10 +152,6 @@ export function superAdminStaffSchema(isEditing: boolean) {
     name: requiredTrimmed('the staff name'),
     email: emailSchema,
     mobile: mobileSchema,
-    role_id: yup
-      .string()
-      .required('Please select a role.')
-      .oneOf(['2', '3'], 'Please select a role.'),
     password: isEditing
       ? yup
           .string()
@@ -170,7 +166,6 @@ export type SuperAdminStaffFormValues = {
   name: string;
   email: string;
   mobile: string;
-  role_id: string;
   password: string;
   id: number | null;
 };

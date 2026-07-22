@@ -107,6 +107,23 @@ function extractErrorMessage(
   return errorFallback || 'Request failed.';
 }
 
+function handleUnauthorized() {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('superadmin_token');
+    localStorage.removeItem('superadmin_user');
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    localStorage.removeItem('b2b_token');
+    localStorage.removeItem('b2b_user');
+    localStorage.removeItem('corporate_token');
+    localStorage.removeItem('corporate_user');
+    
+    if (window.location.pathname !== '/') {
+      window.location.href = '/';
+    }
+  }
+}
+
 export async function apiFetch<T = unknown>(
   path: string,
   options: ApiFetchOptions = {},
@@ -173,6 +190,9 @@ export async function apiFetch<T = unknown>(
 
   const ok = data.response_code === '200' || (acceptHttpOk && res.ok);
   if (!ok) {
+    if (data.response_code === '401' || res.status === 401) {
+      handleUnauthorized();
+    }
     const message = extractErrorMessage(data, errorFallback);
     if (!silent && showErrorToast) toast.error(message);
     throw new ApiError(message);
@@ -216,6 +236,9 @@ export async function handleApiResponse<T = unknown>(
 
   const ok = data.response_code === '200' || (acceptHttpOk && res.ok);
   if (!ok) {
+    if (data.response_code === '401' || res.status === 401) {
+      handleUnauthorized();
+    }
     const message = extractErrorMessage(data, errorFallback);
     if (!silent && showErrorToast) toast.error(message);
     throw new ApiError(message);

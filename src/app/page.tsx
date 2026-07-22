@@ -30,12 +30,24 @@ export default function UnifiedLoginPage() {
   });
 
   useEffect(() => {
-    localStorage.removeItem('superadmin_token');
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('b2b_token');
-    localStorage.removeItem('corporate_token');
+    if (localStorage.getItem('superadmin_token')) {
+      router.push('/superadmin/dashboard');
+      return;
+    }
+    if (localStorage.getItem('admin_token')) {
+      router.push('/admin/dashboard');
+      return;
+    }
+    if (localStorage.getItem('b2b_token')) {
+      router.push('/b2b/dashboard');
+      return;
+    }
+    if (localStorage.getItem('corporate_token')) {
+      router.push('/corporate/dashboard');
+      return;
+    }
     dispatch(clearCredentials());
-  }, [dispatch]);
+  }, [dispatch, router]);
 
   const loginMutation = useMutation({
     mutationFn: (values: LoginFormValues) =>

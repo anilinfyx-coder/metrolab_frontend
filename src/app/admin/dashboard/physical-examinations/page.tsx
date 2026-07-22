@@ -110,6 +110,8 @@ export default function PhysicalExaminationsPage() {
   const confirmDialog = useConfirm();
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewData, setPreviewData] = useState<PhysicalExaminationCertificateFormValues | null>(null);
   const [patientSearch, setPatientSearch] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
 
@@ -192,10 +194,14 @@ export default function PhysicalExaminationsPage() {
     setSelectedPatient(null);
     setPatientSearch('');
     setShowForm(true);
+    setShowPreview(false);
+    setPreviewData(null);
   };
 
   const closeForm = () => {
     setShowForm(false);
+    setShowPreview(false);
+    setPreviewData(null);
     reset(emptyForm);
     setSelectedPatient(null);
     setPatientSearch('');
@@ -205,6 +211,8 @@ export default function PhysicalExaminationsPage() {
     reset(emptyForm);
     setSelectedPatient(null);
     setPatientSearch('');
+    setShowPreview(false);
+    setPreviewData(null);
   };
 
   const searchPatient = async () => {
@@ -228,15 +236,21 @@ export default function PhysicalExaminationsPage() {
     }
   };
 
-  const onSubmit = handleSubmit(async values => {
+  const onSubmit = handleSubmit(values => {
+    setPreviewData(values);
+    setShowPreview(true);
+  }, createInvalidHandler<PhysicalExaminationCertificateFormValues>());
+
+  const handleGenerateCertificate = async () => {
+    if (!previewData) return;
     try {
-      await saveMutation.mutateAsync(values);
+      await saveMutation.mutateAsync(previewData);
       closeForm();
       await queryClient.invalidateQueries({ queryKey: CERT_QUERY_KEY });
     } catch {
       /* toasted by apiFetch */
     }
-  }, createInvalidHandler<PhysicalExaminationCertificateFormValues>());
+  };
 
   const handleDelete = async (cert: PhysicalExamCertificate) => {
     const ok = await confirmDialog({
@@ -357,7 +371,7 @@ export default function PhysicalExaminationsPage() {
       )}
 
       <div className={`page-body${emailing ? ' test-reports-page-busy' : ''}`}>
-        {showForm ? (
+        {showForm && !showPreview ? (
           <div className="card">
             <div className="card-header cert-form-card-header">
               <span className="card-title">Issue Physical Examination Certificate</span>
@@ -581,7 +595,7 @@ export default function PhysicalExaminationsPage() {
               </div>
               <div className="cert-form-footer-actions">
                 <button type="submit" className="btn btn-primary" disabled={saving || !patientId}>
-                  {saving ? 'Saving...' : 'Save Certificate'}
+                  Preview Certificate
                 </button>
                 <button type="button" className="btn btn-ghost" onClick={resetFormData} disabled={saving}>
                   Reset Data
@@ -591,6 +605,53 @@ export default function PhysicalExaminationsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        ) : showForm && showPreview && previewData ? (
+          <div className="card">
+            <div className="card-header cert-form-card-header">
+              <span className="card-title">Preview Physical Examination Certificate</span>
+              <button type="button" className="btn btn-ghost" onClick={() => setShowPreview(false)} disabled={saving}>
+                Back to Form
+              </button>
+            </div>
+            <div className="card-body">
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Patient Details & Vitals</h4>
+                <p><strong>Patient:</strong> {selectedPatient?.name || 'Unknown'} (ID: {String(previewData.patient_id)})</p>
+                <p><strong>Age:</strong> {previewData.age || '—'} | <strong>Height:</strong> {previewData.height || '—'} | <strong>Weight:</strong> {previewData.weight || '—'}</p>
+                <p><strong>Blood Pressure:</strong> {previewData.bp || '—'} | <strong>Pulse:</strong> {previewData.pulse || '—'}</p>
+              </div>
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Hearing & Vision</h4>
+                <p><strong>Hearing Right:</strong> {previewData.hearing_right || '—'} | <strong>Hearing Left:</strong> {previewData.hearing_left || '—'}</p>
+                <p><strong>Vision Right:</strong> {previewData.vision_right || '—'} | <strong>Vision Left:</strong> {previewData.vision_left || '—'}</p>
+                <p><strong>Wears Glasses:</strong> {previewData.wear_glasses ? 'Yes' : 'No'}</p>
+              </div>
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Evaluation</h4>
+                <div className="cert-form-grid cert-form-grid-3">
+                  {EVAL_FIELDS.map(item => (
+                    <p key={item.field} style={{ margin: '4px 0' }}><strong>{item.label}:</strong> {previewData[item.field] === 'N' ? 'Normal' : previewData[item.field] === 'AB' ? 'Abnormal' : '—'}</p>
+                  ))}
+                </div>
+              </div>
+              <div className="cert-form-section">
+                <h4 className="cert-form-section-title">Conclusion & Signature</h4>
+                <p><strong>Additional Comments:</strong> {previewData.additional_comments || '—'}</p>
+                <p><strong>Overall Condition:</strong> {previewData.overall_condition}</p>
+                <p><strong>Clinician:</strong> {previewData.clinician_name} ({previewData.clinician_specialty})</p>
+                <p><strong>Date of Exam:</strong> {formatDate(previewData.date_of_examination)}</p>
+                <p><strong>Address:</strong> {previewData.clinician_address || '—'}</p>
+              </div>
+            </div>
+            <div className="cert-form-footer-actions">
+              <button type="button" className="btn btn-primary" onClick={() => void handleGenerateCertificate()} disabled={saving}>
+                {saving ? 'Generating...' : 'Generate Certificate'}
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={() => setShowPreview(false)} disabled={saving}>
+                Cancel
+              </button>
+            </div>
           </div>
         ) : (
           <ListingTable

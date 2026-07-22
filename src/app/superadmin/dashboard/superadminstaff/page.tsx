@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import TopNav from '../../../components/TopNav';
@@ -20,7 +20,6 @@ const emptyStaff: SuperAdminStaffFormValues = {
   name: '',
   email: '',
   mobile: '',
-  role_id: '',
   password: '',
   id: null,
 };
@@ -73,7 +72,7 @@ export default function SuperAdminStaffPage() {
       name: values.name.trim(),
       email: values.email.trim(),
       mobile: values.mobile.trim(),
-      role_id: Number(values.role_id),
+      role_id: 3, // Always default to Super Admin Staff
     };
     if (values.password?.trim()) payload.password = values.password.trim();
 
@@ -151,7 +150,6 @@ export default function SuperAdminStaffPage() {
       name: s.name || '',
       email: s.email || '',
       mobile: s.mobile || '',
-      role_id: String(s.role_id || ''),
       password: '',
       id: s.id,
     });
@@ -244,20 +242,6 @@ export default function SuperAdminStaffPage() {
                       {PASSWORD_HELPER_TEXT}
                     </div>
                   )}
-                </FormGroup>
-
-                <FormGroup label="Role" htmlFor="sf-role" required error={errors.role_id?.message}>
-                  <select
-                    id="sf-role"
-                    data-field="role_id"
-                    aria-invalid={!!errors.role_id}
-                    style={fieldStyle(!!errors.role_id)}
-                    {...register('role_id')}
-                  >
-                    <option value="">Select Role</option>
-                    <option value="2">Super Admin User</option>
-                    <option value="3">Super Admin User Staff</option>
-                  </select>
                 </FormGroup>
               </div>
               <div className="superadmin-staff-form-actions">
