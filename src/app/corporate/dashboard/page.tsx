@@ -1,17 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import {
-  MdAdd,
-  MdAssignment,
-  MdBarChart,
-  MdBiotech,
-  MdBusiness,
-  MdLocalHospital,
-  MdRocketLaunch,
-  MdScience,
-  MdVpnKey,
-  MdWavingHand,
-} from 'react-icons/md';
 import Link from 'next/link';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
@@ -210,23 +198,6 @@ export default function CorporateDashboard() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <div className="card" style={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)', backgroundColor: '#fff', gridColumn: '1 / -1' }}>
-                <div className="card-header" style={{ borderBottom: '1px solid #edf2f9', borderRadius: '12px 12px 0 0', padding: '20px' }}>
-                  <h3 className="card-title" style={{ margin: 0, fontSize: '1.1rem', color: '#1e293b' }}>🚀 Quick Actions</h3>
-                </div>
-                <div className="card-body" style={{ padding: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                  <Link href="/corporate/dashboard/employee" style={quickActionStyle('#e0e7ff', '#4f46e5')}>
-                    <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>👥</span>
-                    <span style={{ fontWeight: 600 }}>Manage Employees</span>
-                  </Link>
-                  <Link href="/corporate/dashboard/testrequest" style={quickActionStyle('#fce7f3', '#db2777')}>
-                    <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🧪</span>
-                    <span style={{ fontWeight: 600 }}>New Test Request</span>
-                  </Link>
-                </div>
-              </div>
-
             </div>
           </div>
         )}
@@ -286,19 +257,3 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
     </div>
   );
 }
-
-const quickActionStyle = (bg: string, color: string): React.CSSProperties => ({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '24px',
-  backgroundColor: bg,
-  color: color,
-  borderRadius: '12px',
-  textDecoration: 'none',
-  minWidth: '200px',
-  flex: '1 1 auto',
-  transition: 'transform 0.2s',
-  border: `1px solid ${color}33`,
-});
