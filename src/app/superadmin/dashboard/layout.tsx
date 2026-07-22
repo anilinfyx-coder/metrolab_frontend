@@ -1,7 +1,7 @@
 'use client';
 import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   MdBiotech,
@@ -29,14 +29,29 @@ const superAdminNavItems: NavItem[] = [
 
 export default function SuperAdminDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const [navItems, setNavItems] = useState<NavItem[]>(superAdminNavItems);
+
   useEffect(() => {
     const token = localStorage.getItem('superadmin_token');
-    if (!token) router.push('/');
+    if (!token) {
+      router.push('/');
+      return;
+    }
+
+    const userStr = localStorage.getItem('superadmin_user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (Number(user.role) !== 1) {
+          setNavItems(prev => prev.filter(item => item.href !== '/superadminstaff'));
+        }
+      } catch {}
+    }
   }, [router]);
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={superAdminNavItems} basePath="/superadmin/dashboard" tokenKey="superadmin_token" userKey="superadmin_user" loginPath="/" />
+      <Sidebar navItems={navItems} basePath="/superadmin/dashboard" tokenKey="superadmin_token" userKey="superadmin_user" loginPath="/" />
       <div className="main-content">
         <div className="main-content-body">{children}</div>
         <AppFooter />
