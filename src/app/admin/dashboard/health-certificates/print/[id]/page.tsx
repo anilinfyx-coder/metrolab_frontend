@@ -14,7 +14,9 @@ type LabBranding = {
   public_phone_no?: string | null;
   public_fax?: string | null;
   public_email?: string | null;
+  website?: string | null;
   logo_file?: string | null;
+  medical_officer_signature_file_name?: string | null;
 };
 
 function textOrNull(value: unknown): string | null {
