@@ -1,31 +1,20 @@
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  MdAccountBalanceWallet,
-  MdAdd,
-  MdAssignment,
-  MdCheckCircle,
-  MdClose,
-  MdDelete,
-  MdDescription,
-  MdEdit,
-  MdHourglassEmpty,
-  MdPayment,
-  MdRefresh,
-  MdSave,
-  MdSettings,
-  MdVisibility,
-} from 'react-icons/md';
+import { MdAccountBalanceWallet, MdAdd, MdAssignment, MdCheckCircle, MdClose, MdDelete, MdDescription, MdEdit, MdHourglassEmpty, MdPayment, MdRefresh, MdSave, MdSearch, MdSettings, MdVisibility } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { FormGroup, FieldError } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
+import TablePagination from '../../../components/TablePagination';
 import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
 import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
+import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 import {
   b2bClientFormSchema,
   b2bDocumentSchema,
@@ -127,6 +116,7 @@ type SaveClientPayload = {
 export default function B2BClientsPage() {
   const confirmDialog = useConfirm();
   const queryClient = useQueryClient();
+  const router = useRouter();
   const [view, setView] = useState<View>('list');
   const [selectedClient, setSelectedClient] = useState<B2BClient | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -183,6 +173,11 @@ export default function B2BClientsPage() {
   const [editingSubId, setEditingSubId] = useState<number | null>(null);
   const [draftCustomPrices, setDraftCustomPrices] = useState<{ lab_test_id: number; custom_price: string }[] | null>(null);
   const [draftSelectedIds, setDraftSelectedIds] = useState<Set<number> | null>(null);
+  const [accessPage, setAccessPage] = useState(1);
+  const [accessPageSize, setAccessPageSize] = useState(25);
+  const [accessSearchInput, setAccessSearchInput] = useState('');
+  const [accessSearch, setAccessSearch] = useState('');
+  const [accessTotal, setAccessTotal] = useState(0);
 
   // Documents
   const [docFormMeta, setDocFormMeta] = useState<{ id: number | null; file: File | null; fileName: string }>({
@@ -315,17 +310,44 @@ export default function B2BClientsPage() {
     },
   });
 
-  const { data: accessLabTests = [] } = useQuery({
-    queryKey: LAB_TESTS_ACTIVE_KEY,
-    enabled: view === 'labtestaccess',
+  const { data: accessLabTests = [], isFetching: accessLabTestsLoading } = useQuery({
+    queryKey: [...LAB_TESTS_ACTIVE_KEY, 'access', selectedClientId, accessPage, accessPageSize, accessSearch],
+    enabled: view === 'labtestaccess' && !!selectedClientId,
     queryFn: async () => {
       try {
-        return await apiFetch<LabTest[]>('/api/LabTests?status=true', { tokenKey: 'superadmin_token' }) || [];
+        const qs = buildPageQuery(accessPage, accessPageSize, {
+          status: 'true',
+          search: accessSearch || undefined,
+          assign_for_b2b_client_id: selectedClientId || undefined,
+        });
+        const data = await apiFetch<LabTest[] | PaginatedResult<LabTest>>(`/api/LabTests?${qs}`, {
+          tokenKey: 'superadmin_token',
+        });
+        if (isPaginatedResult<LabTest>(data)) {
+          setAccessTotal(data.total);
+          return data.items || [];
+        }
+        const list = Array.isArray(data) ? data : [];
+        setAccessTotal(list.length);
+        return list;
       } catch {
+        setAccessTotal(0);
         return [];
       }
     },
   });
+
+  useEffect(() => {
+    if (view !== 'labtestaccess') return;
+    const timer = window.setTimeout(() => {
+      const next = accessSearchInput.trim();
+      setAccessSearch(prev => {
+        if (prev !== next) setAccessPage(1);
+        return next;
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [accessSearchInput, view]);
 
   const { data: docTypes = [] } = useQuery({
     queryKey: B2B_DOC_TYPES_KEY,
@@ -394,28 +416,14 @@ export default function B2BClientsPage() {
     [draftSelectedIds, accessList],
   );
 
-  const accessAssignedAt = useMemo(
-    () => new Map(accessList.map(a => [a.lab_test_id, a.creation_timestamp || ''])),
-    [accessList],
-  );
-
   const labTests = useMemo(() => {
-    const savedIds = new Set(accessList.map(a => a.lab_test_id));
-    const withSelection = accessLabTests.map(t => ({
+    return accessLabTests.map(t => ({
       ...t,
       is_selected: selectedTestIds.has(t.id),
     }));
+  }, [accessLabTests, selectedTestIds]);
 
-    return [...withSelection].sort((a, b) => {
-      const aAssigned = savedIds.has(a.id);
-      const bAssigned = savedIds.has(b.id);
-      if (aAssigned !== bAssigned) return aAssigned ? -1 : 1;
-      const aTs = accessAssignedAt.get(a.id) || '';
-      const bTs = accessAssignedAt.get(b.id) || '';
-      if (aTs !== bTs) return bTs.localeCompare(aTs);
-      return (a.name || '').localeCompare(b.name || '');
-    });
-  }, [accessLabTests, selectedTestIds, accessList, accessAssignedAt]);
+  const accessTotalPages = Math.max(1, Math.ceil(accessTotal / accessPageSize) || 1);
 
   const walletBalance = useMemo(() => {
     if (walletBalanceOverride != null) return walletBalanceOverride;
@@ -443,18 +451,40 @@ export default function B2BClientsPage() {
       setReportFooterFile(null);
       setMedOfficerSigFile(null);
       setView('form');
-    } else if ((v === 'wallet' || v === 'subscription') && cid) {
+    } else if ((v === 'wallet' || v === 'subscription' || v === 'labtestaccess' || v === 'edit') && cid) {
       const c = clients.find(x => x.id.toString() === cid);
       if (c) {
-        setSelectedClient(c);
         if (v === 'wallet') {
+          setSelectedClient(c);
           setWalletBalanceOverride(
             c.wallet_balance != null ? Number(c.wallet_balance) : 0,
           );
           resetWallet({ amount: '', description: '' });
           setView('wallet');
-        } else {
+        } else if (v === 'subscription') {
+          setSelectedClient(c);
           setView('subscription');
+        } else if (v === 'labtestaccess') {
+          setSelectedClient(c);
+          setDraftSelectedIds(null);
+          setAccessPage(1);
+          setAccessPageSize(25);
+          setAccessSearchInput('');
+          setAccessSearch('');
+          setAccessTotal(0);
+          setView('labtestaccess');
+        } else {
+          setEditingId(c.id);
+          resetClient({
+            ...emptyClient,
+            ...(c as unknown as Record<string, string>),
+            country_id: c.country_id != null ? String(c.country_id) : '',
+            state_id: c.state_id != null ? String(c.state_id) : '',
+            city_id: c.city_id != null ? String(c.city_id) : '',
+          });
+          setIsApproval(!!c.is_approval);
+          setIsFixedPrice(!!c.is_fixed_price);
+          setView('form');
         }
       }
     }
@@ -863,6 +893,11 @@ export default function B2BClientsPage() {
   const openLabTestAccess = (c: B2BClient) => {
     setSelectedClient(c);
     setDraftSelectedIds(null);
+    setAccessPage(1);
+    setAccessPageSize(25);
+    setAccessSearchInput('');
+    setAccessSearch('');
+    setAccessTotal(0);
     setView('labtestaccess');
   };
 
@@ -876,6 +911,7 @@ export default function B2BClientsPage() {
       });
       setDraftSelectedIds(null);
       await queryClient.invalidateQueries({ queryKey: b2bLabTestAccessKey(selectedClientId) });
+      await queryClient.invalidateQueries({ queryKey: LAB_TESTS_ACTIVE_KEY });
     } catch {
       /* error toasted by apiFetch */
     }
@@ -908,7 +944,19 @@ export default function B2BClientsPage() {
   }, createInvalidHandler<WalletRechargeFormValues>());
 
   const clientColumns: ListingColumn<B2BClient>[] = [
-    { key: 'company_name', label: 'Company Name', width: '25%' },
+    {
+      key: 'company_name',
+      label: 'Company Name',
+      width: '25%',
+      render: client => (
+        <Link
+          href={`/superadmin/dashboard/b2bclient/${client.id}`}
+          style={{ color: '#334155', textDecoration: 'none', fontWeight: 600 }}
+        >
+          {client.company_name || `Client #${client.id}`}
+        </Link>
+      ),
+    },
     { key: 'mobile', label: 'Mobile', width: '20%' },
     { key: 'email', label: 'Email', width: '25%' },
     {
@@ -1446,48 +1494,107 @@ export default function B2BClientsPage() {
       <div className="page-content">
         <TopNav title={`Lab Test Access — ${selectedClient?.company_name || ''}`} />
         <div className="page-body">
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">List of Lab Test Access for &quot;{selectedClient?.company_name}&quot;</span>
+          <div className="card b2b-lab-access-card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+              <div>
+                <span className="card-title">List of Lab Test Access for &quot;{selectedClient?.company_name}&quot;</span>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                  {selectedTestIds.size} selected · {accessTotal} test{accessTotal === 1 ? '' : 's'} found
+                </div>
+              </div>
               <button type="button" className="btn btn-ghost" onClick={() => { setView('list'); }}>
                 <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
               </button>
             </div>
-            <div className="card-body" style={{ padding: 0 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', width: 60 }}>Select</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Name</th>
-                    <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {labTests.map(t => (
-                    <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.75rem 1rem' }}>
-                        <input type="checkbox" checked={!!t.is_selected}
-                          onChange={() => setDraftSelectedIds(prev => {
-                            const current = prev ?? new Set(accessList.map(a => a.lab_test_id));
-                            const next = new Set(current);
-                            if (next.has(t.id)) next.delete(t.id);
-                            else next.add(t.id);
-                            return next;
-                          })} />
-                      </td>
-                      <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{t.name}</td>
-                      <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{t.description || '—'}</td>
-                    </tr>
-                  ))}
-                  {labTests.length === 0 && (
-                    <tr><td colSpan={3} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No lab tests found.</td></tr>
-                  )}
-                </tbody>
-              </table>
+
+            <div className="b2b-lab-access-toolbar">
+              <div className="b2b-lab-access-search">
+                <MdSearch size={18} aria-hidden className="b2b-lab-access-search-icon" />
+                <input
+                  type="text"
+                  className="patient-form-input"
+                  placeholder="Search lab tests by name or description..."
+                  value={accessSearchInput}
+                  onChange={e => setAccessSearchInput(e.target.value)}
+                  aria-label="Search lab tests"
+                />
+              </div>
             </div>
-            <div className="card-footer" style={{ display: 'flex', gap: '0.75rem' }}>
-              <button className="btn btn-primary" onClick={saveLabTestAccess}><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
-              <button className="btn btn-ghost" onClick={() => { setView('list'); }}><MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close</button>
+
+            <div className="card-body" style={{ padding: 0 }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', width: 60 }}>Select</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Name</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Description</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accessLabTestsLoading && labTests.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          Loading lab tests...
+                        </td>
+                      </tr>
+                    ) : labTests.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          {accessSearch ? 'No lab tests match your search.' : 'No lab tests found.'}
+                        </td>
+                      </tr>
+                    ) : (
+                      labTests.map(t => (
+                        <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '0.75rem 1rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={!!t.is_selected}
+                              onChange={() => setDraftSelectedIds(prev => {
+                                const current = prev ?? new Set(accessList.map(a => a.lab_test_id));
+                                const next = new Set(current);
+                                if (next.has(t.id)) next.delete(t.id);
+                                else next.add(t.id);
+                                return next;
+                              })}
+                            />
+                          </td>
+                          <td style={{ padding: '0.75rem 1rem', fontWeight: 500 }}>{t.name}</td>
+                          <td style={{ padding: '0.75rem 1rem', color: 'var(--text-muted)' }}>{t.description || '—'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <TablePagination
+                pageSize={accessPageSize}
+                onPageSizeChange={size => {
+                  setAccessPageSize(size);
+                  setAccessPage(1);
+                }}
+                page={Math.min(accessPage, accessTotalPages)}
+                totalPages={accessTotalPages}
+                onPageChange={setAccessPage}
+                total={accessTotal}
+              />
+            </div>
+
+            <div className="card-footer b2b-lab-access-footer" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Selections are kept while you search or change pages. Click Save to apply.
+              </div>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <button className="btn btn-primary" onClick={saveLabTestAccess} disabled={saveLabTestAccessMutation.isPending}>
+                  <MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />
+                  {saveLabTestAccessMutation.isPending ? 'Saving...' : 'Save'}
+                </button>
+                <button className="btn btn-ghost" onClick={() => { setView('list'); }}>
+                  <MdClose size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Close
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1644,10 +1751,13 @@ export default function B2BClientsPage() {
           emptyText="No B2B Labs found."
           headerActions={<ListingHeaderActions onAdd={openAdd} />}
           actionsLabel="Actions"
-          actionsWidth={150}
+          actionsWidth={180}
           defaultPageSize={10}
           rowActions={client => (
             <ActionIcons
+              onView={() => router.push(`/superadmin/dashboard/b2bclient/${client.id}`)}
+              viewVariant="eye"
+              viewTitle="View Detail"
               onEdit={() => openEdit(client)}
               onToggleStatus={() => toggleStatus(client)}
               onDelete={() => deleteClient(client.id)}

@@ -82,6 +82,7 @@ export function ActionIcons({
   deleteFirst = false,
   editVariant = 'filled',
   editDisabled = false,
+  viewVariant = 'doc',
 }: {
   onEdit?: () => void;
   onToggleStatus?: () => void;
@@ -103,6 +104,7 @@ export function ActionIcons({
   deleteFirst?: boolean;
   editVariant?: 'filled' | 'outline';
   editDisabled?: boolean;
+  viewVariant?: 'doc' | 'eye';
 }) {
   const editBtn = onEdit ? (
     <button
@@ -176,6 +178,8 @@ export function ActionIcons({
     </button>
   ) : null;
 
+  const viewBtn = viewVariant === 'eye' ? viewEyeBtn : viewDocBtn;
+
   // Manage Requests: Download + View (eye) + Delete
   const isRequestActions = !!(onDownload && onView && onDelete && !onLock && !onMail && !onEdit);
   // Test Reports: Download + Edit + Lock + Mail
@@ -195,19 +199,19 @@ export function ActionIcons({
           {editBtn}
           {lockBtn}
           {mailBtn}
-          {onView && viewDocBtn}
+          {onView && viewBtn}
           {deleteBtn}
         </>
       ) : deleteFirst ? (
         <>
-          {onView && viewDocBtn}
+          {onView && viewBtn}
           {deleteBtn}
           {editBtn}
           {statusBtn}
         </>
       ) : (
         <>
-          {onView && viewDocBtn}
+          {onView && viewBtn}
           {editBtn}
           {statusBtn}
           {deleteBtn}
