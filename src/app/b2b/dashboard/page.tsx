@@ -277,27 +277,6 @@ export default function B2bDashboardPage() {
 
             </div>
 
-            {/* Quick Actions */}
-            <div className="card" style={{ ...cardStyle, marginBottom: 0 }}>
-              <div className="card-header" style={cardHeaderStyle}>
-                <h3 className="card-title" style={cardTitleStyle}>🚀 Quick Actions</h3>
-              </div>
-              <div className="card-body" style={{ padding: '24px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-                <Link href="/b2b/dashboard/admindashboard" style={quickActionStyle('#e0e7ff', '#4f46e5')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🖥️</span>
-                  <span style={{ fontWeight: 600 }}>Admin Dashboard</span>
-                </Link>
-                <Link href="/b2b/dashboard/corporateclient" style={quickActionStyle('#dcfce7', '#16a34a')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🏢</span>
-                  <span style={{ fontWeight: 600 }}>Manage Corporate Clients</span>
-                </Link>
-                <Link href="/b2b/dashboard/wallet" style={quickActionStyle('#fef9c3', '#ca8a04')}>
-                  <span style={{ fontSize: '1.5rem', marginBottom: '8px' }}>💰</span>
-                  <span style={{ fontWeight: 600 }}>View Wallet & Transactions</span>
-                </Link>
-              </div>
-            </div>
-
           </div>
         )}
       </div>
@@ -416,18 +395,3 @@ const emptyTdStyle: React.CSSProperties = {
   textAlign: 'center', 
   color: '#94a3b8'
 };
-const quickActionStyle = (bg: string, color: string): React.CSSProperties => ({
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '24px',
-  backgroundColor: bg,
-  color: color,
-  borderRadius: '12px',
-  textDecoration: 'none',
-  minWidth: '200px',
-  flex: '1 1 auto',
-  transition: 'transform 0.2s',
-  border: `1px solid ${color}33`,
-});

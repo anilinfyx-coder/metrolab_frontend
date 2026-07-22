@@ -2,6 +2,7 @@
 import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   MdAssignment,
@@ -12,6 +13,9 @@ import {
   MdMedicalServices,
   MdPeople,
   MdScience,
+  MdAdd,
+  MdMail,
+  MdClose,
 } from 'react-icons/md';
 
 const adminNavItems: NavItem[] = [
@@ -47,6 +51,32 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
         <div className="main-content-body">{children}</div>
         <AppFooter />
       </div>
+
+      {/* Floating Action Button (Add Patient) */}
+      <div style={{ position: 'fixed', bottom: '30px', right: '30px', zIndex: 9999 }}>
+        <Link 
+          href="/admin/dashboard/patient"
+          title="Add Patient"
+          style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--primary)',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            textDecoration: 'none',
+            transition: 'transform 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          <MdAdd size={28} />
+        </Link>
+      </div>
+
     </div>
   );
 }

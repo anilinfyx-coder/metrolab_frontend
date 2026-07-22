@@ -263,41 +263,6 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            <div className="card admin-dashboard-quick">
-              <div className="card-header admin-dashboard-quick-header">
-                <h3 className="card-title">Quick Actions</h3>
-              </div>
-              <div className="card-body admin-dashboard-quick-body">
-                <Link href="/admin/dashboard/patient" className="admin-quick-action admin-quick-action-blue">
-                  <MdAdd size={28} aria-hidden />
-                  <span>Add Patient</span>
-                </Link>
-                <Link href="/admin/dashboard/labtest" className="admin-quick-action admin-quick-action-purple">
-                  <MdAssignment size={28} aria-hidden />
-                  <span>Waiting List</span>
-                </Link>
-                <Link href="/admin/dashboard/manageothertest" className="admin-quick-action admin-quick-action-red">
-                  <MdDescription size={28} aria-hidden />
-                  <span>Test Reports</span>
-                </Link>
-                <Link href="/admin/dashboard/testrequests" className="admin-quick-action admin-quick-action-green">
-                  <MdMail size={28} aria-hidden />
-                  <span>Manage Requests</span>
-                </Link>
-                <Link href="/admin/dashboard/health-certificates" className="admin-quick-action admin-quick-action-indigo">
-                  <MdHealthAndSafety size={28} aria-hidden />
-                  <span>Health Certificates</span>
-                </Link>
-                <Link href="/admin/dashboard/physical-examinations" className="admin-quick-action admin-quick-action-pink">
-                  <MdMedicalServices size={28} aria-hidden />
-                  <span>Physical Examinations</span>
-                </Link>
-                <Link href="/admin/dashboard/patientList" className="admin-quick-action admin-quick-action-orange">
-                  <MdLocalHospital size={28} aria-hidden />
-                  <span>Patient List</span>
-                </Link>
-              </div>
-            </div>
           </div>
         )}
       </div>
