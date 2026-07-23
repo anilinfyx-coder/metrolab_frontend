@@ -6,6 +6,8 @@ import { MdLogout, MdPerson, MdVpnKey, MdNotifications } from 'react-icons/md';
 import { getPortalFromPath, getStoredUser } from './portalConfig';
 import { apiFetch } from '../../lib/api';
 
+import { useWhitelabel } from './WhitelabelProvider';
+
 interface TopNavProps {
   title: string;
   children?: ReactNode;
@@ -19,6 +21,7 @@ export default function TopNav({ title, children }: TopNavProps) {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { isWhitelabel, config } = useWhitelabel();
 
   useEffect(() => {
     const user = getStoredUser(portal.userKey);
@@ -67,12 +70,51 @@ export default function TopNav({ title, children }: TopNavProps) {
   const signOut = () => {
     localStorage.removeItem(portal.tokenKey);
     localStorage.removeItem(portal.userKey);
+    
+    // For local testing, clear the whitelabel domain on logout
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      localStorage.removeItem('test_domain');
+      window.location.href = portal.loginPath;
+      return;
+    }
+    
     router.push(portal.loginPath);
   };
 
   return (
     <div className="topnav">
-      <h1 className="topnav-title">{title}</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <h1 className="topnav-title">{title}</h1>
+        {portal.key === 'b2b' && (
+          isWhitelabel && config ? (
+            <span style={{
+              fontSize: '0.75rem',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              backgroundColor: 'var(--primary-color, #4f46e5)',
+              color: '#fff',
+              fontWeight: '600',
+              letterSpacing: '0.02em',
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}>
+              Whitelabel Mode: {config.custom_domain}
+            </span>
+          ) : (
+            <span style={{
+              fontSize: '0.75rem',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              backgroundColor: '#64748b',
+              color: '#fff',
+              fontWeight: '600',
+              letterSpacing: '0.02em',
+              border: '1px solid rgba(255,255,255,0.2)'
+            }}>
+              Standard MetroLab Mode
+            </span>
+          )
+        )}
+      </div>
       <div className="topnav-actions">
         {children}
         

@@ -6,6 +6,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { MdMenu, MdMenuOpen } from 'react-icons/md';
 import { apiFetch, getUploadUrl } from '../../lib/api';
 import { getStoredUser } from './portalConfig';
+import { useWhitelabel } from './WhitelabelProvider';
 
 export type NavItem = {
   href: string;
@@ -26,6 +27,7 @@ type LabBranding = {
   logoFile: string | null;
   tagline: string | null;
   companyName: string | null;
+  primaryColorCode: string | null;
 };
 
 function normalizeText(value: unknown): string | null {
@@ -42,6 +44,7 @@ function extractBranding(data: Record<string, unknown>): LabBranding {
     logoFile: normalizeText(data.logo_file),
     tagline: normalizeText(data.tagline),
     companyName: normalizeText(data.company_name) || normalizeText(data.name),
+    primaryColorCode: normalizeText(data.primary_color_code),
   };
 }
 
@@ -95,7 +98,8 @@ export default function Sidebar({
 
     const applyBranding = (data: Record<string, unknown>) => {
       if (cancelled) return;
-      setLabBranding(extractBranding(data));
+      const extracted = extractBranding(data);
+      setLabBranding(extracted);
     };
 
     applyBranding(stored);
@@ -110,6 +114,7 @@ export default function Sidebar({
           logo_file: branding.logoFile,
           tagline: branding.tagline,
           company_name: branding.companyName ?? stored.company_name,
+          primary_color_code: branding.primaryColorCode ?? stored.primary_color_code,
         }),
       );
     };
@@ -164,11 +169,25 @@ export default function Sidebar({
     };
   }, [usesLabBranding, userKey, isB2bPortal, resolvedTokenKey]);
 
+  const { isWhitelabel, config } = useWhitelabel();
+
+  useEffect(() => {
+    if (!isWhitelabel && labBranding?.primaryColorCode) {
+      document.documentElement.style.setProperty('--primary-color', labBranding.primaryColorCode);
+      document.documentElement.style.setProperty('--sidebar-bg', labBranding.primaryColorCode);
+    }
+  }, [isWhitelabel, labBranding?.primaryColorCode]);
+
   const toggleSidebar = () => setCollapsed((value) => !value);
 
-  const hasLabLogo = Boolean(labBranding?.logoFile);
-  const showLabBranding = usesLabBranding && hasLabLogo;
-  const labLogoUrl = hasLabLogo ? getUploadUrl(labBranding?.logoFile) : '';
+  // If we are on a whitelabel domain, use the config logo. Otherwise use the logged in user's logo.
+  const activeLogoFile = isWhitelabel ? config?.logo_file : labBranding?.logoFile;
+  const activeCompanyName = isWhitelabel ? config?.company_name : labBranding?.companyName;
+  const activeTagline = isWhitelabel ? null : labBranding?.tagline; // Can keep tagline blank or use config later if needed
+
+  const hasLabLogo = Boolean(activeLogoFile);
+  const showLabBranding = (usesLabBranding || isWhitelabel) && hasLabLogo;
+  const labLogoUrl = hasLabLogo ? (isWhitelabel && config?.logo_url ? config.logo_url : getUploadUrl(activeLogoFile)) : '';
 
   const toggleButton = (
     <button
@@ -188,13 +207,15 @@ export default function Sidebar({
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={labLogoUrl}
-        alt={labBranding?.companyName || 'Lab logo'}
+        alt={activeCompanyName || 'Lab logo'}
         className={`sidebar-lab-logo${collapsed ? ' sidebar-lab-logo-collapsed' : ''}`}
       />
-      {!collapsed && labBranding?.tagline ? (
-        <div className="sidebar-logo-tagline">{labBranding.tagline}</div>
+      {!collapsed && activeTagline ? (
+        <div className="sidebar-logo-tagline">{activeTagline}</div>
       ) : null}
     </>
+  ) : isWhitelabel ? (
+    <div style={{ minHeight: '60px', width: '100%' }} />
   ) : (
     <MetroBrandBlock collapsed={collapsed} />
   );
@@ -240,7 +261,7 @@ export default function Sidebar({
           className={`sidebar-footer-bar${showLabBranding ? ' sidebar-footer-bar-with-logo' : ' sidebar-footer-bar-toggle-only'}`}
         >
           {toggleButton}
-          {showLabBranding ? (
+          {showLabBranding && !isWhitelabel ? (
             <div className="sidebar-footer-brand">
               <Image
                 src="/login-logo.png"
@@ -253,7 +274,7 @@ export default function Sidebar({
             </div>
           ) : null}
         </div>
-      ) : showLabBranding ? (
+      ) : showLabBranding && !isWhitelabel ? (
         <div className="sidebar-footer-bar sidebar-footer-bar-logo-only">
           <div className="sidebar-footer-brand">
             <Image

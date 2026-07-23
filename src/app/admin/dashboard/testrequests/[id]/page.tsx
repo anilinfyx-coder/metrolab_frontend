@@ -557,7 +557,7 @@ export default function TestRequestDetailPage() {
                                   type="button"
                                   className="action-btn action-btn-forward"
                                   title="Transfer this employee to waiting list"
-                                  disabled={!canTransferEmployee(e, detail.status)}
+                                  disabled={!canTransferEmployee(e, detail.status) || (e.is_selected_for_alternate && !e.is_selected_for_drug && !e.is_selected_for_alcohol)}
                                   onClick={() => transferEmployee(e)}
                                 >
                                   <MdForward size={16} aria-hidden />
@@ -566,6 +566,7 @@ export default function TestRequestDetailPage() {
                                   type="button"
                                   className="action-btn action-btn-block"
                                   title="Exclude employee and reassign"
+                                  disabled={!canTransferEmployee(e, detail.status) || (e.is_selected_for_alternate && !e.is_selected_for_drug && !e.is_selected_for_alcohol)}
                                   onClick={() => openCancelModal(e)}
                                 >
                                   <MdBlock size={15} aria-hidden />

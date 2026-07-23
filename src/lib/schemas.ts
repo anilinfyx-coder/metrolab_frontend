@@ -344,6 +344,7 @@ export function b2bClientFormSchema(isEditing = false) {
     support_mobile: optionalMobileSchema,
     support_person_name: yup.string().trim(),
     website: yup.string().trim(),
+    custom_domain: yup.string().trim(),
     tagline: yup.string().trim(),
     primary_color_code: yup.string().trim(),
     medical_officer_name: requiredTrimmed('the medical officer name'),

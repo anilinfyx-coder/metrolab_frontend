@@ -7,6 +7,8 @@ import { Toaster } from 'react-hot-toast';
 import { store } from '../../store';
 import { ConfirmProvider } from './ConfirmModal';
 
+import { WhitelabelProvider } from './WhitelabelProvider';
+
 export default function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
@@ -43,7 +45,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ReduxProvider store={store}>
       <QueryClientProvider client={queryClient}>
-        <ConfirmProvider>{children}</ConfirmProvider>
+        <ConfirmProvider>
+          <WhitelabelProvider>{children}</WhitelabelProvider>
+        </ConfirmProvider>
         <Toaster
           position="top-center"
           reverseOrder={false}

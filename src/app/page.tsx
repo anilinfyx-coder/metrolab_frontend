@@ -12,6 +12,7 @@ import { apiFetch } from '../lib/api';
 import { loginSchema, type LoginFormValues } from '../lib/schemas';
 import { useAppDispatch } from '../store/hooks';
 import { clearCredentials, setCredentials, type AuthUser, type Portal } from '../store/authSlice';
+import { useWhitelabel } from './components/WhitelabelProvider';
 import styles from './page.module.css';
 
 const portalConfig: Record<Portal, { tokenKey: string; userKey: string; path: string }> = {
@@ -24,6 +25,7 @@ const portalConfig: Record<Portal, { tokenKey: string; userKey: string; path: st
 export default function UnifiedLoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const { isWhitelabel, config } = useWhitelabel();
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: formResolver<LoginFormValues>(loginSchema),
     defaultValues: { username: '', password: '' },
@@ -75,22 +77,41 @@ export default function UnifiedLoginPage() {
   };
 
   return (
-    <main className={styles.page}>
+    <main 
+      className={styles.page}
+      style={isWhitelabel && config?.primary_color_code ? {
+        backgroundColor: config.primary_color_code,
+        backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.4) 100%)'
+      } : undefined}
+    >
       <div className={styles.container}>
         <div className={styles.logoWrap}>
-          <Image
-            src="/login-logo.png"
-            alt="Metro Lab"
-            width={280}
-            height={250}
-            priority
-            className={styles.logo}
-          />
+          {isWhitelabel ? (
+            config?.logo_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={config.logo_url}
+                alt={config.company_name || 'Whitelabel Logo'}
+                className={styles.logo}
+              />
+            ) : null
+          ) : (
+            <Image
+              src="/login-logo.png"
+              alt="Metro Lab"
+              width={280}
+              height={250}
+              priority
+              className={styles.logo}
+            />
+          )}
         </div>
 
-        <p className={styles.tagline}>
-          Precision is our Home Mark
-        </p>
+        {!isWhitelabel && (
+          <p className={styles.tagline}>
+            Precision is our Home Mark
+          </p>
+        )}
 
         <div className={styles.formWrap}>
           <p className={styles.heading}>
