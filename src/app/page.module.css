@@ -151,7 +151,7 @@
   padding: 0.72rem;
   border: 0;
   border-radius: 4px;
-  background: #1e1a70;
+  background: var(--primary-color, #1e1a70);
   box-shadow: 0 2px 6px rgba(30, 26, 112, 0.25);
   color: #fff;
   font-family: inherit;
@@ -163,7 +163,7 @@
 }
 
 .submit:hover:not(:disabled) {
-  background: #2c28a0;
+  filter: brightness(1.2);
 }
 
 .submit:disabled {

@@ -41,6 +41,7 @@ interface B2BClient {
   password?: string;
   is_fixed_price?: boolean;
   fixed_price_amount?: number | string;
+  custom_domain?: string;
   is_approval?: boolean;
   wallet_balance?: number;
 }
@@ -83,7 +84,7 @@ const emptyClient = {
   country_id: '', state_id: '', city_id: '',
   public_email: '', public_phone_no: '', public_fax: '', pincode: '',
   support_email: '', support_mobile: '', support_person_name: '',
-  website: '', medical_officer_name: '', medical_officer_position: '', mrocc: '', clia_number: '',
+  website: '', custom_domain: '', medical_officer_name: '', medical_officer_position: '', mrocc: '', clia_number: '',
   smtp_server: '', smtp_port: '', smtp_email: '', smtp_password: '',
   tagline: '', primary_color_code: '', approval_note: '', password: '',
   fixed_price_amount: '',
@@ -1110,8 +1111,21 @@ export default function B2BClientsPage() {
                 {inp('support_mobile', 'Support Mobile')}
                 {inp('support_person_name', 'Support Person Name')}
                 {inp('website', 'Website')}
+                {inp('custom_domain', 'Custom Domain (e.g. lab.client1.biz)')}
                 {inp('tagline', 'Tagline')}
-                {inp('primary_color_code', 'Primary Colour Code')}
+                <FormGroup key="primary_color_code" label="Primary Colour Code (e.g. rgb(12,34,56) or #Hex)" htmlFor="b2b-primary_color_code" error={clientErrors.primary_color_code?.message}>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flexShrink: 0, width: '40px', height: '40px', borderRadius: '4px', border: '1px solid var(--border)', background: watchClient('primary_color_code') || '#ffffff' }} />
+                    <input
+                      id="b2b-primary_color_code"
+                      type="text"
+                      placeholder="e.g. rgb(255, 0, 0)"
+                      className="form-control"
+                      style={{ flex: 1, padding: '0.55rem 0.75rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-color)' }}
+                      {...registerClient('primary_color_code')}
+                    />
+                  </div>
+                </FormGroup>
                 {inp('medical_officer_name', 'Medical Officer Name')}
                 {inp('medical_officer_position', 'Medical Officer Position')}
                 {inp('mrocc', 'MROCC')}
