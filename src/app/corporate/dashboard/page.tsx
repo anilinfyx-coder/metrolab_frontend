@@ -63,13 +63,6 @@ export default function CorporateDashboard() {
         ) : (
           <div className="page-body">
             
-            <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '1.8rem', color: '#0f172a', margin: '0 0 8px 0' }}>
-                Welcome back, {user?.name || 'Corporate Admin'} 👋
-              </h2>
-              <p style={{ color: '#64748b', margin: 0 }}>Here is what is happening with your employees and test requests today.</p>
-            </div>
-
             {/* KPI Cards section */}
             <div style={{ 
               display: 'grid', 

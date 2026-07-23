@@ -58,7 +58,7 @@ export default function UnifiedLoginPage() {
         skipAuth: true,
         errorFallback: 'Invalid credentials. Please try again.',
         successMessage: 'Signed in successfully.',
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, login_domain: isWhitelabel ? config?.custom_domain : null }),
       }),
     onSuccess: user => {
       if (!user.portal) return;
