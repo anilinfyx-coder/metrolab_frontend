@@ -476,9 +476,14 @@ export default function B2BClientsPage() {
           setView('labtestaccess');
         } else {
           setEditingId(c.id);
+          const sanitizedClient = Object.fromEntries(
+            Object.entries(c).map(([k, v]) => [k, v ?? ''])
+          );
+          
           resetClient({
             ...emptyClient,
-            ...(c as unknown as Record<string, string>),
+            ...(sanitizedClient as Record<string, string>),
+            password: '', // Prevent showing encrypted password
             country_id: c.country_id != null ? String(c.country_id) : '',
             state_id: c.state_id != null ? String(c.state_id) : '',
             city_id: c.city_id != null ? String(c.city_id) : '',
@@ -699,6 +704,7 @@ export default function B2BClientsPage() {
     resetClient({
       ...emptyClient,
       ...(c as unknown as Record<string, string>),
+      password: '', // Prevent showing encrypted password
       country_id: c.country_id != null ? String(c.country_id) : '',
       state_id: c.state_id != null ? String(c.state_id) : '',
       city_id: c.city_id != null ? String(c.city_id) : '',
@@ -1052,7 +1058,7 @@ export default function B2BClientsPage() {
                 {inp('contact_person_name', 'Contact Person Name')}
                 {inp('mobile', 'Mobile')}
                 {inp('email', 'Login Email', 'email')}
-                {inp('password', 'Login Password', 'password', !!editingId)}
+                {inp('password', 'Login Password', 'password', false)}
                 {inp('address', 'Address')}
                 <FormGroup label="Country" htmlFor="b2b-country" required={isClientFieldRequired('country_id')} error={clientErrors.country_id?.message}>
                   <select
@@ -1060,6 +1066,7 @@ export default function B2BClientsPage() {
                     data-field="country_id"
                     aria-invalid={!!clientErrors.country_id}
                     style={fieldStyle(!!clientErrors.country_id)}
+                    value={watchClient('country_id') || ''}
                     {...registerClient('country_id', {
                       onChange: e => {
                         setClientValue('country_id', e.target.value);
@@ -1079,6 +1086,7 @@ export default function B2BClientsPage() {
                     disabled={!countryId}
                     aria-invalid={!!clientErrors.state_id}
                     style={fieldStyle(!!clientErrors.state_id)}
+                    value={watchClient('state_id') || ''}
                     {...registerClient('state_id', {
                       onChange: e => {
                         setClientValue('state_id', e.target.value);
@@ -1097,6 +1105,7 @@ export default function B2BClientsPage() {
                     disabled={!stateId}
                     aria-invalid={!!clientErrors.city_id}
                     style={fieldStyle(!!clientErrors.city_id)}
+                    value={watchClient('city_id') || ''}
                     {...registerClient('city_id')}
                   >
                     <option value="">-- Select City --</option>
