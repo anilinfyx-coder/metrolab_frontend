@@ -7,7 +7,7 @@ import PageLoader from '../../../components/PageLoader';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, registerMobile } from '../../../../lib/formHelpers';
 import { b2bPatientSchema, type B2bPatientFormValues } from '../../../../lib/schemas';
 
 interface Patient {
@@ -260,12 +260,11 @@ export default function PatientsPage() {
                     <input
                       id="patient-mobile"
                       type="text"
-                      inputMode="numeric"
                       placeholder="9-10 digits"
                       data-field="mobile"
                       aria-invalid={!!errors.mobile}
                       style={fieldStyle(!!errors.mobile)}
-                      {...register('mobile')}
+                      {...registerMobile(register, 'mobile')}
                     />
                   </FormGroup>
                   <FormGroup label="Email" htmlFor="patient-email" error={errors.email?.message}>

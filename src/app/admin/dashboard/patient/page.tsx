@@ -5,7 +5,7 @@ import { MdClose, MdSearch } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { FieldError } from '../../../components/FormField';
 import { handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
-import { formResolver } from '../../../../lib/formHelpers';
+import { formResolver, registerMobile, sanitizeMobileDigits } from '../../../../lib/formHelpers';
 import { patientDemographicSchema, type PatientDemographicFormValues } from '../../../../lib/schemas';
 
 const US_STATES = [
@@ -395,8 +395,10 @@ export default function PatientDemographicPage() {
                   type="text"
                   className="patient-form-input"
                   placeholder="Mobile"
+                  inputMode="numeric"
+                  maxLength={10}
                   value={filter.mobile}
-                  onChange={e => setFilter(p => ({ ...p, mobile: e.target.value }))}
+                  onChange={e => setFilter(p => ({ ...p, mobile: sanitizeMobileDigits(e.target.value) }))}
                 />
               </div>
               <button type="button" className="btn btn-primary patient-search-btn" onClick={searchPatient} disabled={searching}>
@@ -436,7 +438,7 @@ export default function PatientDemographicPage() {
                     placeholder="Mobile"
                     data-field="mobile"
                     aria-invalid={!!errors.mobile}
-                    {...register('mobile')}
+                    {...registerMobile(register, 'mobile')}
                   />
                   <FieldError message={errors.mobile?.message} />
                 </div>

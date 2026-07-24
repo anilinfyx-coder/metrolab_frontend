@@ -1,5 +1,12 @@
-import type { CSSProperties } from 'react';
-import type { FieldErrors, FieldValues, Resolver } from 'react-hook-form';
+import type { ChangeEvent, CSSProperties } from 'react';
+import type {
+  FieldErrors,
+  FieldValues,
+  Path,
+  RegisterOptions,
+  Resolver,
+  UseFormRegister,
+} from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import type * as yup from 'yup';
 
@@ -58,4 +65,44 @@ export function generateAutoPassword(length = 10): string {
     [chars[i], chars[j]] = [chars[j], chars[i]];
   }
   return chars.join('');
+}
+
+/** Mobile / phone fields: digits only, hard-capped at 10. */
+export const MOBILE_MAX_DIGITS = 10;
+
+export function sanitizeMobileDigits(value: string, maxDigits = MOBILE_MAX_DIGITS): string {
+  return String(value ?? '').replace(/\D/g, '').slice(0, maxDigits);
+}
+
+export function isMobileFieldName(name: string): boolean {
+  const key = name.toLowerCase();
+  return (
+    key === 'mobile' ||
+    key.endsWith('_mobile') ||
+    key === 'public_phone_no' ||
+    key.endsWith('_phone') ||
+    key.endsWith('_phone_no')
+  );
+}
+
+/**
+ * react-hook-form register wrapper for mobile/phone inputs.
+ * Blocks non-digits and stops entry after 10 digits (including paste).
+ */
+export function registerMobile<TFieldValues extends FieldValues>(
+  register: UseFormRegister<TFieldValues>,
+  name: Path<TFieldValues>,
+  options?: RegisterOptions<TFieldValues, Path<TFieldValues>>,
+) {
+  const registration = register(name, options);
+  return {
+    ...registration,
+    inputMode: 'numeric' as const,
+    maxLength: MOBILE_MAX_DIGITS,
+    autoComplete: 'tel' as const,
+    onChange: (e: ChangeEvent<HTMLInputElement>) => {
+      e.target.value = sanitizeMobileDigits(e.target.value);
+      return registration.onChange(e);
+    },
+  };
 }

@@ -18,6 +18,7 @@ import {
 } from 'react-icons/md';
 import TablePagination, { useClientPagination } from './TablePagination';
 import PageLoader from './PageLoader';
+import { isMobileFieldName, sanitizeMobileDigits } from '../../lib/formHelpers';
 
 export type ListingColumn<T> = {
   key: string;
@@ -387,9 +388,15 @@ export default function ListingTable<T extends { id: number | string }>({
                         {col.filterable !== false ? (
                           <input
                             value={filters[col.key] || ''}
-                            onChange={e =>
-                              setFilters(prev => ({ ...prev, [col.key]: e.target.value }))
-                            }
+                            inputMode={isMobileFieldName(col.key) ? 'numeric' : undefined}
+                            maxLength={isMobileFieldName(col.key) ? 10 : undefined}
+                            onChange={e => {
+                              const raw = e.target.value;
+                              const next = isMobileFieldName(col.key)
+                                ? sanitizeMobileDigits(raw)
+                                : raw;
+                              setFilters(prev => ({ ...prev, [col.key]: next }));
+                            }}
                             aria-label={`Filter ${col.label}`}
                           />
                         ) : null}

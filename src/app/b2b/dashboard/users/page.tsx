@@ -10,7 +10,7 @@ import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import { apiFetch } from '../../../../lib/api';
 import { patchListItem } from '../../../../lib/listState';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, registerMobile, sanitizeMobileDigits } from '../../../../lib/formHelpers';
 import {
   PASSWORD_HELPER_TEXT,
   b2bStaffUserSchema,
@@ -240,12 +240,11 @@ export default function B2BUsersPage() {
                   <input
                     id="staff-mobile"
                     type="text"
-                    inputMode="numeric"
                     placeholder="Enter Mobile No. (9-10 digits)"
                     data-field="mobile"
                     aria-invalid={!!errors.mobile}
                     style={fieldStyle(!!errors.mobile)}
-                    {...register('mobile')}
+                    {...registerMobile(register, 'mobile')}
                   />
                 </FormGroup>
 
@@ -325,7 +324,9 @@ export default function B2BUsersPage() {
                         <td>
                           <input
                             value={filters.mobile}
-                            onChange={e => setFilters(f => ({ ...f, mobile: e.target.value }))}
+                            inputMode="numeric"
+                            maxLength={10}
+                            onChange={e => setFilters(f => ({ ...f, mobile: sanitizeMobileDigits(e.target.value) }))}
                           />
                         </td>
                         <td>

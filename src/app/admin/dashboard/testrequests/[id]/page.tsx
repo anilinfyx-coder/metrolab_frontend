@@ -7,6 +7,7 @@ import PageLoader from '../../../../components/PageLoader';
 import { useConfirm } from '../../../../components/ConfirmModal';
 import { formatDateTime } from '../../../../utils/dateFormat';
 import { handleApiResponse, toastApiError, toastApiSuccess, getToken, API_BASE } from '../../../../../lib/api';
+import { sanitizeMobileDigits } from '../../../../../lib/formHelpers';
 
 type EmployeeRow = {
   id: number;
@@ -515,7 +516,12 @@ export default function TestRequestDetailPage() {
                         <td key={key}>
                           <input
                             value={filters[key]}
-                            onChange={(e) => setFilters((prev) => ({ ...prev, [key]: e.target.value }))}
+                            inputMode={key === 'mobile' ? 'numeric' : undefined}
+                            maxLength={key === 'mobile' ? 10 : undefined}
+                            onChange={(e) => setFilters((prev) => ({
+                              ...prev,
+                              [key]: key === 'mobile' ? sanitizeMobileDigits(e.target.value) : e.target.value,
+                            }))}
                             aria-label={`Filter ${key}`}
                           />
                         </td>

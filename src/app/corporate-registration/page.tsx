@@ -5,7 +5,7 @@ import { MdCheckCircle, MdHourglassEmpty } from 'react-icons/md';
 import Link from 'next/link';
 import { FormGroup } from '../components/FormField';
 import { apiFetch, toastApiError } from '../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, isMobileFieldName, registerMobile } from '../../lib/formHelpers';
 import {
   corporateRegistrationSchema,
   type CorporateRegistrationFormValues,
@@ -103,7 +103,7 @@ export default function CorporateRegistrationPage() {
         data-field={name}
         aria-invalid={!!errors[name]}
         style={fieldStyle(!!errors[name], inputExtra)}
-        {...register(name)}
+        {...(isMobileFieldName(String(name)) ? registerMobile(register, name) : register(name))}
       />
     </FormGroup>
   );

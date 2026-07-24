@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MdAccountBalanceWallet, MdAdd, MdAssignment, MdCheckCircle, MdClose, MdDelete, MdDescription, MdEdit, MdHourglassEmpty, MdPayment, MdRefresh, MdSave, MdSearch, MdSettings, MdVisibility } from 'react-icons/md';
+import { MdAccountBalanceWallet, MdAdd, MdAssignment, MdClose, MdDelete, MdDescription, MdEdit, MdHourglassEmpty, MdPayment, MdRefresh, MdSave, MdSearch, MdSettings, MdVisibility } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { FormGroup, FieldError } from '../../../components/FormField';
@@ -13,7 +13,7 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 import TablePagination from '../../../components/TablePagination';
 import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword, isMobileFieldName, registerMobile } from '../../../../lib/formHelpers';
 import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 import {
   b2bClientFormSchema,
@@ -1017,7 +1017,7 @@ export default function B2BClientsPage() {
           data-field={key}
           aria-invalid={!!clientErrors[key]}
           style={fieldStyle(!!clientErrors[key], readOnly ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {})}
-          {...registerClient(key)}
+          {...(isMobileFieldName(String(key)) ? registerMobile(registerClient, key) : registerClient(key))}
         />
       )}
     </FormGroup>
@@ -1148,9 +1148,15 @@ export default function B2BClientsPage() {
                 <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                   <label style={{ marginBottom: '0.5rem' }}>Approval Required</label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
-                    <input type="checkbox" checked={isApproval} onChange={e => setIsApproval(e.target.checked)}
-                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
-                    <span style={{ fontSize: '0.875rem' }}>{isApproval ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Approval Required</> : 'No Approval Required'}</span>
+                    <input
+                      type="checkbox"
+                      checked={isApproval}
+                      onChange={e => setIsApproval(e.target.checked)}
+                      style={{ width: 18, height: 18, margin: 0, flexShrink: 0, cursor: 'pointer', accentColor: '#6366f1' }}
+                    />
+                    <span style={{ fontSize: '0.875rem', lineHeight: 1.3, color: 'var(--text)' }}>
+                      {isApproval ? 'Yes, approval is required' : 'No approval required'}
+                    </span>
                   </label>
                 </div>
 
@@ -1311,8 +1317,15 @@ export default function B2BClientsPage() {
                 <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: '400px' }}>
                   <label style={{ marginBottom: '0.5rem' }}>Fixed Price Per Report</label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
-                    <input type="checkbox" checked={isFixedPrice} onChange={e => setIsFixedPrice(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
-                    <span style={{ fontSize: '0.875rem' }}>{isFixedPrice ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Yes, Fixed Price</> : 'No, Use Test-Wise Pricing'}</span>
+                    <input
+                      type="checkbox"
+                      checked={isFixedPrice}
+                      onChange={e => setIsFixedPrice(e.target.checked)}
+                      style={{ width: 18, height: 18, margin: 0, flexShrink: 0, cursor: 'pointer', accentColor: '#6366f1' }}
+                    />
+                    <span style={{ fontSize: '0.875rem', lineHeight: 1.3, color: 'var(--text)' }}>
+                      {isFixedPrice ? 'Yes, use fixed price' : 'No, use test-wise pricing'}
+                    </span>
                   </label>
                 </div>
                 
@@ -1548,10 +1561,10 @@ export default function B2BClientsPage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', width: 60 }}>Select</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Name</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Description</th>
+                    <tr style={{ borderBottom: '1px solid var(--table-th-border)', background: 'var(--table-th-bg)' }}>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700, width: 60 }}>Select</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>Name</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>Description</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1605,7 +1618,7 @@ export default function B2BClientsPage() {
               />
             </div>
 
-            <div className="card-footer b2b-lab-access-footer" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div className="card-footer b2b-lab-access-footer">
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 Selections are kept while you search or change pages. Click Save to apply.
               </div>
@@ -1723,7 +1736,7 @@ export default function B2BClientsPage() {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', background: '#f8f9fc' }}>
                       {['Date', 'Type', 'Amount', 'Balance After', 'Description'].map(h => (
-                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>

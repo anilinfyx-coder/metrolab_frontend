@@ -8,7 +8,7 @@ import ListingTable, { ActionIcons, ListingColumn } from '../../../components/Li
 import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
 import { patchListItem } from '../../../../lib/listState';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, registerMobile } from '../../../../lib/formHelpers';
 import {
   corporateEmployeeSchema,
   type CorporateEmployeeFormValues,
@@ -251,12 +251,10 @@ export default function EmployeePage() {
                       type="text"
                       className="form-control"
                       placeholder="Mobile (9-10 digits)"
-                      maxLength={15}
-                      inputMode="numeric"
                       data-field="mobile"
                       aria-invalid={!!errors.mobile}
                       style={fieldStyle(!!errors.mobile)}
-                      {...register('mobile')}
+                      {...registerMobile(register, 'mobile')}
                     />
                   </FormGroup>
                 </div>

@@ -72,11 +72,11 @@ const emptyForm: TestRequestFormValues = {
   reasonForTest: '',
   selectionType: '1',
   isDrugSelected: false,
-  drugCount: 0,
+  drugCount: undefined,
   isAlcoholSelected: false,
-  alcoholCount: 0,
+  alcoholCount: undefined,
   isAlternateSelected: false,
-  alternateCount: 0,
+  alternateCount: undefined,
 };
 
 export default function TestRequestsPage() {
@@ -519,6 +519,7 @@ export default function TestRequestsPage() {
                         <input
                           type="number"
                           min={0}
+                          placeholder="0"
                           data-field="drugCount"
                           aria-invalid={!!errors.drugCount}
                           style={{
@@ -530,7 +531,9 @@ export default function TestRequestsPage() {
                             color: 'var(--text)',
                             fontSize: '0.875rem',
                           }}
-                          {...register('drugCount', { valueAsNumber: true })}
+                          {...register('drugCount', {
+                            setValueAs: v => (v === '' || v == null ? undefined : Number(v)),
+                          })}
                         />
                         {selectionType === '2' && <span style={{ fontWeight: 600 }}>%</span>}
                       </div>
@@ -556,6 +559,7 @@ export default function TestRequestsPage() {
                         <input
                           type="number"
                           min={0}
+                          placeholder="0"
                           data-field="alcoholCount"
                           aria-invalid={!!errors.alcoholCount}
                           style={{
@@ -567,7 +571,9 @@ export default function TestRequestsPage() {
                             color: 'var(--text)',
                             fontSize: '0.875rem',
                           }}
-                          {...register('alcoholCount', { valueAsNumber: true })}
+                          {...register('alcoholCount', {
+                            setValueAs: v => (v === '' || v == null ? undefined : Number(v)),
+                          })}
                         />
                         {selectionType === '2' && <span style={{ fontWeight: 600 }}>%</span>}
                       </div>
@@ -593,6 +599,7 @@ export default function TestRequestsPage() {
                         <input
                           type="number"
                           min={0}
+                          placeholder="0"
                           data-field="alternateCount"
                           style={{
                             width: '90px',
@@ -603,7 +610,9 @@ export default function TestRequestsPage() {
                             color: 'var(--text)',
                             fontSize: '0.875rem',
                           }}
-                          {...register('alternateCount', { valueAsNumber: true })}
+                          {...register('alternateCount', {
+                            setValueAs: v => (v === '' || v == null ? undefined : Number(v)),
+                          })}
                         />
                       </div>
                     )}
@@ -725,14 +734,14 @@ export default function TestRequestsPage() {
             <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                 <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border)', background: '#f8f9fc' }}>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600 }}>Last Name</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600 }}>First Name</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600 }}>Mobile</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600 }}>Department</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600, minWidth: '140px' }}>Drug</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600, minWidth: '140px' }}>Alcohol</th>
-                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 600 }}>Alternate</th>
+                  <tr style={{ borderBottom: '1px solid var(--table-th-border)', background: 'var(--table-th-bg)' }}>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)' }}>Last Name</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)' }}>First Name</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)' }}>Mobile</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)' }}>Department</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)', minWidth: '140px' }}>Drug</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)', minWidth: '140px' }}>Alcohol</th>
+                    <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 700, color: 'var(--table-th-color)' }}>Alternate</th>
                   </tr>
                 </thead>
                 <tbody>

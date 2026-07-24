@@ -1,6 +1,11 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import {
+  MdAssignment,
+  MdBadge,
+  MdHourglassEmpty,
+} from 'react-icons/md';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
 import { formatDate } from '../../utils/dateFormat';
@@ -73,19 +78,19 @@ export default function CorporateDashboard() {
               <DashboardCard 
                 title="Total Employees" 
                 value={employees.length} 
-                icon="👥" 
+                icon={<MdBadge size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)" 
               />
               <DashboardCard 
                 title="Total Test Requests" 
                 value={testRequests.length} 
-                icon="🧪" 
+                icon={<MdAssignment size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)" 
               />
               <DashboardCard 
                 title="Pending Tests" 
                 value={pendingRequests} 
-                icon="⏳" 
+                icon={<MdHourglassEmpty size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)" 
               />
             </div>
@@ -110,10 +115,10 @@ export default function CorporateDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Request ID</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Title</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Employees</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Date</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Request ID</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Title</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Employees</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Date</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -150,10 +155,10 @@ export default function CorporateDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Employee ID</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Name</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Department</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Added Date</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Employee ID</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Name</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Department</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Added Date</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -199,7 +204,7 @@ export default function CorporateDashboard() {
   );
 }
 
-function DashboardCard({ title, value, icon, gradient }: { title: string, value: number, icon: string, gradient: string }) {
+function DashboardCard({ title, value, icon, gradient }: { title: string, value: number, icon: ReactNode, gradient: string }) {
   return (
     <div style={{
       background: '#fff',
@@ -208,11 +213,13 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
+      gap: '12px',
       boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
       transition: 'transform 0.3s ease, box-shadow 0.3s ease',
       cursor: 'default',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      minWidth: 0,
     }}
     onMouseEnter={(e) => {
       e.currentTarget.style.transform = 'translateY(-5px)';
@@ -228,12 +235,12 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
         top: 0, left: 0, width: '100%', height: '4px',
         background: gradient
       }} />
-      <div>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 600, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           {title}
         </div>
         <div style={{ color: '#0f172a', fontSize: '2rem', fontWeight: 800, lineHeight: 1 }}>
-          {value}
+          {Number(value || 0).toLocaleString()}
         </div>
       </div>
       <div style={{
@@ -241,9 +248,9 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
         borderRadius: '12px',
         background: gradient,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1.8rem',
         color: '#fff',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        flexShrink: 0,
       }}>
         {icon}
       </div>
