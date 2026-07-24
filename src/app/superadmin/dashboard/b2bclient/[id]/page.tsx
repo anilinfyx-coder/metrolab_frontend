@@ -260,27 +260,42 @@ export default function B2bClientProfilePage() {
           </div>
         </div>
 
-        <div className="b2b-profile-kpi-grid">
-          {[
-            { label: 'Patients', value: kpis?.patients ?? 0, icon: <MdPeople size={20} aria-hidden /> },
-            { label: 'Corporates', value: kpis?.corporates ?? 0, icon: <MdLocalHospital size={20} aria-hidden /> },
-            { label: 'Assigned Tests', value: kpis?.assigned_tests ?? 0, icon: <MdSettings size={20} aria-hidden /> },
-            { label: 'Completed', value: kpis?.completed_tests ?? 0, icon: <MdAssignment size={20} aria-hidden /> },
-            { label: 'Pending', value: kpis?.pending_tests ?? 0, icon: <MdWarningAmber size={20} aria-hidden /> },
-            { label: 'Wallet', value: money(kpis?.wallet_balance), icon: <MdAccountBalanceWallet size={20} aria-hidden />, raw: true },
-          ].map(item => (
-            <div key={item.label} className="card b2b-profile-kpi">
-              <div className="card-body">
-                <div className="b2b-profile-kpi-label">
-                  {item.icon}
-                  <span>{item.label}</span>
-                </div>
-                <div className="b2b-profile-kpi-value">
-                  {item.raw ? item.value : Number(item.value).toLocaleString()}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: '20px',
+          marginBottom: '24px',
+        }}>
+          <DashboardCard
+            title="Patients"
+            value={kpis?.patients ?? 0}
+            icon={<MdPeople size={28} aria-hidden />}
+            gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)"
+          />
+          <DashboardCard
+            title="Corporates"
+            value={kpis?.corporates ?? 0}
+            icon={<MdLocalHospital size={28} aria-hidden />}
+            gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)"
+          />
+          <DashboardCard
+            title="Assigned Tests"
+            value={kpis?.assigned_tests ?? 0}
+            icon={<MdSettings size={28} aria-hidden />}
+            gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)"
+          />
+          <DashboardCard
+            title="Completed"
+            value={kpis?.completed_tests ?? 0}
+            icon={<MdAssignment size={28} aria-hidden />}
+            gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
+          />
+          <DashboardCard
+            title="Wallet"
+            value={money(kpis?.wallet_balance)}
+            icon={<MdAccountBalanceWallet size={28} aria-hidden />}
+            gradient="linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)"
+          />
         </div>
 
         <div className="b2b-profile-health-grid">
@@ -371,7 +386,7 @@ export default function B2bClientProfilePage() {
 
           <div className="card" style={cardShell}>
             <div className="sa-dash-card-header">
-              <h3 className="sa-dash-card-title">Test Status Distribution</h3>
+              <h3 className="sa-dash-card-title">Test Status</h3>
             </div>
             <div className="sa-dash-donut-wrap">
               <div className="sa-dash-donut-chart">
@@ -524,6 +539,76 @@ function ProfileTable({
             </tbody>
           </table>
         )}
+      </div>
+    </div>
+  );
+}
+
+function DashboardCard({ title, value, icon, gradient }: { title: string, value: number | string, icon: React.ReactNode, gradient: string }) {
+  return (
+    <div style={{
+      background: '#fff',
+      borderRadius: '16px',
+      padding: '24px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '12px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
+      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+      cursor: 'default',
+      position: 'relative',
+      overflow: 'hidden',
+      minWidth: 0,
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.transform = 'translateY(-5px)';
+      e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.transform = 'translateY(0)';
+      e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.03)';
+    }}
+    >
+      <div style={{
+        position: 'absolute',
+        top: 0, left: 0, width: '100%', height: '4px',
+        background: gradient,
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          color: '#64748b',
+          fontSize: '0.9rem',
+          fontWeight: 600,
+          marginBottom: '8px',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          lineHeight: 1.3,
+          overflowWrap: 'break-word',
+          wordBreak: 'break-word',
+        }}>
+          {title}
+        </div>
+        <div style={{
+          color: '#0f172a',
+          fontSize: '2rem',
+          fontWeight: 800,
+          lineHeight: 1.15,
+          overflowWrap: 'anywhere',
+        }}>
+          {typeof value === 'number' ? value.toLocaleString() : value}
+        </div>
+      </div>
+      <div style={{
+        width: '56px', height: '56px',
+        borderRadius: '12px',
+        background: gradient,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: '#fff',
+        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+        flexShrink: 0,
+      }}>
+        {icon}
       </div>
     </div>
   );
