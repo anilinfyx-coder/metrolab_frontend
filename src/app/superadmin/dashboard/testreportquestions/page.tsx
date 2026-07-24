@@ -209,7 +209,7 @@ export default function TestReportQuestionsPage() {
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border)' }}>
                     {['#', 'Question', 'Test Type', 'Status', 'Action'].map(h => (
-                      <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
+                      <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>{h}</th>
                     ))}
                   </tr>
                 </thead>

@@ -8,7 +8,7 @@ import { FormGroup } from './FormField';
 import PasswordInput from './PasswordInput';
 import { getPortalFromPath, getStoredUser } from './portalConfig';
 import { apiFetch } from '../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, registerMobile } from '../../lib/formHelpers';
 import { profileSchemaForPortal, type ProfilePortalFormValues } from '../../lib/schemas';
 
 const emptyProfile: ProfilePortalFormValues = {
@@ -200,11 +200,10 @@ export default function ProfilePage() {
                 <FormGroup label="Mobile" htmlFor="profile-mobile" error={errors.mobile?.message}>
                   <input
                     id="profile-mobile"
-                    inputMode="numeric"
                     data-field="mobile"
                     aria-invalid={!!errors.mobile}
                     style={fieldStyle(!!errors.mobile)}
-                    {...register('mobile')}
+                    {...registerMobile(register, 'mobile')}
                   />
                 </FormGroup>
 

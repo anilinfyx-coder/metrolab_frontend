@@ -11,7 +11,7 @@
   --font-title:    20px;
   --font-section:  16px;
   --font-label:    13px;
-  --font-table-th: 12px;
+  --font-table-th: 14px;
   --font-small:    12px;
 
   --primary:       #0076A3;
@@ -24,6 +24,12 @@
   --warning:       #f39c12;
   --danger:        #e74c3c;
   --info:          #00AED9;
+
+  /* Table column headers — match /superadmin/dashboard/b2bclient/[id] */
+  --table-th-color: #64748b;
+  --table-th-bg:    #f8fafc;
+  --table-th-border:#edf2f9;
+  --table-th-weight:700;
 
   /* Action button colors — distinct per action */
   --btn-edit:      #2563EB;
@@ -254,7 +260,7 @@ body.sidebar-collapsed .main-content {
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  padding: 0.75rem 1rem;
+  padding: 1rem 1.25rem;
   border-top: 1px solid var(--border);
   background: #fff;
 }
@@ -343,7 +349,7 @@ body.sidebar-collapsed .main-content {
 }
 
 .th-sort-btn:hover .th-sort-label {
-  color: var(--primary-dark, #00648A);
+  color: #475569;
 }
 
 .th-sort-label,
@@ -1846,10 +1852,13 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 
 .waiting-list-table .listing-table thead th {
   padding: 0.95rem 0.75rem 0.45rem;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--primary-accent, #00AED9);
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color);
+  background: var(--table-th-bg);
+  border-bottom: 1px solid var(--table-th-border);
   vertical-align: bottom;
 }
 
@@ -1885,13 +1894,13 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .patient-list-table .listing-table thead th {
   padding: 1.1rem 1.35rem 0.3rem;
   font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  letter-spacing: 0.015em;
-  text-transform: uppercase;
-  color: #00AED9 !important;
-  background: #fff !important;
-  border-bottom: none !important;
+  font-size: var(--font-table-th) !important;
+  font-weight: var(--table-th-weight) !important;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color) !important;
+  background: var(--table-th-bg) !important;
+  border-bottom: 1px solid var(--table-th-border) !important;
   vertical-align: bottom;
   white-space: nowrap;
 }
@@ -1899,26 +1908,27 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .patient-list-table .listing-table .th-sort-btn {
   gap: 0.35rem;
   font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  letter-spacing: 0.015em;
-  text-transform: uppercase;
-  color: #00AED9 !important;
+  font-size: var(--font-table-th) !important;
+  font-weight: var(--table-th-weight) !important;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color) !important;
   line-height: 1.2;
 }
 
 .patient-list-table .listing-table .th-sort-label,
 .patient-list-table .listing-table .th-col-label {
-  color: #00AED9 !important;
+  color: var(--table-th-color) !important;
+  font-weight: var(--table-th-weight) !important;
 }
 
 .patient-list-table .listing-table .th-sort-hint {
   opacity: 0.55;
-  color: #b0b7bf !important;
+  color: #94a3b8 !important;
 }
 
 .patient-list-table .listing-table .th-sort-icon.active {
-  color: #00AED9 !important;
+  color: #475569 !important;
 }
 
 .patient-list-table .listing-table .table-filter-row td {
@@ -2034,13 +2044,13 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .test-reports-table .listing-table thead th {
   padding: 1.1rem 1.35rem 0.3rem;
   font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  letter-spacing: 0.015em;
-  text-transform: uppercase;
-  color: #00AED9 !important;
-  background: #fff !important;
-  border-bottom: none !important;
+  font-size: var(--font-table-th) !important;
+  font-weight: var(--table-th-weight) !important;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color) !important;
+  background: var(--table-th-bg) !important;
+  border-bottom: 1px solid var(--table-th-border) !important;
   vertical-align: bottom;
   white-space: nowrap;
 }
@@ -2048,11 +2058,11 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .test-reports-table .listing-table .th-sort-btn {
   gap: 0.35rem;
   font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  letter-spacing: 0.015em;
-  text-transform: uppercase;
-  color: #00AED9 !important;
+  font-size: var(--font-table-th) !important;
+  font-weight: var(--table-th-weight) !important;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color) !important;
 }
 
 .test-reports-table .listing-table .th-sort-hint {
@@ -2202,13 +2212,13 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .test-requests-table .listing-table thead th {
   padding: 1.1rem 1.35rem 0.3rem;
   font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  letter-spacing: 0.015em;
-  text-transform: uppercase;
-  color: #00AED9 !important;
-  background: #fff !important;
-  border-bottom: none !important;
+  font-size: var(--font-table-th) !important;
+  font-weight: var(--table-th-weight) !important;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color) !important;
+  background: var(--table-th-bg) !important;
+  border-bottom: 1px solid var(--table-th-border) !important;
   vertical-align: bottom;
   white-space: nowrap;
 }
@@ -2216,11 +2226,11 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .test-requests-table .listing-table .th-sort-btn {
   gap: 0.35rem;
   font-family: "Open Sans", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif !important;
-  font-size: 13px !important;
-  font-weight: 400 !important;
-  letter-spacing: 0.015em;
-  text-transform: uppercase;
-  color: #00AED9 !important;
+  font-size: var(--font-table-th) !important;
+  font-weight: var(--table-th-weight) !important;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color) !important;
 }
 
 .test-requests-table .listing-table .th-sort-hint {
@@ -2423,21 +2433,21 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .tr-emp-table thead th {
   text-align: left;
   padding: 0.75rem 0.75rem 0.35rem;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: #00AED9;
-  background: #fff;
-  border-bottom: none;
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color);
+  background: var(--table-th-bg);
+  border-bottom: 1px solid var(--table-th-border);
   white-space: nowrap;
 }
 
 .tr-emp-table .th-sort-btn {
-  color: #00AED9;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
+  color: var(--table-th-color);
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  text-transform: none;
 }
 
 .tr-emp-filter-row td {
@@ -2748,13 +2758,13 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .report-param-table thead th {
   text-align: left;
   padding: 0.65rem 0.75rem;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: #9aa3ad;
-  background: #fff;
-  border-bottom: 1px solid #e0e4e8;
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color);
+  background: var(--table-th-bg);
+  border-bottom: 1px solid var(--table-th-border);
 }
 
 .report-param-table tbody td {
@@ -3125,12 +3135,13 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 .wl-param-table thead th {
   padding: 0.65rem 0.75rem;
   text-align: left;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  color: var(--primary-accent, #00AED9);
-  border-bottom: 1px solid var(--border);
-  background: #fff;
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color);
+  border-bottom: 1px solid var(--table-th-border);
+  background: var(--table-th-bg);
 }
 
 .wl-param-table tbody td {
@@ -3320,14 +3331,14 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 }
 
 .listing-table thead th {
-  background: #fff;
-  border-bottom: 1px solid var(--border);
+  background: var(--table-th-bg);
+  border-bottom: 1px solid var(--table-th-border);
   padding: 0.9rem 0.85rem 0.5rem;
   font-size: var(--font-table-th);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--primary-accent);
+  font-weight: var(--table-th-weight);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: var(--table-th-color);
   vertical-align: bottom;
   white-space: nowrap;
   line-height: 1.35;
@@ -3442,15 +3453,19 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 
 .employee-listing .listing-table thead th {
   padding: 1rem 0.75rem 0.5rem;
-  color: var(--primary-accent);
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-transform: uppercase;
+  color: var(--table-th-color);
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  text-transform: none;
+  letter-spacing: 0.01em;
+  background: var(--table-th-bg);
+  border-bottom: 1px solid var(--table-th-border);
 }
 
 .employee-listing .listing-table .th-sort-btn {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  color: var(--table-th-color);
 }
 
 .employee-listing .listing-table .table-filter-row td {
@@ -3574,7 +3589,7 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
 
 .th-sort-icon {
   flex-shrink: 0;
-  color: var(--primary-accent);
+  color: var(--table-th-color);
 }
 
 .th-sort-icon.active {
@@ -3665,14 +3680,14 @@ table {
 thead th {
   text-align: left;
   padding: 0.7rem 0.75rem;
-  color: var(--primary-accent);
-  font-weight: 600;
+  color: var(--table-th-color);
+  font-weight: var(--table-th-weight);
   font-size: var(--font-table-th);
   font-family: var(--font-sans);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 2px solid var(--border);
-  background: #f8f9fc;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  border-bottom: 1px solid var(--table-th-border);
+  background: var(--table-th-bg);
   white-space: nowrap;
 }
 
@@ -4349,14 +4364,16 @@ select { cursor: pointer; }
 }
 
 .admin-dashboard-table thead tr {
-  background: #f8fafc;
-  color: #64748b;
+  background: var(--table-th-bg);
+  color: var(--table-th-color);
   text-align: left;
 }
 
 .admin-dashboard-table th {
   padding: 0.75rem 1.15rem;
-  font-weight: 600;
+  font-size: var(--font-table-th);
+  font-weight: var(--table-th-weight);
+  color: var(--table-th-color);
 }
 
 .admin-dashboard-table td {
@@ -4693,16 +4710,46 @@ select { cursor: pointer; }
 .sa-dash-donut-chart {
   position: relative;
   min-height: 220px;
+  overflow: visible;
 }
 
+.sa-dash-donut-chart .recharts-responsive-container,
+.sa-dash-donut-chart .recharts-wrapper {
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+}
+
+/* Hover tooltip above chart ring */
+.sa-dash-donut-chart .recharts-tooltip-wrapper {
+  z-index: 20 !important;
+  pointer-events: none;
+}
+
+/*
+ * Center total sits UNDER the SVG. The donut hole is transparent, so Total shows through.
+ * Tooltip stays in the chart layer above — no z-index fight with the center text.
+ */
 .sa-dash-donut-center {
   position: absolute;
   inset: 0;
+  z-index: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+}
+
+.sa-dash-donut-center-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 5.75rem;
+  height: 5.75rem;
+  border-radius: 999px;
+  background: #ffffff;
 }
 
 .sa-dash-donut-total-label {
@@ -4711,6 +4758,7 @@ select { cursor: pointer; }
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  line-height: 1.2;
 }
 
 .sa-dash-donut-total-value {
@@ -4723,6 +4771,7 @@ select { cursor: pointer; }
 .sa-dash-donut-total-sub {
   font-size: 0.75rem;
   color: #64748b;
+  line-height: 1.2;
 }
 
 .sa-dash-donut-legend {
@@ -4843,32 +4892,55 @@ select { cursor: pointer; }
 
 /* B2B Lab Test Access — search + sticky save */
 .b2b-lab-access-toolbar {
-  padding: 0.85rem 1rem 0.35rem;
+  padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border);
+  background: #fff;
 }
 
 .b2b-lab-access-search {
   position: relative;
   max-width: 420px;
+  width: 100%;
 }
 
 .b2b-lab-access-search-icon {
   position: absolute;
-  left: 0.7rem;
+  left: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
   pointer-events: none;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.b2b-lab-access-search .patient-form-input {
-  padding-left: 2.1rem;
+/* Beat global input padding so icon never overlaps text */
+.b2b-lab-access-search input.patient-form-input,
+.b2b-lab-access-search input:not([type="checkbox"]):not([type="radio"]) {
   width: 100%;
+  padding: 0.5rem 0.85rem 0.5rem 2.55rem;
+  box-sizing: border-box;
+}
+
+.b2b-lab-access-card .table-pagination {
+  padding: 1rem 1.25rem;
+  margin: 0;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  min-height: 52px;
 }
 
 .b2b-lab-access-footer {
   position: sticky;
   bottom: 0;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding: 1rem 1.25rem;
   background: #fff;
   border-top: 1px solid var(--border);
   z-index: 2;
@@ -5006,10 +5078,11 @@ select { cursor: pointer; }
 .b2b-profile-table th {
   padding: 0.75rem 1rem;
   text-align: left;
-  color: #64748b;
-  font-weight: 600;
-  border-bottom: 1px solid #edf2f9;
-  background: #f8fafc;
+  font-size: var(--font-table-th);
+  color: var(--table-th-color);
+  font-weight: var(--table-th-weight);
+  border-bottom: 1px solid var(--table-th-border);
+  background: var(--table-th-bg);
 }
 
 .b2b-profile-table td {

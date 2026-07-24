@@ -7,7 +7,7 @@ import PageLoader from '../../../components/PageLoader';
 import TopNav from '../../../components/TopNav';
 import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, registerMobile } from '../../../../lib/formHelpers';
 import {
   PASSWORD_HELPER_TEXT,
   superAdminChangePasswordSchema,
@@ -130,7 +130,7 @@ export default function SuperAdminProfilePage() {
                 </FormGroup>
 
                 <FormGroup label="Mobile No." htmlFor="sa-mobile" error={profileErrors.mobile?.message}>
-                  <input id="sa-mobile" type="text" inputMode="numeric" placeholder="Enter Mobile No." data-field="mobile" className="form-control" aria-invalid={!!profileErrors.mobile} style={fieldStyle(!!profileErrors.mobile)} {...registerProfile('mobile')} />
+                  <input id="sa-mobile" type="text" placeholder="Enter Mobile No." data-field="mobile" className="form-control" aria-invalid={!!profileErrors.mobile} style={fieldStyle(!!profileErrors.mobile)} {...registerMobile(registerProfile, 'mobile')} />
                 </FormGroup>
 
                 <div style={{ marginTop: '1rem' }}>

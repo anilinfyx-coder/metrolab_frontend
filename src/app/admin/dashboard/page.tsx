@@ -2,16 +2,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  MdAdd,
-  MdAssignment,
   MdDescription,
   MdHealthAndSafety,
   MdHourglassEmpty,
-  MdLocalHospital,
-  MdMail,
   MdMedicalServices,
   MdPeople,
-  MdScience,
+  MdPendingActions,
+  MdCorporateFare,
 } from 'react-icons/md';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
@@ -124,7 +121,7 @@ export default function AdminDashboardPage() {
               <DashboardCard
                 title="Waiting List"
                 value={waitingList.length}
-                icon={<MdAssignment size={28} aria-hidden />}
+                icon={<MdPendingActions size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)"
                 link="/admin/dashboard/labtest"
               />
@@ -145,7 +142,7 @@ export default function AdminDashboardPage() {
               <DashboardCard
                 title="Corporate Requests"
                 value={testRequests.length}
-                icon={<MdScience size={28} aria-hidden />}
+                icon={<MdCorporateFare size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
                 link="/admin/dashboard/testrequests"
               />

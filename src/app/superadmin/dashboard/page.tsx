@@ -2,14 +2,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
+  MdAccountBalanceWallet,
+  MdApartment,
+  MdAttachMoney,
   MdBiotech,
   MdBusiness,
   MdCardMembership,
   MdChevronRight,
-  MdHandshake,
-  MdLocalHospital,
-  MdAccountBalanceWallet,
   MdErrorOutline,
+  MdLanguage,
+  MdPeople,
   MdWarningAmber,
 } from 'react-icons/md';
 import {
@@ -29,6 +31,7 @@ import {
 } from 'recharts';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
+import TestStatusDonutCenter from '../../components/TestStatusDonutCenter';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
@@ -108,6 +111,7 @@ export default function SuperAdminDashboard() {
   const [topLabTests, setTopLabTests] = useState<TopLabTest[]>([]);
   const [activityRange, setActivityRange] = useState<'7d' | '30d'>('7d');
   const [activity, setActivity] = useState<ActivityPoint[]>([]);
+  const [statusRange, setStatusRange] = useState<'today' | '7d' | '30d' | 'all'>('today');
   const [statusDist, setStatusDist] = useState<StatusDistribution>({ completed: 0, pending: 0, total: 0 });
   const [revenueRange, setRevenueRange] = useState<'7d' | 'current_month' | 'last_month' | '6m'>('6m');
   const [revenue, setRevenue] = useState<RevenuePoint[]>([]);
@@ -132,7 +136,7 @@ export default function SuperAdminDashboard() {
           status_distribution?: StatusDistribution;
           revenue?: { items?: RevenuePoint[] };
           alerts?: DashboardAlerts;
-        }>(`/api/SuperAdmin/dashboardOverview?activityRange=${activityRange}&revenueRange=${revenueRange}`, {
+        }>(`/api/SuperAdmin/dashboardOverview?activityRange=${activityRange}&revenueRange=${revenueRange}&statusRange=${statusRange}`, {
           tokenKey: 'superadmin_token',
         }).catch(() => null);
 
@@ -177,6 +181,23 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (!initialLoadDone.current) return;
 
+    const fetchStatus = async () => {
+      try {
+        const data = await apiFetch<StatusDistribution>(
+          `/api/SuperAdmin/testStatusDistribution?range=${statusRange}`,
+          { tokenKey: 'superadmin_token' },
+        );
+        if (data) setStatusDist(data);
+      } catch {
+        setStatusDist({ completed: 0, pending: 0, total: 0 });
+      }
+    };
+    void fetchStatus();
+  }, [statusRange]);
+
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+
     const fetchRevenue = async () => {
       try {
         const data = await apiFetch<{ items?: RevenuePoint[] }>(
@@ -211,30 +232,43 @@ export default function SuperAdminDashboard() {
           <div className="page-body">
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
               gap: '20px',
               marginBottom: '24px',
             }}>
               <DashboardCard
-                title="B2B Clients"
+                title="B2B Client"
                 value={stats?.total_b2b_clients || 0}
                 icon={<MdBusiness size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
               />
               <DashboardCard
-                title="Corporate Clients"
+                title="WhiteLabel Client"
+                value={stats?.total_whitelabel_clients || 0}
+                icon={<MdLanguage size={28} aria-hidden />}
+                gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+              />
+              <DashboardCard
+                title="Corporate Client"
                 value={stats?.total_corporate_clients || 0}
-                icon={<MdHandshake size={28} aria-hidden />}
+                icon={<MdApartment size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)"
               />
               <DashboardCard
-                title="Active Subscriptions"
+                title="Income"
+                value={`$${Number(stats?.total_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                subtitle={`Sub $${Number(stats?.total_subscription_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} · Wallet $${Number(stats?.total_wallet_used || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                icon={<MdAttachMoney size={28} aria-hidden />}
+                gradient="linear-gradient(135deg, #0ba360 0%, #3cba92 100%)"
+              />
+              <DashboardCard
+                title="Active Subscription"
                 value={stats?.total_active_subscriptions || 0}
                 icon={<MdCardMembership size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)"
               />
               <DashboardCard
-                title="Completed Lab Tests"
+                title="Completed Test"
                 value={stats?.total_lab_tests || 0}
                 icon={<MdBiotech size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)"
@@ -242,7 +276,7 @@ export default function SuperAdminDashboard() {
               <DashboardCard
                 title="Total Patients"
                 value={stats?.total_patients || 0}
-                icon={<MdLocalHospital size={28} aria-hidden />}
+                icon={<MdPeople size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)"
               />
             </div>
@@ -269,6 +303,7 @@ export default function SuperAdminDashboard() {
                       <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                       <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
                       <Tooltip
+                        cursor={false}
                         contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
                         formatter={(value) => [Number(value || 0).toLocaleString(), 'Tests']}
                       />
@@ -287,10 +322,22 @@ export default function SuperAdminDashboard() {
 
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
-                  <h3 className="sa-dash-card-title">Test Status Distribution</h3>
+                  <h3 className="sa-dash-card-title">Test Status</h3>
+                  <select
+                    className="sa-dash-select"
+                    value={statusRange}
+                    onChange={e => setStatusRange(e.target.value as typeof statusRange)}
+                    aria-label="Test status range"
+                  >
+                    <option value="today">Today</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="all">All Time</option>
+                  </select>
                 </div>
                 <div className="sa-dash-donut-wrap">
                   <div className="sa-dash-donut-chart">
+                    <TestStatusDonutCenter total={statusTotal} />
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
                         <Pie
@@ -307,14 +354,25 @@ export default function SuperAdminDashboard() {
                             <Cell key={entry.name} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value) => Number(value || 0).toLocaleString()} />
+                        <Tooltip
+                          formatter={(value) => Number(value || 0).toLocaleString()}
+                          offset={18}
+                          allowEscapeViewBox={{ x: true, y: true }}
+                          wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                          contentStyle={{
+                            background: '#ffffff',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
+                            fontSize: 12,
+                            padding: '8px 10px',
+                            color: '#0f172a',
+                          }}
+                          itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                          labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
-                    <div className="sa-dash-donut-center">
-                      <div className="sa-dash-donut-total-label">Total</div>
-                      <div className="sa-dash-donut-total-value">{statusTotal.toLocaleString()}</div>
-                      <div className="sa-dash-donut-total-sub">Tests</div>
-                    </div>
                   </div>
                   <div className="sa-dash-donut-legend">
                     {statusChartData.map(item => {
@@ -407,10 +465,10 @@ export default function SuperAdminDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Company</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Contact</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Wallet</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Added</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Company</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Contact</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Wallet</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Added</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -507,9 +565,9 @@ export default function SuperAdminDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>#</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Lab Test</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Completed</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>#</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Lab Test</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Completed</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -557,9 +615,9 @@ export default function SuperAdminDashboard() {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
                       <thead>
                         <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>B2B Client</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Period</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 600 }}>Amount</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>B2B Client</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Period</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Amount</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -628,7 +686,19 @@ function AlertRow({
   );
 }
 
-function DashboardCard({ title, value, icon, gradient }: { title: string, value: number, icon: ReactNode, gradient: string }) {
+function DashboardCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  gradient,
+}: {
+  title: string;
+  value: number | string;
+  subtitle?: string;
+  icon: ReactNode;
+  gradient: string;
+}) {
   return (
     <div style={{
       background: '#fff',
@@ -680,8 +750,19 @@ function DashboardCard({ title, value, icon, gradient }: { title: string, value:
           lineHeight: 1.15,
           overflowWrap: 'anywhere',
         }}>
-          {Number(value || 0).toLocaleString()}
+          {typeof value === 'number' ? value.toLocaleString() : value}
         </div>
+        {subtitle ? (
+          <div style={{
+            marginTop: '6px',
+            color: '#64748b',
+            fontSize: '0.72rem',
+            fontWeight: 600,
+            lineHeight: 1.35,
+          }}>
+            {subtitle}
+          </div>
+        ) : null}
       </div>
       <div style={{
         width: '56px', height: '56px',

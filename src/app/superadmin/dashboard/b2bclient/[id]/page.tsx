@@ -5,13 +5,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   MdAccountBalanceWallet,
+  MdApartment,
   MdArrowBack,
   MdAssignment,
+  MdBiotech,
+  MdCheckCircle,
   MdEdit,
-  MdLocalHospital,
+  MdHourglassEmpty,
   MdPeople,
   MdSettings,
-  MdWarningAmber,
 } from 'react-icons/md';
 import {
   Area,
@@ -29,6 +31,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import TopNav from '../../../../components/TopNav';
 import PageLoader from '../../../../components/PageLoader';
+import TestStatusDonutCenter from '../../../../components/TestStatusDonutCenter';
 import { formatDate, formatDateTime } from '../../../../utils/dateFormat';
 import { apiFetch } from '../../../../../lib/api';
 
@@ -141,13 +144,14 @@ export default function B2bClientProfilePage() {
   const params = useParams();
   const clientId = String(params?.id || '');
   const [activityRange, setActivityRange] = useState<'7d' | '30d'>('7d');
+  const [statusRange, setStatusRange] = useState<'today' | '7d' | '30d' | 'all'>('today');
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['superadmin-b2b-profile', clientId, activityRange],
+    queryKey: ['superadmin-b2b-profile', clientId, activityRange, statusRange],
     enabled: !!clientId,
     queryFn: () =>
       apiFetch<B2bProfileOverview>(
-        `/api/SuperAdmin/b2bClientOverview/${clientId}?activityRange=${activityRange}`,
+        `/api/SuperAdmin/b2bClientOverview/${clientId}?activityRange=${activityRange}&statusRange=${statusRange}`,
         { tokenKey: 'superadmin_token', errorFallback: 'Unable to load B2B lab profile.' },
       ),
   });
@@ -275,7 +279,7 @@ export default function B2bClientProfilePage() {
           <DashboardCard
             title="Corporates"
             value={kpis?.corporates ?? 0}
-            icon={<MdLocalHospital size={28} aria-hidden />}
+            icon={<MdApartment size={28} aria-hidden />}
             gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)"
           />
           <DashboardCard
@@ -365,6 +369,7 @@ export default function B2bClientProfilePage() {
                   <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
                   <YAxis allowDecimals={false} tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} width={36} />
                   <Tooltip
+                    cursor={false}
                     contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }}
                     formatter={(value) => [Number(value || 0).toLocaleString(), 'Tests']}
                   />
@@ -387,9 +392,21 @@ export default function B2bClientProfilePage() {
           <div className="card" style={cardShell}>
             <div className="sa-dash-card-header">
               <h3 className="sa-dash-card-title">Test Status</h3>
+              <select
+                className="sa-dash-select"
+                value={statusRange}
+                onChange={e => setStatusRange(e.target.value as typeof statusRange)}
+                aria-label="Test status range"
+              >
+                <option value="today">Today</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="all">All Time</option>
+              </select>
             </div>
             <div className="sa-dash-donut-wrap">
               <div className="sa-dash-donut-chart">
+                <TestStatusDonutCenter total={statusTotal} />
                 <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
                     <Pie
@@ -406,14 +423,25 @@ export default function B2bClientProfilePage() {
                         <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value) => Number(value || 0).toLocaleString()} />
+                    <Tooltip
+                      formatter={(value) => Number(value || 0).toLocaleString()}
+                      offset={18}
+                      allowEscapeViewBox={{ x: true, y: true }}
+                      wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                      contentStyle={{
+                        background: '#ffffff',
+                        borderRadius: 8,
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
+                        fontSize: 12,
+                        padding: '8px 10px',
+                        color: '#0f172a',
+                      }}
+                      itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                      labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="sa-dash-donut-center">
-                  <div className="sa-dash-donut-total-label">Total</div>
-                  <div className="sa-dash-donut-total-value">{statusTotal.toLocaleString()}</div>
-                  <div className="sa-dash-donut-total-sub">Tests</div>
-                </div>
               </div>
               <div className="sa-dash-donut-legend">
                 {statusChartData.map(item => {
@@ -437,14 +465,20 @@ export default function B2bClientProfilePage() {
           <ProfileTable
             title="Assigned Tests"
             viewAllHref={accessHref}
-            headers={['Test', 'Completed', 'Pending']}
+            headers={['Test', 'Completed', 'Pending', 'Total']}
             empty="No assigned tests."
-            rows={data.assigned_tests.map(t => [
-              t.lab_test_name || `Test #${t.lab_test_id}`,
-              String(t.completed_count || 0),
-              String(t.pending_count || 0),
-            ])}
+            rows={data.assigned_tests.map(t => {
+              const completed = Number(t.completed_count || 0);
+              const pending = Number(t.pending_count || 0);
+              return [
+                t.lab_test_name || `Test #${t.lab_test_id}`,
+                String(completed),
+                String(pending),
+                String(completed + pending),
+              ];
+            })}
           />
+          {/* Recent Patients — temporarily hidden
           <ProfileTable
             title="Recent Patients"
             headers={['Name', 'Mobile', 'Added']}
@@ -455,6 +489,8 @@ export default function B2bClientProfilePage() {
               formatDate(p.creation_timestamp),
             ])}
           />
+          */}
+          {/* Recent Reports — temporarily hidden
           <ProfileTable
             title="Recent Reports"
             headers={['Patient', 'Test', 'Date']}
@@ -465,6 +501,7 @@ export default function B2bClientProfilePage() {
               formatDate(r.creation_timestamp),
             ])}
           />
+          */}
           <ProfileTable
             title="Wallet Transactions"
             viewAllHref={walletHref}

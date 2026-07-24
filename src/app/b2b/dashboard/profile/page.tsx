@@ -8,7 +8,7 @@ import { FormGroup } from '../../../components/FormField';
 import PasswordInput from '../../../components/PasswordInput';
 import { getStoredUser } from '../../../components/portalConfig';
 import { apiFetch } from '../../../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, isMobileFieldName, registerMobile } from '../../../../lib/formHelpers';
 import {
   b2bProfileSettingsSchema,
   changePasswordFormSchema,
@@ -186,7 +186,7 @@ export default function B2BProfilePage() {
           data-field={key}
           aria-invalid={!!opts?.error}
           style={fieldStyle(!!opts?.error)}
-          {...registerProfile(key)}
+          {...(isMobileFieldName(String(key)) ? registerMobile(registerProfile, key) : registerProfile(key))}
         />
       )}
     </FormGroup>

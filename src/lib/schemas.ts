@@ -10,12 +10,12 @@ export const mobileSchema = yup
   .string()
   .trim()
   .required('Mobile number is required.')
-  .matches(/^[0-9]{9,10}$/, 'Mobile number must be 9 to 10 digits.');
+  .matches(/^[0-9]{9,10}$/, 'Mobile number must be 9 to 10 digits only.');
 
 export const optionalMobileSchema = yup
   .string()
   .trim()
-  .test('mobile-format', 'Mobile number must be 9 to 10 digits.', value => {
+  .test('mobile-format', 'Mobile number must be 9 to 10 digits only.', value => {
     if (!value) return true;
     return /^[0-9]{9,10}$/.test(value);
   });
@@ -492,6 +492,15 @@ export const superAdminChangePasswordSchema = yup.object({
 export type SuperAdminChangePasswordFormValues = yup.InferType<typeof superAdminChangePasswordSchema>;
 
 export function testRequestFormSchema(totalEmployees: number) {
+  const optionalCount = yup
+    .number()
+    .transform((value, originalValue) =>
+      originalValue === '' || originalValue == null || (typeof value === 'number' && Number.isNaN(value))
+        ? undefined
+        : value,
+    )
+    .optional();
+
   return yup.object({
     title: yup.string().trim().required('Request Title is mandatory'),
     year: yup.string().trim(),
@@ -501,11 +510,11 @@ export function testRequestFormSchema(totalEmployees: number) {
     reasonForTest: yup.string().trim().required('Reason for test is mandatory'),
     selectionType: yup.string().trim(),
     isDrugSelected: yup.boolean(),
-    drugCount: yup.number(),
+    drugCount: optionalCount,
     isAlcoholSelected: yup.boolean(),
-    alcoholCount: yup.number(),
+    alcoholCount: optionalCount,
     isAlternateSelected: yup.boolean(),
-    alternateCount: yup.number(),
+    alternateCount: optionalCount,
   }).test('employee-counts', '', function (values) {
     if (!values) return true;
     const total = totalEmployees;

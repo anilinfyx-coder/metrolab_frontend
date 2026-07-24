@@ -8,7 +8,7 @@ import PasswordInput from '../../../components/PasswordInput';
 import ListingTable, { ActionIcons, ListingHeaderActions, ListingColumn } from '../../../components/ListingTable';
 import { apiFetch } from '../../../../lib/api';
 import { patchListItem } from '../../../../lib/listState';
-import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword, registerMobile } from '../../../../lib/formHelpers';
 import {
   corporateClientFormSchema,
   PASSWORD_HELPER_TEXT,
@@ -289,7 +289,7 @@ export default function CorporateClientPage() {
                     <input id="cc-contact" type="text" placeholder="Enter Contact Person Name" data-field="contact_person_name" aria-invalid={!!errors.contact_person_name} style={fieldStyle(!!errors.contact_person_name)} {...register('contact_person_name')} />
                   </FormGroup>
                   <FormGroup label="Mobile" htmlFor="cc-mobile" required error={errors.mobile?.message}>
-                    <input id="cc-mobile" type="text" inputMode="numeric" placeholder="Enter Mobile" data-field="mobile" aria-invalid={!!errors.mobile} style={fieldStyle(!!errors.mobile)} {...register('mobile')} />
+                    <input id="cc-mobile" type="text" placeholder="Enter Mobile" data-field="mobile" aria-invalid={!!errors.mobile} style={fieldStyle(!!errors.mobile)} {...registerMobile(register, 'mobile')} />
                   </FormGroup>
                   <FormGroup label="Email" htmlFor="cc-email" required error={errors.email?.message}>
                     <input id="cc-email" type="email" placeholder="Enter Email" data-field="email" aria-invalid={!!errors.email} style={fieldStyle(!!errors.email)} {...register('email')} />

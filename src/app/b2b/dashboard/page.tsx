@@ -1,20 +1,24 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   MdAccountBalanceWallet,
-  MdAssignment,
+  MdApartment,
   MdBiotech,
   MdBlock,
-  MdBusiness,
-  MdComputer,
-  MdLocalHospital,
-  MdRocketLaunch,
+  MdPeople,
   MdWarning,
-  MdWavingHand,
 } from 'react-icons/md';
 import Link from 'next/link';
+import {
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+} from 'recharts';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
+import TestStatusDonutCenter from '../../components/TestStatusDonutCenter';
 import { apiFetch } from '../../../lib/api';
 import { formatDate } from '../../utils/dateFormat';
 
@@ -26,6 +30,27 @@ function getUser() {
   return null;
 }
 
+const STATUS_COLORS = {
+  completed: '#10b981',
+  pending: '#f59e0b',
+};
+
+const STATUS_RANGE_OPTIONS = [
+  { value: 'today', label: 'Today' },
+  { value: '7d', label: 'Last 7 Days' },
+  { value: '30d', label: 'Last 30 Days' },
+  { value: 'all', label: 'All Time' },
+] as const;
+
+type StatusRange = (typeof STATUS_RANGE_OPTIONS)[number]['value'];
+
+type StatusDistribution = {
+  completed: number;
+  pending: number;
+  total: number;
+  range?: string;
+};
+
 export default function B2bDashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -33,7 +58,10 @@ export default function B2bDashboardPage() {
   const [patients, setPatients] = useState<any[]>([]);
   const [testRequests, setTestRequests] = useState<any[]>([]);
   const [completedTests, setCompletedTests] = useState<number>(0);
+  const [statusRange, setStatusRange] = useState<StatusRange>('today');
+  const [statusDist, setStatusDist] = useState<StatusDistribution>({ completed: 0, pending: 0, total: 0 });
   const [loading, setLoading] = useState(true);
+  const initialLoadDone = useRef(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -55,7 +83,10 @@ export default function B2bDashboardPage() {
             apiFetch<unknown[]>(`/api/TestRequest?b2b_client_id=${currentUser.id}`, {
               tokenKey: 'b2b_token',
             }).catch(() => []),
-            apiFetch<{ total_completed_tests?: number }>('/api/B2bClients/dashboardStats', {
+            apiFetch<{
+              total_completed_tests?: number;
+              status_distribution?: StatusDistribution;
+            }>(`/api/B2bClients/dashboardStats?statusRange=${statusRange}`, {
               tokenKey: 'b2b_token',
             }).catch(() => null),
           ]);
@@ -65,18 +96,49 @@ export default function B2bDashboardPage() {
           setPatients((patientList as any[]) || []);
           setTestRequests((testReqList as any[]) || []);
           setCompletedTests(stats?.total_completed_tests ?? 0);
+          if (stats?.status_distribution) {
+            setStatusDist(stats.status_distribution);
+          }
         }
       } finally {
         setLoading(false);
+        initialLoadDone.current = true;
       }
     };
 
-    fetchData();
+    void fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!initialLoadDone.current) return;
+    const currentUser = user || getUser();
+    if (!currentUser?.id) return;
+
+    const fetchStatus = async () => {
+      try {
+        const stats = await apiFetch<{ status_distribution?: StatusDistribution }>(
+          `/api/B2bClients/dashboardStats?statusRange=${statusRange}`,
+          { tokenKey: 'b2b_token' },
+        );
+        if (stats?.status_distribution) setStatusDist(stats.status_distribution);
+      } catch {
+        setStatusDist({ completed: 0, pending: 0, total: 0 });
+      }
+    };
+    void fetchStatus();
+  }, [statusRange, user]);
 
   const recentCorporate = corporateClients.slice(0, 5);
   const recentPatients = patients.slice(0, 5);
   const recentTestRequests = testRequests.slice(0, 5);
+
+  const statusChartData = useMemo(() => ([
+    { name: 'Completed', value: statusDist.completed || 0, color: STATUS_COLORS.completed },
+    { name: 'Pending', value: statusDist.pending || 0, color: STATUS_COLORS.pending },
+  ]), [statusDist]);
+
+  const statusTotal = statusDist.total || (statusDist.completed + statusDist.pending);
 
   return (
     <>
@@ -120,26 +182,26 @@ export default function B2bDashboardPage() {
               <DashboardCard 
                 title="Wallet Balance" 
                 value={walletBalance !== null ? `$${walletBalance.toFixed(2)}` : '—'} 
-                icon="💰" 
+                icon={<MdAccountBalanceWallet size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)" 
                 link="/b2b/dashboard/wallet"
               />
               <DashboardCard 
                 title="Total Patients" 
                 value={patients.length} 
-                icon="🧑‍⚕️" 
+                icon={<MdPeople size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)" 
               />
               <DashboardCard 
                 title="Corporate Clients" 
                 value={corporateClients.length} 
-                icon="🏢" 
+                icon={<MdApartment size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" 
               />
               <DashboardCard 
-                title="Total Completed Tests" 
+                title="Completed tests" 
                 value={completedTests} 
-                icon="🧪" 
+                icon={<MdBiotech size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" 
               />
             </div>
@@ -229,9 +291,18 @@ export default function B2bDashboardPage() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Recent Patients */}
-              <div className="card" style={{ ...cardStyle, gridColumn: '1 / -1' }}>
+            {/* Patients + Test Status row */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 420px), 1fr))',
+              gap: '24px',
+              marginBottom: '24px',
+              alignItems: 'stretch',
+            }}>
+              {/* Recently Registered Patients */}
+              <div className="card" style={cardStyle}>
                 <div className="card-header" style={cardHeaderStyle}>
                   <h3 className="card-title" style={cardTitleStyle}>Recently Registered Patients</h3>
                   <Link href="/b2b/dashboard/patients" style={linkStyle}>
@@ -273,6 +344,76 @@ export default function B2bDashboardPage() {
                 </div>
               </div>
 
+              {/* Test Status — right of patients */}
+              <div className="card" style={cardStyle}>
+                <div className="card-header" style={cardHeaderStyle}>
+                  <h3 className="card-title" style={cardTitleStyle}>Test Status</h3>
+                  <select
+                    className="sa-dash-select"
+                    value={statusRange}
+                    onChange={e => setStatusRange(e.target.value as StatusRange)}
+                    aria-label="Test status range"
+                  >
+                    {STATUS_RANGE_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sa-dash-donut-wrap" style={{ minHeight: 260 }}>
+                  <div className="sa-dash-donut-chart">
+                    <TestStatusDonutCenter total={statusTotal} />
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={statusChartData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={58}
+                          outerRadius={82}
+                          paddingAngle={2}
+                        >
+                          {statusChartData.map(entry => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => Number(value || 0).toLocaleString()}
+                          offset={18}
+                          allowEscapeViewBox={{ x: true, y: true }}
+                          wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                          contentStyle={{
+                            background: '#ffffff',
+                            borderRadius: 8,
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
+                            fontSize: 12,
+                            padding: '8px 10px',
+                            color: '#0f172a',
+                          }}
+                          itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                          labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="sa-dash-donut-legend">
+                    {statusChartData.map(item => {
+                      const pct = statusTotal > 0 ? ((item.value / statusTotal) * 100).toFixed(1) : '0.0';
+                      return (
+                        <div key={item.name} className="sa-dash-donut-legend-row">
+                          <span className="sa-dash-dot" style={{ background: item.color }} />
+                          <span className="sa-dash-donut-legend-name">{item.name}</span>
+                          <span className="sa-dash-donut-legend-value">
+                            {item.value.toLocaleString()} <span>({pct}%)</span>
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
             </div>
 
           </div>
@@ -282,7 +423,7 @@ export default function B2bDashboardPage() {
   );
 }
 
-function DashboardCard({ title, value, icon, gradient, link }: { title: string, value: string | number, icon: string, gradient: string, link?: string }) {
+function DashboardCard({ title, value, icon, gradient, link }: { title: string, value: string | number, icon: ReactNode, gradient: string, link?: string }) {
   const CardWrapper = link ? Link : ('div' as any);
   const wrapperProps = link ? { href: link, style: { textDecoration: 'none' } } : {};
   
@@ -321,7 +462,7 @@ function DashboardCard({ title, value, icon, gradient, link }: { title: string, 
             {title}
           </div>
           <div style={{ color: '#0f172a', fontSize: '2rem', fontWeight: 800, lineHeight: 1 }}>
-            {value}
+            {typeof value === 'number' ? value.toLocaleString() : value}
           </div>
         </div>
         <div style={{
@@ -329,9 +470,9 @@ function DashboardCard({ title, value, icon, gradient, link }: { title: string, 
           borderRadius: '12px',
           background: gradient,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.8rem',
           color: '#fff',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+          flexShrink: 0,
         }}>
           {icon}
         </div>
@@ -358,7 +499,8 @@ const cardHeaderStyle: React.CSSProperties = {
 const cardTitleStyle: React.CSSProperties = {
   margin: 0, 
   fontSize: '1.1rem', 
-  color: '#1e293b'
+  color: '#1e293b',
+  fontWeight: 700,
 };
 const linkStyle: React.CSSProperties = {
   fontSize: '0.85rem', 
@@ -378,7 +520,8 @@ const tableHeaderStyle: React.CSSProperties = {
 };
 const thStyle: React.CSSProperties = {
   padding: '12px 20px', 
-  fontWeight: 600
+  fontWeight: 700,
+  color: '#64748b',
 };
 const tdStyle: React.CSSProperties = {
   padding: '16px 20px', 
