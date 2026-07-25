@@ -103,7 +103,7 @@ export default function AdminProfilePage() {
         method: 'PUT',
         tokenKey: 'admin_token',
         body: JSON.stringify({
-          name: values.name.trim(),
+          name: (values.name || '').trim(),
           email: values.email.trim(),
           mobile: (values.mobile || '').trim() || null,
         }),
@@ -117,7 +117,7 @@ export default function AdminProfilePage() {
           ...stored,
           ...updated,
           id: values.id,
-          name: values.name.trim(),
+          name: (values.name || '').trim(),
           email: values.email.trim(),
         }),
       );
