@@ -666,7 +666,7 @@ export default function TestRequestsPage() {
                 Close
               </button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+            <div className="resp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)' }}>Request Title</label>
                 <div style={{ fontSize: '1rem', fontWeight: 500 }}>{selectedRequest.title}</div>

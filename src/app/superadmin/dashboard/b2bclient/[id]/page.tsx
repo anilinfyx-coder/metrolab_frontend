@@ -31,7 +31,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import TopNav from '../../../../components/TopNav';
 import PageLoader from '../../../../components/PageLoader';
-import TestStatusDonutCenter from '../../../../components/TestStatusDonutCenter';
+import TestStatusDonutCenter, { statusPieData } from '../../../../components/TestStatusDonutCenter';
 import { formatDate, formatDateTime } from '../../../../utils/dateFormat';
 import { apiFetch } from '../../../../../lib/api';
 
@@ -166,6 +166,10 @@ export default function B2bClientProfilePage() {
   }, [data]);
 
   const statusTotal = data?.status_distribution?.total || 0;
+  const statusPieSlices = useMemo(
+    () => statusPieData(statusChartData, statusTotal),
+    [statusChartData, statusTotal],
+  );
   const activity = data?.activity?.items || [];
   const client = data?.client;
   const kpis = data?.kpis;
@@ -410,36 +414,39 @@ export default function B2bClientProfilePage() {
                 <ResponsiveContainer width="100%" height={200}>
                   <PieChart>
                     <Pie
-                      data={statusChartData}
+                      data={statusPieSlices}
                       dataKey="value"
                       nameKey="name"
                       cx="50%"
                       cy="50%"
                       innerRadius={52}
                       outerRadius={74}
-                      paddingAngle={2}
+                      paddingAngle={statusTotal > 0 ? 2 : 0}
+                      stroke="none"
                     >
-                      {statusChartData.map(entry => (
+                      {statusPieSlices.map(entry => (
                         <Cell key={entry.name} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      formatter={(value) => Number(value || 0).toLocaleString()}
-                      offset={18}
-                      allowEscapeViewBox={{ x: true, y: true }}
-                      wrapperStyle={{ zIndex: 20, outline: 'none' }}
-                      contentStyle={{
-                        background: '#ffffff',
-                        borderRadius: 8,
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
-                        fontSize: 12,
-                        padding: '8px 10px',
-                        color: '#0f172a',
-                      }}
-                      itemStyle={{ color: '#0f172a', fontWeight: 600 }}
-                      labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
-                    />
+                    {statusTotal > 0 ? (
+                      <Tooltip
+                        formatter={(value) => Number(value || 0).toLocaleString()}
+                        offset={18}
+                        allowEscapeViewBox={{ x: true, y: true }}
+                        wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                        contentStyle={{
+                          background: '#ffffff',
+                          borderRadius: 8,
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
+                          fontSize: 12,
+                          padding: '8px 10px',
+                          color: '#0f172a',
+                        }}
+                        itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                        labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
+                      />
+                    ) : null}
                   </PieChart>
                 </ResponsiveContainer>
               </div>

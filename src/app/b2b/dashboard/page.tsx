@@ -18,7 +18,7 @@ import {
 } from 'recharts';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
-import TestStatusDonutCenter from '../../components/TestStatusDonutCenter';
+import TestStatusDonutCenter, { statusPieData } from '../../components/TestStatusDonutCenter';
 import { apiFetch } from '../../../lib/api';
 import { formatDate } from '../../utils/dateFormat';
 
@@ -139,6 +139,10 @@ export default function B2bDashboardPage() {
   ]), [statusDist]);
 
   const statusTotal = statusDist.total || (statusDist.completed + statusDist.pending);
+  const statusPieSlices = useMemo(
+    () => statusPieData(statusChartData, statusTotal),
+    [statusChartData, statusTotal],
+  );
 
   return (
     <>
@@ -175,7 +179,7 @@ export default function B2bDashboardPage() {
             {/* KPI Cards section */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', 
               gap: '20px', 
               marginBottom: '30px' 
             }}>
@@ -209,7 +213,7 @@ export default function B2bDashboardPage() {
             {/* Main Tables Grid */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', 
               gap: '24px',
               marginBottom: '24px'
             }}>
@@ -365,36 +369,39 @@ export default function B2bDashboardPage() {
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
                         <Pie
-                          data={statusChartData}
+                          data={statusPieSlices}
                           dataKey="value"
                           nameKey="name"
                           cx="50%"
                           cy="50%"
                           innerRadius={58}
                           outerRadius={82}
-                          paddingAngle={2}
+                          paddingAngle={statusTotal > 0 ? 2 : 0}
+                          stroke="none"
                         >
-                          {statusChartData.map(entry => (
+                          {statusPieSlices.map(entry => (
                             <Cell key={entry.name} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(value) => Number(value || 0).toLocaleString()}
-                          offset={18}
-                          allowEscapeViewBox={{ x: true, y: true }}
-                          wrapperStyle={{ zIndex: 20, outline: 'none' }}
-                          contentStyle={{
-                            background: '#ffffff',
-                            borderRadius: 8,
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
-                            fontSize: 12,
-                            padding: '8px 10px',
-                            color: '#0f172a',
-                          }}
-                          itemStyle={{ color: '#0f172a', fontWeight: 600 }}
-                          labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
-                        />
+                        {statusTotal > 0 ? (
+                          <Tooltip
+                            formatter={(value) => Number(value || 0).toLocaleString()}
+                            offset={18}
+                            allowEscapeViewBox={{ x: true, y: true }}
+                            wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                            contentStyle={{
+                              background: '#ffffff',
+                              borderRadius: 8,
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
+                              fontSize: 12,
+                              padding: '8px 10px',
+                              color: '#0f172a',
+                            }}
+                            itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                            labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
+                          />
+                        ) : null}
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

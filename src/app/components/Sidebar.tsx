@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { ReactNode, useEffect, useState } from 'react';
 import { MdMenu, MdMenuOpen } from 'react-icons/md';
 import { apiFetch, getUploadUrl } from '../../lib/api';
+import { closeSidebarMobileNav } from '../lib/mobileNav';
 import { getStoredUser } from './portalConfig';
 import { useWhitelabel } from './WhitelabelProvider';
 
@@ -248,6 +249,7 @@ export default function Sidebar({
               className={`sidebar-link ${isActive ? 'active' : ''}`}
               id={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
               title={item.label}
+              onClick={closeSidebarMobileNav}
             >
               <span className="icon">{item.icon}</span>
               <span className="sidebar-link-text">{item.label}</span>

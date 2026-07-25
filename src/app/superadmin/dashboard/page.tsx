@@ -31,7 +31,7 @@ import {
 } from 'recharts';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
-import TestStatusDonutCenter from '../../components/TestStatusDonutCenter';
+import TestStatusDonutCenter, { statusPieData } from '../../components/TestStatusDonutCenter';
 import { formatDate } from '../../utils/dateFormat';
 import { apiFetch } from '../../../lib/api';
 
@@ -218,6 +218,10 @@ export default function SuperAdminDashboard() {
   ]), [statusDist]);
 
   const statusTotal = statusDist.total || (statusDist.completed + statusDist.pending);
+  const statusPieSlices = useMemo(
+    () => statusPieData(statusChartData, statusTotal),
+    [statusChartData, statusTotal],
+  );
 
   return (
     <>
@@ -230,53 +234,48 @@ export default function SuperAdminDashboard() {
           </div>
         ) : (
           <div className="page-body">
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '20px',
-              marginBottom: '24px',
-            }}>
+            <div className="sa-dash-kpi-grid">
               <DashboardCard
                 title="B2B Client"
                 value={stats?.total_b2b_clients || 0}
-                icon={<MdBusiness size={28} aria-hidden />}
+                icon={<MdBusiness size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
               />
               <DashboardCard
                 title="WhiteLabel Client"
                 value={stats?.total_whitelabel_clients || 0}
-                icon={<MdLanguage size={28} aria-hidden />}
+                icon={<MdLanguage size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
               />
               <DashboardCard
                 title="Corporate Client"
                 value={stats?.total_corporate_clients || 0}
-                icon={<MdApartment size={28} aria-hidden />}
+                icon={<MdApartment size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)"
               />
               <DashboardCard
                 title="Income"
                 value={`$${Number(stats?.total_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                 subtitle={`Sub $${Number(stats?.total_subscription_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} · Wallet $${Number(stats?.total_wallet_used || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-                icon={<MdAttachMoney size={28} aria-hidden />}
+                icon={<MdAttachMoney size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #0ba360 0%, #3cba92 100%)"
               />
               <DashboardCard
                 title="Active Subscription"
                 value={stats?.total_active_subscriptions || 0}
-                icon={<MdCardMembership size={28} aria-hidden />}
+                icon={<MdCardMembership size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)"
               />
               <DashboardCard
                 title="Completed Test"
                 value={stats?.total_lab_tests || 0}
-                icon={<MdBiotech size={28} aria-hidden />}
+                icon={<MdBiotech size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)"
               />
               <DashboardCard
                 title="Total Patients"
                 value={stats?.total_patients || 0}
-                icon={<MdPeople size={28} aria-hidden />}
+                icon={<MdPeople size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)"
               />
             </div>
@@ -341,36 +340,39 @@ export default function SuperAdminDashboard() {
                     <ResponsiveContainer width="100%" height={220}>
                       <PieChart>
                         <Pie
-                          data={statusChartData}
+                          data={statusPieSlices}
                           dataKey="value"
                           nameKey="name"
                           cx="50%"
                           cy="50%"
                           innerRadius={58}
                           outerRadius={82}
-                          paddingAngle={2}
+                          paddingAngle={statusTotal > 0 ? 2 : 0}
+                          stroke="none"
                         >
-                          {statusChartData.map(entry => (
+                          {statusPieSlices.map(entry => (
                             <Cell key={entry.name} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip
-                          formatter={(value) => Number(value || 0).toLocaleString()}
-                          offset={18}
-                          allowEscapeViewBox={{ x: true, y: true }}
-                          wrapperStyle={{ zIndex: 20, outline: 'none' }}
-                          contentStyle={{
-                            background: '#ffffff',
-                            borderRadius: 8,
-                            border: '1px solid #e2e8f0',
-                            boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
-                            fontSize: 12,
-                            padding: '8px 10px',
-                            color: '#0f172a',
-                          }}
-                          itemStyle={{ color: '#0f172a', fontWeight: 600 }}
-                          labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
-                        />
+                        {statusTotal > 0 ? (
+                          <Tooltip
+                            formatter={(value) => Number(value || 0).toLocaleString()}
+                            offset={18}
+                            allowEscapeViewBox={{ x: true, y: true }}
+                            wrapperStyle={{ zIndex: 20, outline: 'none' }}
+                            contentStyle={{
+                              background: '#ffffff',
+                              borderRadius: 8,
+                              border: '1px solid #e2e8f0',
+                              boxShadow: '0 10px 24px rgba(15, 23, 42, 0.14)',
+                              fontSize: 12,
+                              padding: '8px 10px',
+                              color: '#0f172a',
+                            }}
+                            itemStyle={{ color: '#0f172a', fontWeight: 600 }}
+                            labelStyle={{ color: '#64748b', fontWeight: 600, marginBottom: 2 }}
+                          />
+                        ) : null}
                       </PieChart>
                     </ResponsiveContainer>
                   </div>
@@ -700,80 +702,19 @@ function DashboardCard({
   gradient: string;
 }) {
   return (
-    <div style={{
-      background: '#fff',
-      borderRadius: '16px',
-      padding: '24px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: '12px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
-      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-      cursor: 'default',
-      position: 'relative',
-      overflow: 'hidden',
-      minWidth: 0,
-    }}
-    onMouseEnter={(e) => {
-      e.currentTarget.style.transform = 'translateY(-5px)';
-      e.currentTarget.style.boxShadow = '0 10px 25px rgba(0,0,0,0.08)';
-    }}
-    onMouseLeave={(e) => {
-      e.currentTarget.style.transform = 'translateY(0)';
-      e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.03)';
-    }}
-    >
-      <div style={{
-        position: 'absolute',
-        top: 0, left: 0, width: '100%', height: '4px',
-        background: gradient,
-      }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          color: '#64748b',
-          fontSize: '0.9rem',
-          fontWeight: 600,
-          marginBottom: '8px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          lineHeight: 1.3,
-          overflowWrap: 'break-word',
-          wordBreak: 'break-word',
-        }}>
-          {title}
-        </div>
-        <div style={{
-          color: '#0f172a',
-          fontSize: '2rem',
-          fontWeight: 800,
-          lineHeight: 1.15,
-          overflowWrap: 'anywhere',
-        }}>
-          {typeof value === 'number' ? value.toLocaleString() : value}
-        </div>
-        {subtitle ? (
-          <div style={{
-            marginTop: '6px',
-            color: '#64748b',
-            fontSize: '0.72rem',
-            fontWeight: 600,
-            lineHeight: 1.35,
-          }}>
-            {subtitle}
+    <div className="sa-dash-kpi-card">
+      <div className="sa-dash-kpi-card-bar" style={{ background: gradient }} />
+      <div className="sa-dash-kpi-card-title">{title}</div>
+      <div className="sa-dash-kpi-card-main">
+        <div className="sa-dash-kpi-card-body">
+          <div className="sa-dash-kpi-card-value">
+            {typeof value === 'number' ? value.toLocaleString() : value}
           </div>
-        ) : null}
-      </div>
-      <div style={{
-        width: '56px', height: '56px',
-        borderRadius: '12px',
-        background: gradient,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: '#fff',
-        boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-        flexShrink: 0,
-      }}>
-        {icon}
+          {subtitle ? <div className="sa-dash-kpi-card-subtitle">{subtitle}</div> : null}
+        </div>
+        <div className="sa-dash-kpi-card-icon" style={{ background: gradient }}>
+          {icon}
+        </div>
       </div>
     </div>
   );

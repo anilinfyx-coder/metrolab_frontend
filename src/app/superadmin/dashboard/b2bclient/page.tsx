@@ -1230,7 +1230,7 @@ export default function B2BClientsPage() {
           </div>
 
           {pricingMode === 'subscription' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+            <div className="resp-split" style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
               {/* Form card */}
               <div className="card">
                 <div className="card-header"><span className="card-title">Subscription Detail</span></div>

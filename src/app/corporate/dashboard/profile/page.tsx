@@ -138,7 +138,7 @@ export default function CorporateProfilePage() {
     <div className="page-content">
       <TopNav title="Update Profile" />
       <div className="page-body">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
+        <div className="resp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
 
           <div className="card">
             <div className="card-header">
@@ -148,7 +148,7 @@ export default function CorporateProfilePage() {
             </div>
             <div className="card-body">
               <form onSubmit={saveProfile} noValidate>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="resp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <label style={{ fontWeight: 500, fontSize: '0.875rem', display: 'block', marginBottom: '0.35rem' }}>Company Name</label>
                     <input disabled style={disabledInputStyle} value={readOnlyProfile.company_name} readOnly />
