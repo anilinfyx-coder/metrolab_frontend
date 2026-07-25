@@ -113,7 +113,7 @@ export default function SuperAdminProfilePage() {
       <TopNav title="Super Admin Profile" />
 
       <div className="page-body">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
+        <div className="resp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', alignItems: 'start' }}>
 
           <div className="card">
             <div className="card-header">

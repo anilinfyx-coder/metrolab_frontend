@@ -207,7 +207,7 @@ export default function B2BProfilePage() {
               </div>
               <div className="card-body">
                 <form onSubmit={saveProfile} noValidate>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1.25rem' }}>
+                  <div className="resp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 1.25rem' }}>
                     {profileField('support_person_name', 'Support Person Name', 'support_person_name')}
                     {profileField('support_mobile', 'Support Mobile', 'support_mobile', { error: profileErrors.support_mobile?.message })}
                     {profileField('support_email', 'Support Email', 'support_email', { type: 'email', error: profileErrors.support_email?.message })}

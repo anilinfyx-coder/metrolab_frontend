@@ -71,7 +71,7 @@ export default function CorporateDashboard() {
             {/* KPI Cards section */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', 
               gap: '20px', 
               marginBottom: '30px' 
             }}>
@@ -98,7 +98,7 @@ export default function CorporateDashboard() {
             {/* Tables Section */}
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))', 
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', 
               gap: '24px' 
             }}>
               

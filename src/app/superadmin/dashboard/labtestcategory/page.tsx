@@ -1088,6 +1088,7 @@ export default function LabTestCategoryPage() {
       label: 'Configurations',
       sortable: false,
       filterable: false,
+      align: 'center',
       width: '34%',
       render: test => (
         <div className="listing-actions">

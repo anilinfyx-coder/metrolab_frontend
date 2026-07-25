@@ -2,9 +2,10 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode, useEffect, useState, useRef } from 'react';
-import { MdLogout, MdPerson, MdVpnKey, MdNotifications } from 'react-icons/md';
+import { MdLogout, MdMenu, MdPerson, MdNotifications } from 'react-icons/md';
 import { getPortalFromPath, getStoredUser } from './portalConfig';
 import { apiFetch } from '../../lib/api';
+import { SIDEBAR_MOBILE_CLOSE_EVENT, setSidebarMobileOpen } from '../lib/mobileNav';
 
 import { useWhitelabel } from './WhitelabelProvider';
 
@@ -20,8 +21,33 @@ export default function TopNav({ title, children }: TopNavProps) {
   const [userName, setUserName] = useState('');
   const [alerts, setAlerts] = useState<any[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { isWhitelabel, config } = useWhitelabel();
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+    setSidebarMobileOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const onClose = () => setMobileNavOpen(false);
+    window.addEventListener(SIDEBAR_MOBILE_CLOSE_EVENT, onClose);
+    return () => {
+      window.removeEventListener(SIDEBAR_MOBILE_CLOSE_EVENT, onClose);
+      setSidebarMobileOpen(false);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSidebarMobileOpen(mobileNavOpen);
+  }, [mobileNavOpen]);
+
+  const toggleMobileNav = () => setMobileNavOpen(open => !open);
+  const closeMobileNav = () => {
+    setMobileNavOpen(false);
+    setSidebarMobileOpen(false);
+  };
 
   useEffect(() => {
     const user = getStoredUser(portal.userKey);
@@ -82,126 +108,102 @@ export default function TopNav({ title, children }: TopNavProps) {
   };
 
   return (
-    <div className="topnav">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <h1 className="topnav-title">{title}</h1>
-        {portal.key === 'b2b' && (
-          isWhitelabel && config ? (
-            <span style={{
-              fontSize: '0.75rem',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              backgroundColor: 'var(--primary-color, #4f46e5)',
-              color: '#fff',
-              fontWeight: '600',
-              letterSpacing: '0.02em',
-              border: '1px solid rgba(255,255,255,0.2)'
-            }}>
-              Whitelabel Mode: {config.custom_domain}
-            </span>
-          ) : (
-            <span style={{
-              fontSize: '0.75rem',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              backgroundColor: '#64748b',
-              color: '#fff',
-              fontWeight: '600',
-              letterSpacing: '0.02em',
-              border: '1px solid rgba(255,255,255,0.2)'
-            }}>
-              Standard MetroLab Mode
-            </span>
-          )
-        )}
-      </div>
-      <div className="topnav-actions">
-        {children}
-        
-        {/* Notification Bell */}
-        {(portal.key === 'superadmin' || portal.key === 'b2b') && (
-          <div className="topnav-notifications" ref={dropdownRef}>
-            <button
-              type="button"
-              className="topnav-user-link topnav-notification-btn"
-              onClick={() => setShowDropdown(!showDropdown)}
-              title="Notifications"
-            >
-              <span className="topnav-user-icon" aria-hidden>
-                <MdNotifications size={18} />
+    <>
+      <button
+        type="button"
+        className="sidebar-mobile-overlay"
+        aria-label="Close navigation menu"
+        tabIndex={mobileNavOpen ? 0 : -1}
+        onClick={closeMobileNav}
+      />
+      <div className="topnav">
+        <div className="topnav-left">
+          <button
+            type="button"
+            className="topnav-menu-btn"
+            onClick={toggleMobileNav}
+            aria-label={mobileNavOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-expanded={mobileNavOpen}
+          >
+            <MdMenu size={22} aria-hidden />
+          </button>
+          <h1 className="topnav-title">{title}</h1>
+          {portal.key === 'b2b' && (
+            isWhitelabel && config ? (
+              <span className="topnav-mode-badge topnav-mode-badge-whitelabel">
+                Whitelabel Mode: {config.custom_domain}
               </span>
-              {alerts.length > 0 && (
-                <span className="topnav-notification-badge">
-                  {alerts.length}
-                </span>
-              )}
-            </button>
-            
-            {showDropdown && (
-              <div style={{
-                position: 'absolute',
-                top: '100%',
-                right: '0',
-                marginTop: '10px',
-                width: '320px',
-                backgroundColor: 'white',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                zIndex: 1000,
-                maxHeight: '400px',
-                overflowY: 'auto'
-              }}>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontWeight: 'bold' }}>
-                  Notifications
-                </div>
-                {alerts.length === 0 ? (
-                  <div style={{ padding: '16px', color: 'var(--text-muted)', textAlign: 'center' }}>
-                    No new notifications
-                  </div>
-                ) : (
-                  <div>
-                    {alerts.map((alert, idx) => (
-                      <div key={idx} style={{ 
-                        padding: '12px 16px', 
-                        borderBottom: idx < alerts.length - 1 ? '1px solid var(--border)' : 'none',
-                        backgroundColor: alert.type === 'wallet_empty' ? '#fff5f5' : '#fffbeb',
-                        borderLeft: `4px solid ${alert.type === 'wallet_empty' ? '#ef4444' : '#f59e0b'}`
-                      }}>
-                        <div style={{ fontSize: '13px', color: '#111827' }}>
-                          {portal.key === 'superadmin' && <strong>{alert.client?.company_name}: </strong>}
-                          {alert.message}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+            ) : (
+              <span className="topnav-mode-badge">
+                Standard MetroLab Mode
+              </span>
+            )
+          )}
+        </div>
+        <div className="topnav-actions">
+          {children}
 
-        {portal.key === 'admin' && (
-          <Link href={`${portal.basePath}/changepassword`} className="topnav-user-link" title="Change Password">
+          {(portal.key === 'superadmin' || portal.key === 'b2b') && (
+            <div className="topnav-notifications" ref={dropdownRef}>
+              <button
+                type="button"
+                className="topnav-user-link topnav-notification-btn"
+                onClick={() => setShowDropdown(!showDropdown)}
+                title="Notifications"
+              >
+                <span className="topnav-user-icon" aria-hidden>
+                  <MdNotifications size={18} />
+                </span>
+                {alerts.length > 0 && (
+                  <span className="topnav-notification-badge">
+                    {alerts.length}
+                  </span>
+                )}
+              </button>
+
+              {showDropdown && (
+                <div className="topnav-notification-panel">
+                  <div className="topnav-notification-panel-title">
+                    Notifications
+                  </div>
+                  {alerts.length === 0 ? (
+                    <div className="topnav-notification-empty">
+                      No new notifications
+                    </div>
+                  ) : (
+                    <div>
+                      {alerts.map((alert, idx) => (
+                        <div
+                          key={idx}
+                          className={`topnav-notification-item${alert.type === 'wallet_empty' ? ' is-critical' : ' is-warning'}`}
+                        >
+                          <div className="topnav-notification-item-text">
+                            {portal.key === 'superadmin' && <strong>{alert.client?.company_name}: </strong>}
+                            {alert.message}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <Link href={portal.profilePath} className="topnav-user-link" title="Update Profile">
             <span className="topnav-user-icon" aria-hidden>
-              <MdVpnKey size={18} />
+              <MdPerson size={18} />
             </span>
-            <span>Security</span>
+            <span className="topnav-user-label">{userName}</span>
           </Link>
-        )}
-        <Link href={portal.profilePath} className="topnav-user-link" title="Update Profile">
-          <span className="topnav-user-icon" aria-hidden>
-            <MdPerson size={18} />
-          </span>
-          <span>{userName}</span>
-        </Link>
-        <button type="button" className="topnav-signout" onClick={signOut} title="Sign Out">
-          <span className="topnav-user-icon" aria-hidden>
-            <MdLogout size={18} />
-          </span>
-          <span>Sign Out</span>
-        </button>
+          <button type="button" className="topnav-signout" onClick={signOut} title="Sign Out">
+            <span className="topnav-user-icon" aria-hidden>
+              <MdLogout size={18} />
+            </span>
+            <span className="topnav-user-label">Sign Out</span>
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
