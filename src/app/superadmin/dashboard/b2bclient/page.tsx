@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { MdAccountBalanceWallet, MdAdd, MdAssignment, MdClose, MdDelete, MdDescription, MdEdit, MdHourglassEmpty, MdPayment, MdRefresh, MdSave, MdSearch, MdSettings, MdVisibility } from 'react-icons/md';
+import { MdAccountBalanceWallet, MdAdd, MdAssignment, MdCheckCircle, MdClose, MdDelete, MdDescription, MdEdit, MdHourglassEmpty, MdPayment, MdRefresh, MdSave, MdSearch, MdSettings, MdVisibility } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import { FormGroup, FieldError } from '../../../components/FormField';
@@ -13,7 +13,7 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 import TablePagination from '../../../components/TablePagination';
 import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
-import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword, isMobileFieldName, registerMobile } from '../../../../lib/formHelpers';
+import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
 import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 import {
   b2bClientFormSchema,
@@ -504,7 +504,7 @@ export default function B2BClientsPage() {
           const sanitizedClient = Object.fromEntries(
             Object.entries(c).map(([k, v]) => [k, v ?? ''])
           );
-
+          
           resetClient({
             ...emptyClient,
             ...(sanitizedClient as Record<string, string>),
@@ -728,8 +728,8 @@ export default function B2BClientsPage() {
   const handlePricingModeChange = async (mode: 'monthly' | 'yearly' | 'custom') => {
     setPricingMode(mode);
     if (selectedClientId) {
-      await changeBillingModeMutation.mutateAsync({ clientId: selectedClientId, mode });
-      toastApiSuccess(`Billing mode updated to ${mode.toUpperCase()}`);
+       await changeBillingModeMutation.mutateAsync({ clientId: selectedClientId, mode });
+       toastApiSuccess(`Billing mode updated to ${mode.toUpperCase()}`);
     }
   };
 
@@ -1063,7 +1063,7 @@ export default function B2BClientsPage() {
           data-field={key}
           aria-invalid={!!clientErrors[key]}
           style={fieldStyle(!!clientErrors[key], readOnly ? { backgroundColor: 'var(--bg-card)', cursor: 'not-allowed' } : {})}
-          {...(isMobileFieldName(String(key)) ? registerMobile(registerClient, key) : registerClient(key))}
+          {...registerClient(key)}
         />
       )}
     </FormGroup>
@@ -1098,203 +1098,197 @@ export default function B2BClientsPage() {
               </button>
             </div>
             <form onSubmit={saveClient} noValidate>
-              <div className="card-body">
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                  {inp('company_name', 'B2B Company Name')}
-                  {inp('contact_person_name', 'Contact Person Name')}
-                  {inp('mobile', 'Mobile')}
-                  {inp('email', 'Login Email', 'email')}
-                  {inp('password', 'Login Password', 'password', false)}
-                  {inp('address', 'Address')}
-                  <FormGroup label="Country" htmlFor="b2b-country" required={isClientFieldRequired('country_id')} error={clientErrors.country_id?.message}>
-                    <select
-                      id="b2b-country"
-                      data-field="country_id"
-                      aria-invalid={!!clientErrors.country_id}
-                      style={fieldStyle(!!clientErrors.country_id)}
-                      value={watchClient('country_id') || ''}
-                      {...registerClient('country_id', {
-                        onChange: e => {
-                          setClientValue('country_id', e.target.value);
-                          setClientValue('state_id', '');
-                          setClientValue('city_id', '');
-                        },
-                      })}
-                    >
-                      <option value="">-- Select Country --</option>
-                      {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </FormGroup>
-                  <FormGroup label="State" htmlFor="b2b-state" required={isClientFieldRequired('state_id')} error={clientErrors.state_id?.message}>
-                    <select
-                      id="b2b-state"
-                      data-field="state_id"
-                      disabled={!countryId}
-                      aria-invalid={!!clientErrors.state_id}
-                      style={fieldStyle(!!clientErrors.state_id)}
-                      value={watchClient('state_id') || ''}
-                      {...registerClient('state_id', {
-                        onChange: e => {
-                          setClientValue('state_id', e.target.value);
-                          setClientValue('city_id', '');
-                        },
-                      })}
-                    >
-                      <option value="">-- Select State --</option>
-                      {filteredStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                  </FormGroup>
-                  <FormGroup label="City" htmlFor="b2b-city" required={isClientFieldRequired('city_id')} error={clientErrors.city_id?.message}>
-                    <select
-                      id="b2b-city"
-                      data-field="city_id"
-                      disabled={!stateId}
-                      aria-invalid={!!clientErrors.city_id}
-                      style={fieldStyle(!!clientErrors.city_id)}
-                      value={watchClient('city_id') || ''}
-                      {...registerClient('city_id')}
-                    >
-                      <option value="">-- Select City --</option>
-                      {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </FormGroup>
-                  {inp('pincode', 'Pincode')}
-                  {inp('public_email', 'Public Email', 'email')}
-                  {inp('public_phone_no', 'Public Phone Number')}
-                  {inp('public_fax', 'Public Fax')}
-                  {inp('support_email', 'Support Email')}
-                  {inp('support_mobile', 'Support Mobile')}
-                  {inp('support_person_name', 'Support Person Name')}
-                  {inp('website', 'Website')}
-                  {inp('tagline', 'Tagline')}
+            <div className="card-body">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                {inp('company_name', 'B2B Company Name')}
+                {inp('contact_person_name', 'Contact Person Name')}
+                {inp('mobile', 'Mobile')}
+                {inp('email', 'Login Email', 'email')}
+                {inp('password', 'Login Password', 'password', false)}
+                {inp('address', 'Address')}
+                <FormGroup label="Country" htmlFor="b2b-country" required={isClientFieldRequired('country_id')} error={clientErrors.country_id?.message}>
+                  <select
+                    id="b2b-country"
+                    data-field="country_id"
+                    aria-invalid={!!clientErrors.country_id}
+                    style={fieldStyle(!!clientErrors.country_id)}
+                    value={watchClient('country_id') || ''}
+                    {...registerClient('country_id', {
+                      onChange: e => {
+                        setClientValue('country_id', e.target.value);
+                        setClientValue('state_id', '');
+                        setClientValue('city_id', '');
+                      },
+                    })}
+                  >
+                    <option value="">-- Select Country --</option>
+                    {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </FormGroup>
+                <FormGroup label="State" htmlFor="b2b-state" required={isClientFieldRequired('state_id')} error={clientErrors.state_id?.message}>
+                  <select
+                    id="b2b-state"
+                    data-field="state_id"
+                    disabled={!countryId}
+                    aria-invalid={!!clientErrors.state_id}
+                    style={fieldStyle(!!clientErrors.state_id)}
+                    value={watchClient('state_id') || ''}
+                    {...registerClient('state_id', {
+                      onChange: e => {
+                        setClientValue('state_id', e.target.value);
+                        setClientValue('city_id', '');
+                      },
+                    })}
+                  >
+                    <option value="">-- Select State --</option>
+                    {filteredStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </FormGroup>
+                <FormGroup label="City" htmlFor="b2b-city" required={isClientFieldRequired('city_id')} error={clientErrors.city_id?.message}>
+                  <select
+                    id="b2b-city"
+                    data-field="city_id"
+                    disabled={!stateId}
+                    aria-invalid={!!clientErrors.city_id}
+                    style={fieldStyle(!!clientErrors.city_id)}
+                    value={watchClient('city_id') || ''}
+                    {...registerClient('city_id')}
+                  >
+                    <option value="">-- Select City --</option>
+                    {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </FormGroup>
+                {inp('pincode', 'Pincode')}
+                {inp('public_email', 'Public Email', 'email')}
+                {inp('public_phone_no', 'Public Phone Number')}
+                {inp('public_fax', 'Public Fax')}
+                {inp('support_email', 'Support Email')}
+                {inp('support_mobile', 'Support Mobile')}
+                {inp('support_person_name', 'Support Person Name')}
+                {inp('website', 'Website')}
+                {inp('tagline', 'Tagline')}
 
-                  {/* Client Type Selection Block */}
-                  <div style={{ gridColumn: '1 / -1', padding: '1.25rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                    <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>Client Domain Type</h4>
-
-                    <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '1rem', border: isWhitelabel ? '1px solid var(--border)' : '1px solid var(--primary)', borderRadius: '8px', background: isWhitelabel ? 'transparent' : 'rgba(128, 128, 128, 0.05)', flex: 1, minWidth: '250px' }}>
-                        <input
-                          type="radio"
-                          name="client_type"
-                          checked={!isWhitelabel}
-                          onChange={() => {
-                            setIsWhitelabel(false);
-                            setClientValue('custom_domain', '');
-                          }}
-                          style={{ width: 20, height: 20, accentColor: 'var(--primary)', marginTop: '2px' }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '1rem', color: isWhitelabel ? 'var(--text-muted)' : 'var(--text-color)' }}>Normal Client</div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Client will use the standard Metrolab system domain to log in.</div>
-                        </div>
-                      </label>
-
-                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '1rem', border: isWhitelabel ? '1px solid var(--primary)' : '1px solid var(--border)', borderRadius: '8px', background: isWhitelabel ? 'rgba(128, 128, 128, 0.05)' : 'transparent', flex: 1, minWidth: '250px' }}>
-                        <input
-                          type="radio"
-                          name="client_type"
-                          checked={isWhitelabel}
-                          onChange={() => setIsWhitelabel(true)}
-                          style={{ width: 20, height: 20, accentColor: 'var(--primary)', marginTop: '2px' }}
-                        />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '1rem', color: isWhitelabel ? 'var(--text-color)' : 'var(--text-muted)' }}>Whitelabel Client</div>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Client will have their own custom branded domain.</div>
-                        </div>
-                      </label>
-                    </div>
-
-                    {isWhitelabel && (
-                      <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
-                        <div style={{ maxWidth: '400px' }}>
-                          {inp('custom_domain', 'Custom Domain (e.g. lab.client1.biz)')}
-                        </div>
+                {/* Client Type Selection Block */}
+                <div style={{ gridColumn: '1 / -1', padding: '1.25rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>Client Domain Type</h4>
+                  
+                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '1rem', border: isWhitelabel ? '1px solid var(--border)' : '1px solid var(--primary)', borderRadius: '8px', background: isWhitelabel ? 'transparent' : 'rgba(128, 128, 128, 0.05)', flex: 1, minWidth: '250px' }}>
+                      <input 
+                        type="radio" 
+                        name="client_type"
+                        checked={!isWhitelabel} 
+                        onChange={() => {
+                          setIsWhitelabel(false);
+                          setClientValue('custom_domain', '');
+                        }} 
+                        style={{ width: 20, height: 20, accentColor: 'var(--primary)', marginTop: '2px' }} 
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '1rem', color: isWhitelabel ? 'var(--text-muted)' : 'var(--text-color)' }}>Normal Client</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Client will use the standard Metrolab system domain to log in.</div>
                       </div>
-                    )}
-                  </div>
-                  <FormGroup key="primary_color_code" label="Primary Colour Code (e.g. rgb(12,34,56) or #Hex)" htmlFor="b2b-primary_color_code" error={clientErrors.primary_color_code?.message}>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <label style={{ display: 'block', flexShrink: 0, width: '40px', height: '40px', borderRadius: '4px', border: '1px solid var(--border)', background: watchClient('primary_color_code') || '#ffffff', overflow: 'hidden', cursor: 'pointer' }}>
-                        <input
-                          type="color"
-                          value={watchClient('primary_color_code') || '#ffffff'}
-                          onChange={e => setClientValue('primary_color_code', e.target.value, { shouldValidate: true })}
-                          style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }}
-                        />
-                      </label>
-                      <input
-                        id="b2b-primary_color_code"
-                        type="text"
-                        placeholder="e.g. rgb(255, 0, 0)"
-                        className="form-control"
-                        style={{ flex: 1, padding: '0.55rem 0.75rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-color)' }}
-                        {...registerClient('primary_color_code')}
-                      />
-                    </div>
-                  </FormGroup>
-                  {inp('medical_officer_name', 'Medical Officer Name')}
-                  {inp('medical_officer_position', 'Medical Officer Position')}
-                  {inp('mrocc', 'MROCC')}
-                  {inp('clia_number', 'CLIA Number')}
-                  {inp('smtp_server', 'SMTP Server')}
-                  {inp('smtp_port', 'SMTP Port')}
-                  {inp('smtp_email', 'SMTP Email', 'email')}
-                  {inp('smtp_password', 'SMTP Password', 'password')}
+                    </label>
 
-                  {/* Is Approval Toggle */}
-                  <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                    <label style={{ marginBottom: '0.5rem' }}>Approval Required</label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
-                      <input
-                        type="checkbox"
-                        checked={isApproval}
-                        onChange={e => setIsApproval(e.target.checked)}
-                        style={{ width: 18, height: 18, margin: 0, flexShrink: 0, cursor: 'pointer', accentColor: '#6366f1' }}
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '1rem', border: isWhitelabel ? '1px solid var(--primary)' : '1px solid var(--border)', borderRadius: '8px', background: isWhitelabel ? 'rgba(128, 128, 128, 0.05)' : 'transparent', flex: 1, minWidth: '250px' }}>
+                      <input 
+                        type="radio" 
+                        name="client_type"
+                        checked={isWhitelabel} 
+                        onChange={() => setIsWhitelabel(true)} 
+                        style={{ width: 20, height: 20, accentColor: 'var(--primary)', marginTop: '2px' }} 
                       />
-                      <span style={{ fontSize: '0.875rem', lineHeight: 1.3, color: 'var(--text)' }}>
-                        {isApproval ? 'Yes, approval is required' : 'No approval required'}
-                      </span>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: '1rem', color: isWhitelabel ? 'var(--text-color)' : 'var(--text-muted)' }}>Whitelabel Client</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Client will have their own custom branded domain.</div>
+                      </div>
                     </label>
                   </div>
 
-
-
-                  {inp('approval_note', 'Approval Note')}
-
-                  {/* File Upload Fields */}
-                  <div className="form-group">
-                    <label>Logo File</label>
-                    <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files?.[0] || null)}
-                      style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
-                    {logoFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {logoFile.name}</small>}
-                  </div>
-                  <div className="form-group">
-                    <label>Report Header File</label>
-                    <input type="file" accept="image/*" onChange={e => setReportHeaderFile(e.target.files?.[0] || null)}
-                      style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
-                    {reportHeaderFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {reportHeaderFile.name}</small>}
-                  </div>
-                  <div className="form-group">
-                    <label>Report Footer File</label>
-                    <input type="file" accept="image/*" onChange={e => setReportFooterFile(e.target.files?.[0] || null)}
-                      style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
-                    {reportFooterFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {reportFooterFile.name}</small>}
-                  </div>
-                  <div className="form-group">
-                    <label>Medical Officer Signature</label>
-                    <input type="file" accept="image/*" onChange={e => setMedOfficerSigFile(e.target.files?.[0] || null)}
-                      style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
-                    {medOfficerSigFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {medOfficerSigFile.name}</small>}
-                  </div>
+                  {isWhitelabel && (
+                    <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ maxWidth: '400px' }}>
+                        {inp('custom_domain', 'Custom Domain (e.g. lab.client1.biz)')}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-primary" disabled={saveClientMutation.isPending}>
-                    {saveClientMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
-                  </button>
-                  <button type="button" className="btn btn-ghost" onClick={() => resetClient({ ...emptyClient, password: getClientValues('password') })}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
+                <FormGroup key="primary_color_code" label="Primary Colour Code (e.g. rgb(12,34,56) or #Hex)" htmlFor="b2b-primary_color_code" error={clientErrors.primary_color_code?.message}>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <label style={{ display: 'block', flexShrink: 0, width: '40px', height: '40px', borderRadius: '4px', border: '1px solid var(--border)', background: watchClient('primary_color_code') || '#ffffff', overflow: 'hidden', cursor: 'pointer' }}>
+                      <input 
+                        type="color" 
+                        value={watchClient('primary_color_code') || '#ffffff'} 
+                        onChange={e => setClientValue('primary_color_code', e.target.value, { shouldValidate: true })}
+                        style={{ opacity: 0, width: '100%', height: '100%', cursor: 'pointer' }} 
+                      />
+                    </label>
+                    <input
+                      id="b2b-primary_color_code"
+                      type="text"
+                      placeholder="e.g. rgb(255, 0, 0)"
+                      className="form-control"
+                      style={{ flex: 1, padding: '0.55rem 0.75rem', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-color)' }}
+                      {...registerClient('primary_color_code')}
+                    />
+                  </div>
+                </FormGroup>
+                {inp('medical_officer_name', 'Medical Officer Name')}
+                {inp('medical_officer_position', 'Medical Officer Position')}
+                {inp('mrocc', 'MROCC')}
+                {inp('clia_number', 'CLIA Number')}
+                {inp('smtp_server', 'SMTP Server')}
+                {inp('smtp_port', 'SMTP Port')}
+                {inp('smtp_email', 'SMTP Email', 'email')}
+                {inp('smtp_password', 'SMTP Password', 'password')}
+
+                {/* Is Approval Toggle */}
+                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                  <label style={{ marginBottom: '0.5rem' }}>Approval Required</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
+                    <input type="checkbox" checked={isApproval} onChange={e => setIsApproval(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: '0.875rem' }}>{isApproval ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Approval Required</> : 'No Approval Required'}</span>
+                  </label>
+                </div>
+
+
+
+                {inp('approval_note', 'Approval Note')}
+
+                {/* File Upload Fields */}
+                <div className="form-group">
+                  <label>Logo File</label>
+                  <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files?.[0] || null)}
+                    style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
+                  {logoFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {logoFile.name}</small>}
+                </div>
+                <div className="form-group">
+                  <label>Report Header File</label>
+                  <input type="file" accept="image/*" onChange={e => setReportHeaderFile(e.target.files?.[0] || null)}
+                    style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
+                  {reportHeaderFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {reportHeaderFile.name}</small>}
+                </div>
+                <div className="form-group">
+                  <label>Report Footer File</label>
+                  <input type="file" accept="image/*" onChange={e => setReportFooterFile(e.target.files?.[0] || null)}
+                    style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
+                  {reportFooterFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {reportFooterFile.name}</small>}
+                </div>
+                <div className="form-group">
+                  <label>Medical Officer Signature</label>
+                  <input type="file" accept="image/*" onChange={e => setMedOfficerSigFile(e.target.files?.[0] || null)}
+                    style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
+                  {medOfficerSigFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {medOfficerSigFile.name}</small>}
                 </div>
               </div>
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={saveClientMutation.isPending}>
+                  {saveClientMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save</>}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => resetClient({ ...emptyClient, password: getClientValues('password') })}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
+              </div>
+            </div>
             </form>
           </div>
         </div>
@@ -1332,48 +1326,48 @@ export default function B2BClientsPage() {
           </div>
 
           {(pricingMode === 'monthly' || pricingMode === 'yearly') && (
-            <div className="resp-split" style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '1.5rem', alignItems: 'start' }}>
               {/* Form card */}
               <div className="card">
                 <div className="card-header"><span className="card-title">Subscription Detail</span></div>
                 <form onSubmit={saveSub} noValidate>
-                  <div className="card-body">
-                    <FormGroup label="Start Date" htmlFor="sub-start" required error={subErrors.start_date?.message}>
-                      <input
-                        id="sub-start"
-                        type="date"
-                        data-field="start_date"
-                        aria-invalid={!!subErrors.start_date}
-                        style={fieldStyle(!!subErrors.start_date)}
-                        {...registerSub('start_date')}
-                      />
-                    </FormGroup>
-                    <FormGroup label="End Date" htmlFor="sub-end" required error={subErrors.end_date?.message}>
-                      <input
-                        id="sub-end"
-                        type="date"
-                        data-field="end_date"
-                        aria-invalid={!!subErrors.end_date}
-                        style={fieldStyle(!!subErrors.end_date)}
-                        {...registerSub('end_date')}
-                      />
-                    </FormGroup>
-                    <FormGroup label="Amount" htmlFor="sub-amount" required error={subErrors.amount?.message}>
-                      <input
-                        id="sub-amount"
-                        type="number"
-                        data-field="amount"
-                        placeholder="Enter Amount"
-                        aria-invalid={!!subErrors.amount}
-                        style={fieldStyle(!!subErrors.amount)}
-                        {...registerSub('amount')}
-                      />
-                    </FormGroup>
-                    <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-                      <button type="submit" className="btn btn-primary"><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
-                      <button type="button" className="btn btn-ghost" onClick={() => { resetSub({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
-                    </div>
+                <div className="card-body">
+                  <FormGroup label="Start Date" htmlFor="sub-start" required error={subErrors.start_date?.message}>
+                    <input
+                      id="sub-start"
+                      type="date"
+                      data-field="start_date"
+                      aria-invalid={!!subErrors.start_date}
+                      style={fieldStyle(!!subErrors.start_date)}
+                      {...registerSub('start_date')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="End Date" htmlFor="sub-end" required error={subErrors.end_date?.message}>
+                    <input
+                      id="sub-end"
+                      type="date"
+                      data-field="end_date"
+                      aria-invalid={!!subErrors.end_date}
+                      style={fieldStyle(!!subErrors.end_date)}
+                      {...registerSub('end_date')}
+                    />
+                  </FormGroup>
+                  <FormGroup label="Amount" htmlFor="sub-amount" required error={subErrors.amount?.message}>
+                    <input
+                      id="sub-amount"
+                      type="number"
+                      data-field="amount"
+                      placeholder="Enter Amount"
+                      aria-invalid={!!subErrors.amount}
+                      style={fieldStyle(!!subErrors.amount)}
+                      {...registerSub('amount')}
+                    />
+                  </FormGroup>
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+                    <button type="submit" className="btn btn-primary"><MdSave size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Save</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => { resetSub({ start_date: '', end_date: '', amount: '' }); setEditingSubId(null); }}><MdRefresh size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Reset</button>
                   </div>
+                </div>
                 </form>
               </div>
 
@@ -1419,18 +1413,11 @@ export default function B2BClientsPage() {
                 <div className="form-group" style={{ marginBottom: '1.5rem', maxWidth: '400px' }}>
                   <label style={{ marginBottom: '0.5rem' }}>Fixed Price Per Report</label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
-                    <input
-                      type="checkbox"
-                      checked={isFixedPrice}
-                      onChange={e => setIsFixedPrice(e.target.checked)}
-                      style={{ width: 18, height: 18, margin: 0, flexShrink: 0, cursor: 'pointer', accentColor: '#6366f1' }}
-                    />
-                    <span style={{ fontSize: '0.875rem', lineHeight: 1.3, color: 'var(--text)' }}>
-                      {isFixedPrice ? 'Yes, use fixed price' : 'No, use test-wise pricing'}
-                    </span>
+                    <input type="checkbox" checked={isFixedPrice} onChange={e => setIsFixedPrice(e.target.checked)} style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: '0.875rem' }}>{isFixedPrice ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Yes, Fixed Price</> : 'No, Use Test-Wise Pricing'}</span>
                   </label>
                 </div>
-
+                
                 {isFixedPrice && (
                   <div className="form-group" style={{ maxWidth: '400px' }}>
                     <label>Fixed Price Amount ($)</label>
@@ -1464,26 +1451,26 @@ export default function B2BClientsPage() {
                       </thead>
                       <tbody>
                         {globalLabTests.map(test => {
-                          const cp = customPrices.find(c => c.lab_test_id === test.id);
-                          const priceStr = cp ? cp.custom_price : '';
-                          return (
-                            <tr key={test.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                              <td style={{ padding: '0.75rem' }}>{test.name}</td>
-                              <td style={{ padding: '0.75rem' }}>
-                                <input type="number" value={priceStr} placeholder="Free (0) if blank"
-                                  onChange={e => {
-                                    const val = e.target.value;
-                                    setDraftCustomPrices(prev => {
-                                      const base = prev ?? customPricesData;
-                                      const filtered = base.filter(x => x.lab_test_id !== test.id);
-                                      if (val === '') return filtered;
-                                      return [...filtered, { lab_test_id: test.id, custom_price: val }];
-                                    });
-                                  }}
-                                />
-                              </td>
-                            </tr>
-                          );
+                           const cp = customPrices.find(c => c.lab_test_id === test.id);
+                           const priceStr = cp ? cp.custom_price : '';
+                           return (
+                             <tr key={test.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                               <td style={{ padding: '0.75rem' }}>{test.name}</td>
+                               <td style={{ padding: '0.75rem' }}>
+                                 <input type="number" value={priceStr} placeholder="Free (0) if blank"
+                                   onChange={e => {
+                                     const val = e.target.value;
+                                     setDraftCustomPrices(prev => {
+                                       const base = prev ?? customPricesData;
+                                       const filtered = base.filter(x => x.lab_test_id !== test.id);
+                                       if (val === '') return filtered;
+                                       return [...filtered, { lab_test_id: test.id, custom_price: val }];
+                                     });
+                                   }}
+                                 />
+                               </td>
+                             </tr>
+                           );
                         })}
                         {globalLabTests.length === 0 && (
                           <tr><td colSpan={2} style={{ padding: '1rem', textAlign: 'center' }}>No Lab Tests found.</td></tr>
@@ -1492,7 +1479,7 @@ export default function B2BClientsPage() {
                     </table>
                   </div>
                 )}
-
+                
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '2rem' }}>
                   <button className="btn btn-primary" onClick={saveCustomPricing} disabled={saveCustomPricingMutation.isPending}>
                     {saveCustomPricingMutation.isPending ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Pricing Details</>}
@@ -1532,44 +1519,44 @@ export default function B2BClientsPage() {
                 </button>
               </div>
               <form onSubmit={saveDoc} noValidate>
-                <div className="card-body">
-                  <FormGroup label="Document Type" htmlFor="doc-type" required error={docErrors.typeDataId?.message}>
-                    <select id="doc-type" data-field="typeDataId" aria-invalid={!!docErrors.typeDataId} style={fieldStyle(!!docErrors.typeDataId)} {...registerDoc('typeDataId')}>
-                      <option value="">-- Select Type --</option>
-                      {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                    </select>
-                  </FormGroup>
-                  <div className="form-group">
-                    <label>File Upload<span style={{ color: '#ef4444' }}> *</span></label>
-                    <input
-                      ref={docFileInputRef}
-                      type="file"
-                      data-field="file"
-                      onChange={e => {
-                        setDocFormMeta(p => ({ ...p, file: e.target.files ? e.target.files[0] : null }));
-                        setDocFileError('');
-                      }}
-                    />
-                    {docFileError && <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem' }}>{docFileError}</div>}
-                    {docFormMeta.id && !docFormMeta.file && (
-                      <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                        Leave empty to keep the current file.
-                      </div>
-                    )}
-                  </div>
+              <div className="card-body">
+                <FormGroup label="Document Type" htmlFor="doc-type" required error={docErrors.typeDataId?.message}>
+                  <select id="doc-type" data-field="typeDataId" aria-invalid={!!docErrors.typeDataId} style={fieldStyle(!!docErrors.typeDataId)} {...registerDoc('typeDataId')}>
+                    <option value="">-- Select Type --</option>
+                    {docTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </FormGroup>
+                <div className="form-group">
+                  <label>File Upload<span style={{ color: '#ef4444' }}> *</span></label>
+                  <input
+                    ref={docFileInputRef}
+                    type="file"
+                    data-field="file"
+                    onChange={e => {
+                      setDocFormMeta(p => ({ ...p, file: e.target.files ? e.target.files[0] : null }));
+                      setDocFileError('');
+                    }}
+                  />
+                  {docFileError && <div role="alert" style={{ color: '#ef4444', fontSize: '0.78rem', marginTop: '0.35rem' }}>{docFileError}</div>}
+                  {docFormMeta.id && !docFormMeta.file && (
+                    <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                      Leave empty to keep the current file.
+                    </div>
+                  )}
                 </div>
-                <div className="b2b-document-form-actions">
-                  <button type="submit" className="btn btn-primary">
-                    Save
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-ghost"
-                    onClick={resetDocumentForm}
-                  >
-                    Reset Data
-                  </button>
-                </div>
+              </div>
+              <div className="b2b-document-form-actions">
+                <button type="submit" className="btn btn-primary">
+                  Save
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={resetDocumentForm}
+                >
+                  Reset Data
+                </button>
+              </div>
               </form>
             </div>
           </div>
@@ -1663,10 +1650,10 @@ export default function B2BClientsPage() {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
                   <thead>
-                    <tr style={{ borderBottom: '1px solid var(--table-th-border)', background: 'var(--table-th-bg)' }}>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700, width: 60 }}>Select</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>Name</th>
-                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>Description</th>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', width: 60 }}>Select</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Name</th>
+                      <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)' }}>Description</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1720,7 +1707,7 @@ export default function B2BClientsPage() {
               />
             </div>
 
-            <div className="card-footer b2b-lab-access-footer">
+            <div className="card-footer b2b-lab-access-footer" style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 Selections are kept while you search or change pages. Click Save to apply.
               </div>
@@ -1774,51 +1761,51 @@ export default function B2BClientsPage() {
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div className="card-header"><span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><MdAdd size={18} aria-hidden />Add Funds</span></div>
             <form onSubmit={rechargeWallet} noValidate>
-              <div className="card-body">
-                <div className="wallet-funds-row">
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label htmlFor="wallet-amount">
-                      Amount ($)<span className="required-star">*</span>
-                    </label>
-                    <input
-                      id="wallet-amount"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      data-field="amount"
-                      placeholder="e.g. 500.00"
-                      aria-invalid={!!walletErrors.amount}
-                      style={fieldStyle(!!walletErrors.amount)}
-                      {...registerWallet('amount')}
-                    />
-                    <FieldError message={walletErrors.amount?.message} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label htmlFor="wallet-desc">Description / Note</label>
-                    <input
-                      id="wallet-desc"
-                      type="text"
-                      data-field="description"
-                      placeholder="e.g. Payment received via bank transfer"
-                      style={fieldStyle(!!walletErrors.description)}
-                      {...registerWallet('description')}
-                    />
-                    <FieldError message={walletErrors.description?.message} />
-                  </div>
-                  <div className="form-group wallet-funds-action" style={{ marginBottom: 0 }}>
-                    <label className="wallet-funds-action-label" aria-hidden="true">&nbsp;</label>
-                    <button
-                      type="submit"
-                      className="btn btn-primary wallet-funds-submit"
-                      disabled={rechargeWalletMutation.isPending}
-                    >
-                      {rechargeWalletMutation.isPending
-                        ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</>
-                        : <><MdPayment size={16} aria-hidden /> Add Funds</>}
-                    </button>
-                  </div>
+            <div className="card-body">
+              <div className="wallet-funds-row">
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="wallet-amount">
+                    Amount ($)<span className="required-star">*</span>
+                  </label>
+                  <input
+                    id="wallet-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    data-field="amount"
+                    placeholder="e.g. 500.00"
+                    aria-invalid={!!walletErrors.amount}
+                    style={fieldStyle(!!walletErrors.amount)}
+                    {...registerWallet('amount')}
+                  />
+                  <FieldError message={walletErrors.amount?.message} />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label htmlFor="wallet-desc">Description / Note</label>
+                  <input
+                    id="wallet-desc"
+                    type="text"
+                    data-field="description"
+                    placeholder="e.g. Payment received via bank transfer"
+                    style={fieldStyle(!!walletErrors.description)}
+                    {...registerWallet('description')}
+                  />
+                  <FieldError message={walletErrors.description?.message} />
+                </div>
+                <div className="form-group wallet-funds-action" style={{ marginBottom: 0 }}>
+                  <label className="wallet-funds-action-label" aria-hidden="true">&nbsp;</label>
+                  <button
+                    type="submit"
+                    className="btn btn-primary wallet-funds-submit"
+                    disabled={rechargeWalletMutation.isPending}
+                  >
+                    {rechargeWalletMutation.isPending
+                      ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</>
+                      : <><MdPayment size={16} aria-hidden /> Add Funds</>}
+                  </button>
                 </div>
               </div>
+            </div>
             </form>
           </div>
 
@@ -1838,7 +1825,7 @@ export default function B2BClientsPage() {
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)', background: '#f8f9fc' }}>
                       {['Date', 'Type', 'Amount', 'Balance After', 'Description'].map(h => (
-                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--table-th-color)', fontWeight: 700 }}>{h}</th>
+                        <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -1887,7 +1874,7 @@ export default function B2BClientsPage() {
     <div className="page-content">
       <TopNav title="Manage B2B Labs" />
       <div className="page-body">
-
+        
         {/* Client Type Filter Tabs */}
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem' }}>
           {['all', 'normal', 'whitelabel'].map((f) => (
