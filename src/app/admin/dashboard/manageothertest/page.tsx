@@ -67,12 +67,6 @@ export default function TestsReportsPage() {
   }, []);
 
   const loadReports = async (labTestId: string, p = page, ps = pageSize) => {
-    if (!labTestId) {
-      setReports([]);
-      setTotal(0);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const result = await apiFetch<PaginatedResult<TestReport> | TestReport[]>(
@@ -108,9 +102,7 @@ export default function TestsReportsPage() {
   };
 
   useEffect(() => {
-    if (selectedTestId) {
-      loadReports(selectedTestId, page, pageSize);
-    }
+    loadReports(selectedTestId, page, pageSize);
   }, [selectedTestId, page, pageSize]);
 
   const toggleLock = async (report: TestReport) => {
@@ -206,16 +198,25 @@ export default function TestsReportsPage() {
       label: 'Creation Timestamp',
       sortable: true,
       filterable: true,
-      width: '26%',
+      width: '20%',
       getValue: (row) => formatDateTime(row.creation_timestamp),
       render: (row) => formatDateTime(row.creation_timestamp),
+    },
+    {
+      key: 'lab_test_name',
+      label: 'Test Name',
+      sortable: true,
+      filterable: true,
+      width: '25%',
+      getValue: (row) => row.lab_test_name || '',
+      render: (row) => row.lab_test_name || '—',
     },
     {
       key: 'patient_name',
       label: 'Patient/Donor Name',
       sortable: true,
       filterable: true,
-      width: '30%',
+      width: '20%',
       getValue: (row) => row.patient_name || '',
       render: (row) => (
         <span className="report-patient-name">{row.patient_name || '—'}</span>
@@ -226,7 +227,7 @@ export default function TestsReportsPage() {
       label: 'UID',
       sortable: true,
       filterable: true,
-      width: '18%',
+      width: '15%',
       getValue: (row) => row.uid || row.patient_uid || '',
       render: (row) => row.uid || row.patient_uid || '—',
     },
@@ -253,17 +254,13 @@ export default function TestsReportsPage() {
           className="test-reports-table"
           title="List of Test Reports"
           columns={columns}
-          rows={selectedTestId ? reports : []}
+          rows={reports}
           loading={loading || testsLoading}
-          emptyText={
-            selectedTestId
-              ? 'No test reports found for this test.'
-              : ''
-          }
+          emptyText="No test reports found."
           actionsLabel="Actions"
           actionsWidth={170}
           defaultPageSize={25}
-          showTotal={!!selectedTestId}
+          showTotal={true}
           paginationMode="server"
           page={page}
           pageSize={pageSize}
