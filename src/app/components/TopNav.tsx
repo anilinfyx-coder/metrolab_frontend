@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode, useEffect, useState, useRef } from 'react';
-import { MdLogout, MdMenu, MdPerson, MdNotifications } from 'react-icons/md';
+import { MdLogout, MdMenu, MdPerson, MdNotifications, MdAccountBalanceWallet } from 'react-icons/md';
 import { getPortalFromPath, getStoredUser } from './portalConfig';
 import { apiFetch } from '../../lib/api';
 import { SIDEBAR_MOBILE_CLOSE_EVENT, setSidebarMobileOpen } from '../lib/mobileNav';
@@ -22,6 +22,7 @@ export default function TopNav({ title, children }: TopNavProps) {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [hasActiveSub, setHasActiveSub] = useState(false);
   const [activeSubMode, setActiveSubMode] = useState<'monthly' | 'custom' | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -85,6 +86,7 @@ export default function TopNav({ title, children }: TopNavProps) {
             if (billingMode === 'custom') {
               setHasActiveSub(true);
               setActiveSubMode('custom');
+              setWalletBalance(clientProfile?.wallet_balance ? parseFloat(clientProfile.wallet_balance) : 0);
             } else if (subs && subs.length > 0) {
               const endDate = new Date(subs[0].end_date);
               const today = new Date();
@@ -163,13 +165,32 @@ export default function TopNav({ title, children }: TopNavProps) {
           {children}
 
           {portal.key === 'b2b' && hasActiveSub && (
-            <Link 
-              href={activeSubMode === 'custom' ? '/b2b/dashboard/wallet' : '/b2b/dashboard/subscription'} 
-              className="topnav-user-link" 
-              style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem', marginRight: '10px', textDecoration: 'none' }}
-            >
-              Active Subscription
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {activeSubMode === 'custom' && walletBalance !== null && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#f1f5f9',
+                  color: '#334155',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  marginRight: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <MdAccountBalanceWallet size={16} style={{ marginRight: '6px', color: '#64748b' }} />
+                  ${walletBalance.toFixed(2)}
+                </div>
+              )}
+              <Link 
+                href={activeSubMode === 'custom' ? '/b2b/dashboard/wallet' : '/b2b/dashboard/subscription'} 
+                className="topnav-user-link" 
+                style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem', marginRight: '10px', textDecoration: 'none' }}
+              >
+                Active Subscription
+              </Link>
+            </div>
           )}
 
           {(portal.key === 'superadmin' || portal.key === 'b2b') && (

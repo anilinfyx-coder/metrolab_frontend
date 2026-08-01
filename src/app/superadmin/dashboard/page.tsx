@@ -61,6 +61,8 @@ interface RecentB2BClient {
   mobile?: string;
   email?: string;
   wallet_balance?: number | string;
+  billing_mode?: string;
+  has_active_subscription?: boolean;
   status?: boolean;
   creation_timestamp?: string;
 }
@@ -469,7 +471,7 @@ export default function SuperAdminDashboard() {
                         <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
                           <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Company</th>
                           <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Contact</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Wallet</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Subscription & Wallet</th>
                           <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Added</th>
                         </tr>
                       </thead>
@@ -508,12 +510,24 @@ export default function SuperAdminDashboard() {
                                 <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{client.mobile || client.email || '—'}</div>
                               </td>
                               <td style={{ padding: '16px 20px' }}>
-                                <Link
-                                  href={`/superadmin/dashboard/b2bclient?view=wallet&clientId=${client.id}`}
-                                  style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}
-                                >
-                                  ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
-                                </Link>
+                                {client.billing_mode === 'custom' ? (
+                                  <>
+                                    <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Custom Pricing Active</div>
+                                    <Link
+                                      href={`/superadmin/dashboard/b2bclient?view=wallet&clientId=${client.id}`}
+                                      style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}
+                                      title="Wallet Balance"
+                                    >
+                                      ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
+                                    </Link>
+                                  </>
+                                ) : client.has_active_subscription ? (
+                                  <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.9rem' }}>
+                                    {client.billing_mode === 'yearly' ? 'Yearly Subscription Active' : 'Monthly Subscription Active'}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.9rem' }}>No Subscription Active</span>
+                                )}
                               </td>
                               <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                                 {client.creation_timestamp ? formatDate(client.creation_timestamp) : 'N/A'}
