@@ -439,7 +439,7 @@ export default function ApplyTestForm({
                             <option value="No">No</option>
                           </select>
                         ) : q.answer_type === 2 ? (
-                          <label><input type="checkbox" checked={q.value === 'Done'} onChange={e => handleQuestionChange(i, e.target.checked ? 'Done' : '')}/> Done</label>
+                          <label><input type="checkbox" checked={q.value === 'Done'} onChange={e => handleQuestionChange(i, e.target.checked ? 'Done' : '')} /> Done</label>
                         ) : q.answer_type === 3 || q.answer_type === 4 ? (
                           <input type={q.answer_type === 3 ? 'number' : 'text'} className="form-input" value={q.value} onChange={e => handleQuestionChange(i, e.target.value)} placeholder="Enter Value" />
                         ) : q.answer_type === 5 ? (
