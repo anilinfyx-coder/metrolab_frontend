@@ -74,7 +74,7 @@ export default function AdminDashboardPage() {
           physicalData,
         ] = await Promise.all([
           apiFetch<PatientRow[]>('/api/Patient', { tokenKey: 'admin_token' }).catch(() => []),
-          apiFetch<WaitingListRow[]>('/api/WaitingList', { tokenKey: 'admin_token' }).catch(() => []),
+          apiFetch<WaitingListRow[]>('/api/WaitingList?pending_only=true&limit=5', { tokenKey: 'admin_token' }).catch(() => []),
           apiFetch<TestReportRow[]>('/api/LabTestCategoryReport', { tokenKey: 'admin_token' }).catch(() => []),
           apiFetch<TestRequestRow[]>('/api/TestRequest', { tokenKey: 'admin_token' }).catch(() => []),
           apiFetch<unknown[]>('/api/AdultHealthCertificates', { tokenKey: 'admin_token' }).catch(() => []),

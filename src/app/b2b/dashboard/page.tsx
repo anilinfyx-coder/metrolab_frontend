@@ -7,6 +7,7 @@ import {
   MdBlock,
   MdPeople,
   MdWarning,
+  MdCardMembership,
 } from 'react-icons/md';
 import Link from 'next/link';
 import {
@@ -21,6 +22,14 @@ import PageLoader from '../../components/PageLoader';
 import TestStatusDonutCenter, { statusPieData } from '../../components/TestStatusDonutCenter';
 import { apiFetch } from '../../../lib/api';
 import { formatDate } from '../../utils/dateFormat';
+
+const genderLabel = (g: string | number | null | undefined) => {
+  if (!g) return '—';
+  if (String(g) === '1' || String(g).toLowerCase() === 'male') return 'Male';
+  if (String(g) === '2' || String(g).toLowerCase() === 'female') return 'Female';
+  if (String(g) === '3') return 'Prefer not to Declare';
+  return String(g);
+};
 
 function getUser() {
   if (typeof window !== 'undefined') {
@@ -54,6 +63,7 @@ type StatusDistribution = {
 export default function B2bDashboardPage() {
   const [user, setUser] = useState<any>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [activeSubscription, setActiveSubscription] = useState<any>(null);
   const [corporateClients, setCorporateClients] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [testRequests, setTestRequests] = useState<any[]>([]);
@@ -70,7 +80,7 @@ export default function B2bDashboardPage() {
         setUser(currentUser);
 
         if (currentUser?.id) {
-          const [wallet, corp, patientList, testReqList, stats] = await Promise.all([
+          const [wallet, corp, patientList, testReqList, stats, subs] = await Promise.all([
             apiFetch<{ wallet_balance?: string | number }>(`/api/B2bClients/${currentUser.id}`, {
               tokenKey: 'b2b_token',
             }).catch(() => null),
@@ -89,6 +99,9 @@ export default function B2bDashboardPage() {
             }>(`/api/B2bClients/dashboardStats?statusRange=${statusRange}`, {
               tokenKey: 'b2b_token',
             }).catch(() => null),
+            apiFetch<any[]>(`/api/B2bClientSubscription?b2b_client_id=${currentUser.id}`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => []),
           ]);
 
           if (wallet) setWalletBalance(parseFloat(String(wallet.wallet_balance || 0)));
@@ -98,6 +111,23 @@ export default function B2bDashboardPage() {
           setCompletedTests(stats?.total_completed_tests ?? 0);
           if (stats?.status_distribution) {
             setStatusDist(stats.status_distribution);
+          }
+          
+          let hasActiveSub = false;
+          let latestSub = null;
+          if (subs && subs.length > 0) {
+            latestSub = subs[0];
+            const endDate = new Date(latestSub.end_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (endDate >= today) {
+              hasActiveSub = true;
+            }
+          }
+          if (hasActiveSub) {
+            setActiveSubscription(latestSub);
+          } else {
+            setActiveSubscription(null);
           }
         }
       } finally {
@@ -156,25 +186,7 @@ export default function B2bDashboardPage() {
         ) : (
           <div className="page-body">
             
-            {/* Low balance warning */}
-            {walletBalance !== null && walletBalance <= 50 && (
-              <div style={{
-                marginBottom: '24px', padding: '16px 20px', borderRadius: '12px',
-                background: walletBalance <= 0 ? '#fef2f2' : '#fffbeb',
-                border: `1px solid ${walletBalance <= 0 ? '#fecaca' : '#fef3c7'}`,
-                display: 'flex', gap: '12px', alignItems: 'flex-start'
-              }}>
-                <div style={{ fontSize: '1.5rem', lineHeight: 1 }}>{walletBalance <= 0 ? <MdBlock size={20} aria-hidden /> : <MdWarning size={20} aria-hidden />}</div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: '1rem', color: walletBalance <= 0 ? '#dc2626' : '#d97706', marginBottom: '4px' }}>
-                    {walletBalance <= 0 ? 'Wallet Empty — Test submissions are blocked!' : 'Low Wallet Balance'}
-                  </div>
-                  <div style={{ fontSize: '0.9rem', color: walletBalance <= 0 ? '#991b1b' : '#92400e' }}>
-                    Please contact your Metrolab administrator to recharge your wallet. Current balance: <strong>${walletBalance.toFixed(2)}</strong>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             {/* KPI Cards section */}
             <div style={{ 
@@ -183,13 +195,7 @@ export default function B2bDashboardPage() {
               gap: '20px', 
               marginBottom: '30px' 
             }}>
-              <DashboardCard 
-                title="Wallet Balance" 
-                value={walletBalance !== null ? `$${walletBalance.toFixed(2)}` : '—'} 
-                icon={<MdAccountBalanceWallet size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)" 
-                link="/b2b/dashboard/wallet"
-              />
+
               <DashboardCard 
                 title="Total Patients" 
                 value={patients.length} 
@@ -335,7 +341,7 @@ export default function B2bDashboardPage() {
                                 {pat.first_name} {pat.last_name}
                                 <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 400 }}>{pat.email}</div>
                               </td>
-                              <td style={tdStyle}>{pat.age} Y / {pat.gender}</td>
+                              <td style={tdStyle}>{pat.age} Y / {genderLabel(pat.gender)}</td>
                               <td style={{...tdStyle, fontSize: '0.85rem'}}>
                                 {pat.creation_timestamp ? formatDate(pat.creation_timestamp) : 'N/A'}
                               </td>

@@ -276,7 +276,7 @@ export default function B2BClientsPage() {
 
   const { data: subscriptions = [] } = useQuery({
     queryKey: b2bSubscriptionsKey(selectedClientId ?? 0),
-    enabled: view === 'subscription' && !!selectedClientId,
+    enabled: (view === 'subscription' || view === 'wallet') && !!selectedClientId,
     queryFn: async () => {
       try {
         return await apiFetch<Subscription[]>(
@@ -291,7 +291,7 @@ export default function B2BClientsPage() {
 
   const { data: customPricesData = [] } = useQuery({
     queryKey: b2bCustomPricesKey(selectedClientId ?? 0),
-    enabled: view === 'subscription' && !!selectedClientId,
+    enabled: (view === 'subscription' || view === 'wallet') && !!selectedClientId,
     queryFn: async () => {
       try {
         return await apiFetch<{ lab_test_id: number; custom_price: string }[]>(
@@ -452,6 +452,7 @@ export default function B2BClientsPage() {
         } else if (pricingMode === 'yearly') {
           end.setFullYear(end.getFullYear() + 1);
         }
+        end.setDate(end.getDate() - 1);
         // Format to YYYY-MM-DD
         const endStr = end.toISOString().split('T')[0];
         setSubValue('end_date', endStr, { shouldValidate: true });
@@ -734,12 +735,21 @@ export default function B2BClientsPage() {
   };
 
   // ── B2B Client CRUD ──────────────────────────────────────────────────────
-  const openAdd = () => {
+  const openAddB2B = () => {
     setEditingId(null);
     resetClient({ ...emptyClient, password: generateAutoPassword() });
     setIsApproval(false);
     setIsFixedPrice(false);
     setIsWhitelabel(false);
+    setView('form');
+  };
+
+  const openAddWhitelabel = () => {
+    setEditingId(null);
+    resetClient({ ...emptyClient, password: generateAutoPassword() });
+    setIsApproval(false);
+    setIsFixedPrice(false);
+    setIsWhitelabel(true);
     setView('form');
   };
 
@@ -1083,12 +1093,12 @@ export default function B2BClientsPage() {
                 {editingId ? (
                   <>
                     <MdEdit size={16} aria-hidden />
-                    Edit B2B Lab
+                    {isWhitelabel ? 'Edit Whitelabel Client' : 'Edit B2B Client'}
                   </>
                 ) : (
                   <>
                     <MdAdd size={16} aria-hidden />
-                    Add B2B Lab
+                    {isWhitelabel ? 'Add Whitelabel Client' : 'Add B2B Client'}
                   </>
                 )}
               </span>
@@ -1168,51 +1178,15 @@ export default function B2BClientsPage() {
                 {inp('website', 'Website')}
                 {inp('tagline', 'Tagline')}
 
-                {/* Client Type Selection Block */}
-                <div style={{ gridColumn: '1 / -1', padding: '1.25rem', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                  <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>Client Domain Type</h4>
-                  
-                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '1rem', border: isWhitelabel ? '1px solid var(--border)' : '1px solid var(--primary)', borderRadius: '8px', background: isWhitelabel ? 'transparent' : 'rgba(128, 128, 128, 0.05)', flex: 1, minWidth: '250px' }}>
-                      <input 
-                        type="radio" 
-                        name="client_type"
-                        checked={!isWhitelabel} 
-                        onChange={() => {
-                          setIsWhitelabel(false);
-                          setClientValue('custom_domain', '');
-                        }} 
-                        style={{ width: 20, height: 20, accentColor: 'var(--primary)', marginTop: '2px' }} 
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '1rem', color: isWhitelabel ? 'var(--text-muted)' : 'var(--text-color)' }}>Normal Client</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Client will use the standard Metrolab system domain to log in.</div>
-                      </div>
-                    </label>
-
-                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', cursor: 'pointer', padding: '1rem', border: isWhitelabel ? '1px solid var(--primary)' : '1px solid var(--border)', borderRadius: '8px', background: isWhitelabel ? 'rgba(128, 128, 128, 0.05)' : 'transparent', flex: 1, minWidth: '250px' }}>
-                      <input 
-                        type="radio" 
-                        name="client_type"
-                        checked={isWhitelabel} 
-                        onChange={() => setIsWhitelabel(true)} 
-                        style={{ width: 20, height: 20, accentColor: 'var(--primary)', marginTop: '2px' }} 
-                      />
-                      <div>
-                        <div style={{ fontWeight: 600, fontSize: '1rem', color: isWhitelabel ? 'var(--text-color)' : 'var(--text-muted)' }}>Whitelabel Client</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Client will have their own custom branded domain.</div>
-                      </div>
-                    </label>
-                  </div>
-
-                  {isWhitelabel && (
-                    <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border)' }}>
-                      <div style={{ maxWidth: '400px' }}>
-                        {inp('custom_domain', 'Custom Domain (e.g. lab.client1.biz)')}
-                      </div>
+                {/* Client Domain Section (Conditional) */}
+                {isWhitelabel && (
+                  <div style={{ gridColumn: '1 / -1', padding: '1.25rem', background: 'var(--bg-card)', border: '1px solid var(--primary)', borderRadius: '8px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                    <h4 style={{ marginBottom: '1rem', fontSize: '1.1rem', fontWeight: 600 }}>Whitelabel Client Settings</h4>
+                    <div style={{ maxWidth: '400px' }}>
+                      {inp('custom_domain', 'Custom Domain (e.g. lab.client1.biz)')}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
                 <FormGroup key="primary_color_code" label="Primary Colour Code (e.g. rgb(12,34,56) or #Hex)" htmlFor="b2b-primary_color_code" error={clientErrors.primary_color_code?.message}>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     <label style={{ display: 'block', flexShrink: 0, width: '40px', height: '40px', borderRadius: '4px', border: '1px solid var(--border)', background: watchClient('primary_color_code') || '#ffffff', overflow: 'hidden', cursor: 'pointer' }}>
@@ -1757,6 +1731,36 @@ export default function B2BClientsPage() {
             </div>
           </div>
 
+          {selectedClient?.billing_mode === 'custom' && (
+            <div className="card" style={{ marginBottom: '1.5rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', border: 'none' }}>
+              <div className="card-body" style={{ color: '#fff' }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem' }}>Active Subscription: Custom Pricing Mode</div>
+                <p style={{ marginBottom: '1rem', color: 'rgba(255,255,255,0.9)' }}>
+                  This client operates on per-test negotiated pricing. Test costs are deducted directly from their wallet balance.
+                </p>
+                {selectedClient?.is_fixed_price ? (
+                  <div style={{ background: 'rgba(0,0,0,0.15)', padding: '0.75rem', borderRadius: '8px' }}>
+                    <strong>Fixed Price Per Report:</strong> ${parseFloat(String(selectedClient.fixed_price_amount || 0)).toFixed(2)}
+                  </div>
+                ) : (
+                  customPrices.length > 0 && (
+                    <div style={{ background: 'rgba(0,0,0,0.15)', padding: '1rem', borderRadius: '8px' }}>
+                      <strong style={{ display: 'block', marginBottom: '0.75rem' }}>Custom Test Prices:</strong>
+                      <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                        {customPrices.map(cp => (
+                          <li key={cp.lab_test_id} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '0.25rem' }}>
+                            <span>{cp.test_name || `Test #${cp.lab_test_id}`}</span>
+                            <strong>${parseFloat(cp.custom_price).toFixed(2)}</strong>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Recharge Form */}
           <div className="card" style={{ marginBottom: '1.5rem' }}>
             <div className="card-header"><span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><MdAdd size={18} aria-hidden />Add Funds</span></div>
@@ -1894,7 +1898,7 @@ export default function B2BClientsPage() {
                 transition: 'all 0.2s',
               }}
             >
-              {f === 'all' ? 'All Clients' : f === 'normal' ? 'Normal Clients' : 'Whitelabel Clients'}
+              {f === 'all' ? 'All Clients' : f === 'normal' ? 'B2B Clients' : 'Whitelabel Clients'}
             </button>
           ))}
         </div>
@@ -1905,7 +1909,16 @@ export default function B2BClientsPage() {
           rows={filteredClients}
           loading={loading}
           emptyText="No B2B Labs found."
-          headerActions={<ListingHeaderActions onAdd={openAdd} />}
+          headerActions={(
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button type="button" className="btn btn-primary" onClick={openAddB2B}>
+                <MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden /> Add B2B Client
+              </button>
+              <button type="button" className="btn btn-primary" onClick={openAddWhitelabel}>
+                <MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden /> Add Whitelabel Client
+              </button>
+            </div>
+          )}
           actionsLabel="Actions"
           actionsWidth={180}
           defaultPageSize={10}

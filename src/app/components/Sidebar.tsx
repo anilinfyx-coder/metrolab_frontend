@@ -79,8 +79,9 @@ export default function Sidebar({
 
   const isB2bPortal = userKey === 'b2b_user';
   const isAdminPortal = userKey === 'admin_user';
-  const usesLabBranding = isB2bPortal || isAdminPortal;
-  const resolvedTokenKey = tokenKey || (isB2bPortal ? 'b2b_token' : isAdminPortal ? 'admin_token' : undefined);
+  const isCorporatePortal = userKey === 'corporate_user';
+  const usesLabBranding = isB2bPortal || isAdminPortal || isCorporatePortal;
+  const resolvedTokenKey = tokenKey || (isB2bPortal ? 'b2b_token' : isAdminPortal ? 'admin_token' : isCorporatePortal ? 'corporate_token' : undefined);
 
   useEffect(() => {
     document.body.classList.toggle('sidebar-collapsed', collapsed);
@@ -163,12 +164,28 @@ export default function Sidebar({
       }
     };
 
-    void (isB2bPortal ? loadB2bBranding() : loadAdminBranding());
+    const loadCorporateBranding = async () => {
+      // Corporate users belong to a B2B client — load that client's logo
+      const b2bClientId = stored.b2b_client_id;
+      if (!b2bClientId) return; // no parent B2B → show blank (handled by showLabBranding being false)
+      try {
+        const client = await apiFetch<Record<string, unknown>>(`/api/B2bClients/${b2bClientId}`, {
+          tokenKey: resolvedTokenKey,
+          silent: true,
+        });
+        applyBranding(client);
+        persistBranding(client);
+      } catch {
+        /* keep blank */
+      }
+    };
+
+    void (isCorporatePortal ? loadCorporateBranding() : isB2bPortal ? loadB2bBranding() : loadAdminBranding());
 
     return () => {
       cancelled = true;
     };
-  }, [usesLabBranding, userKey, isB2bPortal, resolvedTokenKey]);
+  }, [usesLabBranding, userKey, isB2bPortal, isCorporatePortal, resolvedTokenKey]);
 
   const { isWhitelabel, config } = useWhitelabel();
 
@@ -217,6 +234,9 @@ export default function Sidebar({
     </>
   ) : isWhitelabel ? (
     <div style={{ minHeight: '60px', width: '100%' }} />
+  ) : usesLabBranding ? (
+    // Portal uses lab branding but no logo found — show blank, not Metro Lab
+    <div style={{ minHeight: '40px', width: '100%' }} />
   ) : (
     <MetroBrandBlock collapsed={collapsed} />
   );
@@ -260,10 +280,10 @@ export default function Sidebar({
 
       {!collapsed ? (
         <div
-          className={`sidebar-footer-bar${showLabBranding ? ' sidebar-footer-bar-with-logo' : ' sidebar-footer-bar-toggle-only'}`}
+          className={`sidebar-footer-bar${usesLabBranding && !isWhitelabel ? ' sidebar-footer-bar-with-logo' : ' sidebar-footer-bar-toggle-only'}`}
         >
           {toggleButton}
-          {showLabBranding && !isWhitelabel ? (
+          {usesLabBranding && !isWhitelabel ? (
             <div className="sidebar-footer-brand">
               <Image
                 src="/login-logo.png"
@@ -276,7 +296,7 @@ export default function Sidebar({
             </div>
           ) : null}
         </div>
-      ) : showLabBranding && !isWhitelabel ? (
+      ) : usesLabBranding && !isWhitelabel ? (
         <div className="sidebar-footer-bar sidebar-footer-bar-logo-only">
           <div className="sidebar-footer-brand">
             <Image

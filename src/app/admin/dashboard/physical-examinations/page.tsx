@@ -688,7 +688,7 @@ export default function PhysicalExaminationsPage() {
             rowActions={cert => (
               <ActionIcons
                 onMail={() => void emailCert(cert)}
-                mailTitle={`Email certificate #${cert.id}`}
+                mailTitle={`Email examination #${cert.id}`}
                 onView={() =>
                   window.open(
                     `/admin/dashboard/physical-examinations/print/${cert.id}`,
@@ -697,6 +697,7 @@ export default function PhysicalExaminationsPage() {
                   )
                 }
                 viewTitle="Print"
+                viewVariant="print"
                 onDelete={() => void handleDelete(cert)}
                 deleteTitle="Delete"
               />
