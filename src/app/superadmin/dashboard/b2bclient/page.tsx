@@ -297,7 +297,7 @@ export default function B2BClientsPage() {
     enabled: (view === 'subscription' || view === 'wallet') && !!selectedClientId,
     queryFn: async () => {
       try {
-        return await apiFetch<{ lab_test_id: number; custom_price: string }[]>(
+        return await apiFetch<{ lab_test_id: number; custom_price: string; test_name?: string }[]>(
           `/api/B2bClientCustomPrices?b2b_client_id=${selectedClientId}`,
           { tokenKey: 'superadmin_token' },
         ) || [];
@@ -309,7 +309,7 @@ export default function B2BClientsPage() {
 
   const { data: globalLabTests = [] } = useQuery({
     queryKey: LAB_TESTS_ALL_KEY,
-    enabled: view === 'subscription',
+    enabled: view === 'subscription' || view === 'wallet',
     queryFn: async () => {
       try {
         return await apiFetch<LabTest[]>('/api/LabTests', { tokenKey: 'superadmin_token' }) || [];
@@ -647,7 +647,7 @@ export default function B2BClientsPage() {
       clientId: number;
       fixedPrice: boolean;
       fixedAmount: string;
-      prices: { lab_test_id: number; custom_price: string }[];
+      prices: { lab_test_id: number; custom_price: string; test_name?: string }[];
     }) => {
       await apiFetch(`/api/B2bClients/${clientId}`, {
         method: 'PUT',

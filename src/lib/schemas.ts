@@ -491,6 +491,61 @@ export const superAdminChangePasswordSchema = yup.object({
 
 export type SuperAdminChangePasswordFormValues = yup.InferType<typeof superAdminChangePasswordSchema>;
 
+export function resolveSelectionCount(
+  count: number | undefined | null,
+  selectionType: string | number | undefined | null,
+  totalEmployees: number,
+): number {
+  const raw = Number(count || 0);
+  if (!Number.isFinite(raw) || raw <= 0 || totalEmployees <= 0) return 0;
+  if (String(selectionType) === '2') {
+    return Math.ceil((raw / 100) * totalEmployees);
+  }
+  return Math.floor(raw);
+}
+
+/**
+ * Model A: Alternate is a backup pool only.
+ * - Percentage mode: remaining heads from (100% - Drug% - Alcohol%)
+ * - Number mode: leftover seats after max(Drug, Alcohol)
+ * - Cap at 25% of total (for 2–4 employees allow up to 1 when seats remain)
+ * - Never allow 100% of employees to be Alternate
+ */
+export function getMaxAlternateCount(
+  totalEmployees: number,
+  drugCount?: number | null,
+  alcoholCount?: number | null,
+  selectionType?: string | number | null,
+): number {
+  const total = Number(totalEmployees || 0);
+  if (total <= 1) return 0;
+
+  let remaining = 0;
+  if (String(selectionType) === '2') {
+    const drugPct = Math.max(0, Number(drugCount || 0));
+    const alcPct = Math.max(0, Number(alcoholCount || 0));
+    const remainingPercent = Math.max(0, 100 - (drugPct + alcPct));
+    remaining = Math.floor((remainingPercent / 100) * total);
+  } else {
+    const drugC = resolveSelectionCount(drugCount, '1', total);
+    const alcC = resolveSelectionCount(alcoholCount, '1', total);
+    remaining = Math.max(0, total - Math.max(drugC, alcC));
+  }
+
+  let pctCap = Math.floor(total * 0.25);
+  if (total >= 2 && total <= 4) pctCap = Math.max(pctCap, 1);
+
+  const neverAll = total - 1;
+  return Math.max(0, Math.min(remaining, pctCap, neverAll));
+}
+
+export function getUsedDrugAlcoholPercent(
+  drugCount?: number | null,
+  alcoholCount?: number | null,
+): number {
+  return Math.max(0, Number(drugCount || 0)) + Math.max(0, Number(alcoholCount || 0));
+}
+
 export function testRequestFormSchema(totalEmployees: number) {
   const optionalCount = yup
     .number()
@@ -518,16 +573,36 @@ export function testRequestFormSchema(totalEmployees: number) {
   }).test('employee-counts', '', function (values) {
     if (!values) return true;
     const total = totalEmployees;
-    const altC = values.alternateCount || 0;
-    let alcC = values.alcoholCount || 0;
-    if (values.selectionType === '2') alcC = Math.ceil((alcC / 100) * total);
-    let drugC = values.drugCount || 0;
-    if (values.selectionType === '2') drugC = Math.ceil((drugC / 100) * total);
+    const altC = values.isAlternateSelected ? (values.alternateCount || 0) : 0;
+    const alcC = values.isAlcoholSelected
+      ? resolveSelectionCount(values.alcoholCount, values.selectionType, total)
+      : 0;
+    const drugC = values.isDrugSelected
+      ? resolveSelectionCount(values.drugCount, values.selectionType, total)
+      : 0;
+
     if (altC + drugC > total) {
       return this.createError({ path: 'drugCount', message: 'Count in Drug + Alternate exceeds total employees' });
     }
     if (altC + alcC > total) {
       return this.createError({ path: 'alcoholCount', message: 'Count in Alcohol + Alternate exceeds total employees' });
+    }
+
+    if (values.isAlternateSelected) {
+      const maxAlt = getMaxAlternateCount(
+        total,
+        values.isDrugSelected ? values.drugCount : 0,
+        values.isAlcoholSelected ? values.alcoholCount : 0,
+        values.selectionType,
+      );
+      if (altC > maxAlt) {
+        return this.createError({
+          path: 'alternateCount',
+          message: maxAlt <= 0
+            ? 'No Alternate seats available with the current Drug/Alcohol selection'
+            : `Alternate cannot exceed ${maxAlt} (backup pool only; for % mode, remaining after Drug% + Alcohol%)`,
+        });
+      }
     }
     return true;
   });

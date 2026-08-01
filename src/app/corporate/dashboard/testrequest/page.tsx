@@ -11,6 +11,9 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import { apiFetch } from '../../../../lib/api';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
 import {
+  getMaxAlternateCount,
+  getUsedDrugAlcoholPercent,
+  resolveSelectionCount,
   testRequestFormSchema,
   type TestRequestFormValues,
 } from '../../../../lib/schemas';
@@ -109,6 +112,19 @@ export default function TestRequestsPage() {
   const isDrugSelected = watch('isDrugSelected');
   const isAlcoholSelected = watch('isAlcoholSelected');
   const isAlternateSelected = watch('isAlternateSelected');
+  const drugCount = watch('drugCount');
+  const alcoholCount = watch('alcoholCount');
+  const alternateCount = watch('alternateCount');
+
+  const maxAlternateAllowed = useMemo(
+    () => getMaxAlternateCount(
+      employees.length,
+      isDrugSelected ? drugCount : 0,
+      isAlcoholSelected ? alcoholCount : 0,
+      selectionType,
+    ),
+    [employees.length, isDrugSelected, drugCount, isAlcoholSelected, alcoholCount, selectionType],
+  );
 
   const loadData = async () => {
     setLoading(true);
@@ -152,13 +168,21 @@ export default function TestRequestsPage() {
 
   const generateAndSubmit = handleSubmit(async values => {
     const total = employees.length;
-    const altC = values.alternateCount || 0;
+    const maxAlt = getMaxAlternateCount(
+      total,
+      values.isDrugSelected ? values.drugCount : 0,
+      values.isAlcoholSelected ? values.alcoholCount : 0,
+      values.selectionType,
+    );
+    let altC = values.isAlternateSelected ? (values.alternateCount || 0) : 0;
+    if (altC > maxAlt) altC = maxAlt;
 
-    let alcC = values.alcoholCount || 0;
-    if (values.selectionType === '2') alcC = Math.ceil((alcC / 100) * total);
-
-    let drugC = values.drugCount || 0;
-    if (values.selectionType === '2') drugC = Math.ceil((drugC / 100) * total);
+    let alcC = values.isAlcoholSelected
+      ? resolveSelectionCount(values.alcoholCount, values.selectionType, total)
+      : 0;
+    let drugC = values.isDrugSelected
+      ? resolveSelectionCount(values.drugCount, values.selectionType, total)
+      : 0;
 
     const ok = await confirmDialog({
       title: 'This is Random Pulling, Please confirm',
@@ -194,6 +218,9 @@ export default function TestRequestsPage() {
 
     const payload = {
       ...values,
+      alternateCount: altC,
+      drugCount: values.isDrugSelected ? (values.drugCount || 0) : 0,
+      alcoholCount: values.isAlcoholSelected ? (values.alcoholCount || 0) : 0,
       totalCount: total,
       employeesList: emps
     };
@@ -620,25 +647,55 @@ export default function TestRequestsPage() {
                       </label>
                     </div>
                     {isAlternateSelected && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <input
-                          type="number"
-                          min={0}
-                          placeholder="0"
-                          data-field="alternateCount"
-                          style={{
-                            width: '90px',
-                            padding: '0.35rem 0.5rem',
-                            border: '1px solid var(--border)',
-                            borderRadius: 5,
-                            background: 'var(--bg-input)',
-                            color: 'var(--text)',
-                            fontSize: '0.875rem',
-                          }}
-                          {...register('alternateCount', {
-                            setValueAs: v => (v === '' || v == null ? undefined : Number(v)),
-                          })}
-                        />
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <input
+                            type="number"
+                            min={0}
+                            max={maxAlternateAllowed}
+                            placeholder="0"
+                            data-field="alternateCount"
+                            aria-invalid={!!errors.alternateCount}
+                            style={{
+                              width: '90px',
+                              padding: '0.35rem 0.5rem',
+                              border: `1px solid ${errors.alternateCount ? '#ef4444' : 'var(--border)'}`,
+                              borderRadius: 5,
+                              background: 'var(--bg-input)',
+                              color: 'var(--text)',
+                              fontSize: '0.875rem',
+                            }}
+                            {...register('alternateCount', {
+                              setValueAs: v => (v === '' || v == null ? undefined : Number(v)),
+                            })}
+                          />
+                        </div>
+                        <div style={{ marginTop: '0.35rem', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.35 }}>
+                          {(() => {
+                            if (maxAlternateAllowed > 0) {
+                              return `Allowed: 0–${maxAlternateAllowed} of ${employees.length} (backup only, max 25%)`;
+                            }
+                            if (String(selectionType) === '2') {
+                              const usedPct = getUsedDrugAlcoholPercent(
+                                isDrugSelected ? drugCount : 0,
+                                isAlcoholSelected ? alcoholCount : 0,
+                              );
+                              if (usedPct >= 100) {
+                                return `No Alternate seats left (Drug + Alcohol already use ${usedPct}%)`;
+                              }
+                              return 'No Alternate seats available with current Drug/Alcohol %';
+                            }
+                            return 'No Alternate seats available with current Drug/Alcohol selection';
+                          })()}
+                          {typeof alternateCount === 'number' && alternateCount > maxAlternateAllowed ? (
+                            <span style={{ display: 'block', color: '#ef4444' }}>
+                              {maxAlternateAllowed <= 0
+                                ? 'Alternate must be 0 with this Drug/Alcohol selection'
+                                : `Reduce Alternate to ${maxAlternateAllowed} or less`}
+                            </span>
+                          ) : null}
+                        </div>
+                        <FieldError message={errors.alternateCount?.message} />
                       </div>
                     )}
                   </div>
