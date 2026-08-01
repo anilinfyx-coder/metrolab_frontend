@@ -34,6 +34,14 @@ function showFlag(labTest: Record<string, unknown> | null | undefined, flag: str
   return !!(labTest && labTest[flag]);
 }
 
+const genderLabel = (g: string | number | null | undefined) => {
+  if (!g) return '—';
+  if (String(g) === '1' || String(g).toLowerCase() === 'male') return 'Male';
+  if (String(g) === '2' || String(g).toLowerCase() === 'female') return 'Female';
+  if (String(g) === '3') return 'Prefer not to Declare';
+  return String(g);
+};
+
 export default function PrintLabTestReport() {
   const { id } = useParams();
   const [report, setReport] = useState<Record<string, any> | null>(null);
@@ -235,7 +243,7 @@ export default function PrintLabTestReport() {
               </div>
               <div>
                 <div><strong>Patient&apos;s SSN:</strong> {(patient as any).ssn || ''}</div>
-                <div><strong>Patient/Donor Gender:</strong> {patient.gender === 1 ? 'Male' : patient.gender === 2 ? 'Female' : patient.gender || '—'}</div>
+                <div><strong>Patient/Donor Gender:</strong> {genderLabel(patient.gender)}</div>
               </div>
             </div>
           </section>

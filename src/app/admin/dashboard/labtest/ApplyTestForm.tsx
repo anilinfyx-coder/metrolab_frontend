@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from 'react';
 import { MdCheckCircle, MdClose, MdScience, MdChevronRight } from 'react-icons/md';
 import PageLoader from '../../../components/PageLoader';
@@ -187,6 +187,14 @@ export default function ApplyTestForm({
     .filter((v: string | null | undefined) => v && String(v).trim())
     .join(', ');
 
+  const genderLabel = (g: string | number | null | undefined) => {
+    if (!g) return '—';
+    if (String(g) === '1' || String(g).toLowerCase() === 'male') return 'Male';
+    if (String(g) === '2' || String(g).toLowerCase() === 'female') return 'Female';
+    if (String(g) === '3') return 'Prefer not to Declare';
+    return String(g);
+  };
+
   const demoRow = (label: string, value?: string | null) => (
     <div className="wl-demo-row">
       <span className="wl-demo-label">{label}:</span>{' '}
@@ -233,7 +241,7 @@ export default function ApplyTestForm({
               </div>
               <div className="wl-demo-col">
                 {demoRow('Driving License/State Id', drivingLicense)}
-                {demoRow('Gender', data.patient_gender)}
+                {demoRow('Gender', genderLabel(data.patient_gender))}
                 {demoRow('Address', address)}
               </div>
             </div>

@@ -646,6 +646,7 @@ export default function PatientDemographicPage() {
                   <input
                     type="text"
                     className="patient-form-input"
+                    style={{ paddingLeft: '2.5rem' }}
                     placeholder="Search lab tests by name..."
                     value={labTestSearch}
                     onChange={e => setLabTestSearch(e.target.value)}

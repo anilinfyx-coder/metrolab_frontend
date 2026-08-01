@@ -63,7 +63,7 @@
   /* Sidebar — teal (legacy parity) */
   --sidebar-bg:    #0076A3;
   --sidebar-active:#C9E4EB;
-  --sidebar-width: 260px;
+  --sidebar-width: 280px;
   --sidebar-border:#00648A;
   --header-height: 60px;
 
@@ -959,6 +959,8 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
   transition: all 0.15s ease;
   margin: 0.25rem 0.5rem;
   border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .sidebar-link:hover {

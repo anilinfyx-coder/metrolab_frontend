@@ -20,6 +20,8 @@ export default function TopNav({ title, children }: TopNavProps) {
   const portal = getPortalFromPath(pathname || '');
   const [userName, setUserName] = useState('');
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [hasActiveSub, setHasActiveSub] = useState(false);
+  const [activeSubMode, setActiveSubMode] = useState<'monthly' | 'custom' | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -53,26 +55,49 @@ export default function TopNav({ title, children }: TopNavProps) {
     const user = getStoredUser(portal.userKey);
     setUserName(user?.name || user?.company_name || user?.email || 'User');
 
-    // Fetch alerts for superadmin or b2b
-    if (portal.key === 'superadmin' || portal.key === 'b2b') {
-      const fetchAlerts = async () => {
-        try {
-          const endpoint = portal.key === 'b2b' && user?.id
-            ? `/api/B2bClients/alerts?b2b_client_id=${user.id}`
-            : '/api/B2bClients/alerts';
-          
-          const alertsData = await apiFetch<any[]>(endpoint, {
-            tokenKey: portal.tokenKey,
-            silent: true // don't show toast errors for background polling
+      // Fetch alerts for superadmin or b2b
+      if (portal.key === 'superadmin' || portal.key === 'b2b') {
+        const fetchAlerts = async () => {
+          try {
+            const endpoint = portal.key === 'b2b' && user?.id
+              ? `/api/B2bClients/alerts?b2b_client_id=${user.id}`
+              : '/api/B2bClients/alerts';
+            
+            const alertsData = await apiFetch<any[]>(endpoint, {
+              tokenKey: portal.tokenKey,
+              silent: true // don't show toast errors for background polling
+            });
+            setAlerts(alertsData || []);
+          } catch {
+            // ignore error
+          }
+        };
+        
+        // Initial fetch
+        fetchAlerts();
+
+        if (portal.key === 'b2b' && user?.id) {
+          Promise.all([
+            apiFetch<any[]>(`/api/B2bClientSubscription?b2b_client_id=${user.id}`, { tokenKey: 'b2b_token', silent: true }).catch(() => []),
+            apiFetch<any>(`/api/B2bClients/${user.id}`, { tokenKey: 'b2b_token', silent: true }).catch(() => null)
+          ]).then(([subs, clientProfile]) => {
+            const billingMode = clientProfile?.billing_mode || 'monthly';
+            if (billingMode === 'custom') {
+              setHasActiveSub(true);
+              setActiveSubMode('custom');
+            } else if (subs && subs.length > 0) {
+              const endDate = new Date(subs[0].end_date);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              const isActive = endDate >= today;
+              setHasActiveSub(isActive);
+              setActiveSubMode(isActive ? 'monthly' : null);
+            } else {
+              setHasActiveSub(false);
+              setActiveSubMode(null);
+            }
           });
-          setAlerts(alertsData || []);
-        } catch {
-          // ignore error
         }
-      };
-      
-      // Initial fetch
-      fetchAlerts();
 
       // Set up polling interval every 60 seconds (60000 ms)
       const intervalId = setInterval(fetchAlerts, 60000);
@@ -128,20 +153,24 @@ export default function TopNav({ title, children }: TopNavProps) {
             <MdMenu size={22} aria-hidden />
           </button>
           <h1 className="topnav-title">{title}</h1>
-          {portal.key === 'b2b' && (
-            isWhitelabel && config ? (
-              <span className="topnav-mode-badge topnav-mode-badge-whitelabel">
-                Whitelabel Mode: {config.custom_domain}
-              </span>
-            ) : (
-              <span className="topnav-mode-badge">
-                Standard MetroLab Mode
-              </span>
-            )
+          {portal.key === 'b2b' && isWhitelabel && config && (
+            <span className="topnav-mode-badge topnav-mode-badge-whitelabel">
+              Whitelabel Mode: {config.custom_domain}
+            </span>
           )}
         </div>
         <div className="topnav-actions">
           {children}
+
+          {portal.key === 'b2b' && hasActiveSub && (
+            <Link 
+              href={activeSubMode === 'custom' ? '/b2b/dashboard/wallet' : '/b2b/dashboard/subscription'} 
+              className="topnav-user-link" 
+              style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem', marginRight: '10px', textDecoration: 'none' }}
+            >
+              Active Subscription
+            </Link>
+          )}
 
           {(portal.key === 'superadmin' || portal.key === 'b2b') && (
             <div className="topnav-notifications" ref={dropdownRef}>

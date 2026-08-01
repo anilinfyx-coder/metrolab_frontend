@@ -15,6 +15,7 @@ import {
   MdToggleOn,
   MdUnfoldMore,
   MdVisibility,
+  MdPrint,
 } from 'react-icons/md';
 import TablePagination, { useClientPagination } from './TablePagination';
 import PageLoader from './PageLoader';
@@ -105,7 +106,7 @@ export function ActionIcons({
   deleteFirst?: boolean;
   editVariant?: 'filled' | 'outline';
   editDisabled?: boolean;
-  viewVariant?: 'doc' | 'eye';
+  viewVariant?: 'doc' | 'eye' | 'print';
 }) {
   const editBtn = onEdit ? (
     <button
@@ -179,7 +180,13 @@ export function ActionIcons({
     </button>
   ) : null;
 
-  const viewBtn = viewVariant === 'eye' ? viewEyeBtn : viewDocBtn;
+  const viewPrintBtn = onView ? (
+    <button type="button" className="action-btn action-btn-view" title={viewTitle} onClick={onView}>
+      <MdPrint size={15} aria-hidden />
+    </button>
+  ) : null;
+
+  const viewBtn = viewVariant === 'print' ? viewPrintBtn : viewVariant === 'eye' ? viewEyeBtn : viewDocBtn;
 
   // Manage Requests: Download + View (eye) + Delete
   const isRequestActions = !!(onDownload && onView && onDelete && !onLock && !onMail && !onEdit);
@@ -202,13 +209,6 @@ export function ActionIcons({
           {mailBtn}
           {onView && viewBtn}
           {deleteBtn}
-        </>
-      ) : deleteFirst ? (
-        <>
-          {onView && viewBtn}
-          {deleteBtn}
-          {editBtn}
-          {statusBtn}
         </>
       ) : (
         <>

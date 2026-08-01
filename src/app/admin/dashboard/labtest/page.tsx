@@ -83,7 +83,7 @@ export default function WaitingListPage() {
     setLoading(true);
     try {
       const result = await apiFetch<PaginatedResult<WaitingEntry> | WaitingEntry[]>(
-        `/api/WaitingList?${buildPageQuery(p, ps)}`,
+        `/api/WaitingList?pending_only=true&${buildPageQuery(p, ps)}`,
         {
           tokenKey: 'admin_token',
           errorFallback: 'Failed to load waiting list.',

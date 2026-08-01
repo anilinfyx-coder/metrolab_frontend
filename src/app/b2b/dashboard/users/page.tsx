@@ -41,7 +41,7 @@ const emptyForm: B2bStaffUserFormValues = {
 function roleLabel(roleId: number | string) {
   const id = Number(roleId);
   if (id === 6) return 'Admin User';
-  if (id === 7) return 'Admin User Staff';
+  if (id === 7) return 'Employee';
   return 'User';
 }
 
@@ -279,7 +279,7 @@ export default function B2BUsersPage() {
                     {...register('role_id')}
                   >
                     <option value="6">Admin User</option>
-                    <option value="7">Admin User Staff</option>
+                    <option value="7">Employee</option>
                   </select>
                 </FormGroup>
 

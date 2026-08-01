@@ -635,6 +635,7 @@ export default function HealthCertificatesPage() {
                   )
                 }
                 viewTitle="Print"
+                viewVariant="print"
                 onDelete={() => void handleDelete(cert)}
                 deleteTitle="Delete"
               />

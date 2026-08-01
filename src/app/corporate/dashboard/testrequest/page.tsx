@@ -57,10 +57,11 @@ interface EmployeeRecord {
   isSelectedForAlcohol?: boolean;
   isSelectedForAlternate?: boolean;
   is_selected_for_drug?: boolean;
-  is_selected_for_alcohol?: boolean;
   is_selected_for_alternate?: boolean;
   drugReportSubmitStatus?: boolean;
+  drugReportId?: number;
   alcoholReportSubmitStatus?: boolean;
+  alcoholReportId?: number;
 }
 
 const emptyForm: TestRequestFormValues = {
@@ -252,15 +253,36 @@ export default function TestRequestsPage() {
   };
 
 
-  const emailReport = async (testRequestId: number, employeeId: number) => {
+  const emailLabReport = async (reportId: number) => {
     try {
-      await apiFetch('/api/TestRequest/emailTestRequestReport', {
+      await apiFetch('/api/LabTestCategoryReport/emailLabTestCategoryReport', {
         method: 'POST',
         tokenKey: 'corporate_token',
-        body: JSON.stringify({ test_request_id: testRequestId, employee_id: employeeId }),
+        body: JSON.stringify({ id: reportId }),
         successMessage: 'Report emailed successfully.',
         errorFallback: 'Failed to email report.',
       });
+    } catch {
+      /* toast handled by apiFetch */
+    }
+  };
+
+  const downloadLabReport = async (reportId: number) => {
+    try {
+      const blob = await apiFetch<Blob>('/api/LabTestCategoryReport/downloadLabTestCategoryReport', {
+        method: 'POST',
+        tokenKey: 'corporate_token',
+        body: JSON.stringify({ id: reportId }),
+        errorFallback: 'Unable to download report.',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `Lab-Report-${reportId}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
     } catch {
       /* toast handled by apiFetch */
     }
@@ -278,7 +300,9 @@ export default function TestRequestsPage() {
       const anchor = document.createElement('a');
       anchor.href = url;
       anchor.download = `TR-${id}-Report.pdf`;
+      document.body.appendChild(anchor);
       anchor.click();
+      document.body.removeChild(anchor);
       URL.revokeObjectURL(url);
     } catch {
       /* toast handled by apiFetch */
@@ -759,8 +783,8 @@ export default function TestRequestsPage() {
                               <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Pending</span>
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
-                                <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdDownload size={12} /></button>
-                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdEmail size={12} /></button>
+                                <button type="button" onClick={() => emp.drugReportId && downloadLabReport(emp.drugReportId)} title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdDownload size={12} /></button>
+                                <button type="button" onClick={() => emp.drugReportId && emailLabReport(emp.drugReportId)} title="Email" style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdEmail size={12} /></button>
                               </div>
                             )}
                           </div>
@@ -776,8 +800,8 @@ export default function TestRequestsPage() {
                               <span style={{ fontSize: '0.8rem', fontWeight: 500 }}>Pending</span>
                             ) : (
                                 <div style={{ display: 'flex', gap: '0.2rem' }}>
-                                <button title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdDownload size={12} /></button>
-                                <button title="Email" onClick={() => emp.employee_id && emailReport(selectedRequest.id, emp.employee_id)} style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdEmail size={12} /></button>
+                                <button type="button" onClick={() => emp.alcoholReportId && downloadLabReport(emp.alcoholReportId)} title="Download" style={{ padding: '0.15rem 0.4rem', background: '#4db0e5', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdDownload size={12} /></button>
+                                <button type="button" onClick={() => emp.alcoholReportId && emailLabReport(emp.alcoholReportId)} title="Email" style={{ padding: '0.15rem 0.4rem', background: '#2f5183', color: '#fff', border: 'none', borderRadius: 3, cursor: 'pointer' }}><MdEmail size={12} /></button>
                               </div>
                             )}
                           </div>

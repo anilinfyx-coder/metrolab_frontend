@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from 'react';
 import { MdAccountBalanceWallet, MdAssignment, MdCheckCircle, MdWarning } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
@@ -13,7 +13,12 @@ function getUser() {
 
 export default function WalletPage() {
   const [balance, setBalance] = useState<number>(0);
+  const [billingMode, setBillingMode] = useState<string>('monthly');
+  const [isFixedPrice, setIsFixedPrice] = useState<boolean>(false);
+  const [fixedPriceAmount, setFixedPriceAmount] = useState<string | number>(0);
   const [history, setHistory] = useState<any[]>([]);
+  const [subscriptions, setSubscriptions] = useState<any[]>([]);
+  const [customPrices, setCustomPrices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,11 +28,14 @@ export default function WalletPage() {
     // Fetch balance and history in parallel
     void (async () => {
       try {
-        const clientData = await apiFetch<{ wallet_balance?: string | number }>(`/api/B2bClients/${user.id}`, {
+        const clientData = await apiFetch<{ wallet_balance?: string | number, billing_mode?: string, is_fixed_price?: boolean, fixed_price_amount?: string | number }>(`/api/B2bClients/${user.id}`, {
           tokenKey: 'b2b_token',
           errorFallback: 'Unable to load wallet balance.',
         });
         setBalance(parseFloat(String(clientData?.wallet_balance || 0)));
+        setBillingMode(clientData?.billing_mode || 'monthly');
+        setIsFixedPrice(!!clientData?.is_fixed_price);
+        setFixedPriceAmount(clientData?.fixed_price_amount || 0);
       } catch {
         setBalance(0);
       }
@@ -40,9 +48,32 @@ export default function WalletPage() {
       } catch {
         setHistory([]);
       }
+      try {
+        const subs = await apiFetch<any[]>(`/api/B2bClientSubscription?b2b_client_id=${user.id}`, {
+          tokenKey: 'b2b_token',
+        });
+        setSubscriptions(subs || []);
+      } catch {
+        setSubscriptions([]);
+      }
+      try {
+        const prices = await apiFetch<any[]>(`/api/B2bClientCustomPrices?b2b_client_id=${user.id}`, {
+          tokenKey: 'b2b_token',
+        });
+        setCustomPrices(prices || []);
+      } catch {
+        setCustomPrices([]);
+      }
       setLoading(false);
     })();
   }, []);
+
+  const activeSub = subscriptions.find(s => {
+    const end = new Date(s.end_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return end >= today;
+  });
 
   const totalCredits = history.filter(t => t.transaction_type === 'CREDIT').reduce((s, t) => s + parseFloat(t.amount), 0);
   const totalDebits = history.filter(t => t.transaction_type === 'DEBIT').reduce((s, t) => s + parseFloat(t.amount), 0);
@@ -55,6 +86,53 @@ export default function WalletPage() {
           <PageLoader message="Loading wallet..." size="lg" />
         ) : (
           <>
+            {/* Active Subscription Row */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div className="card" style={{ background: (billingMode === 'custom' || activeSub) ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'linear-gradient(135deg, #64748b 0%, #475569 100%)', border: 'none' }}>
+                <div className="card-body" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.25rem' }}>Active Subscription Status</div>
+                    <div style={{ fontSize: '1.75rem', fontWeight: 700, color: '#fff' }}>
+                      {billingMode === 'custom' ? 'Custom Pricing Mode' : (activeSub ? 'Standard Subscription Active' : 'No Active Subscription')}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.8)', marginTop: '0.25rem' }}>
+                      {billingMode === 'custom' ? (
+                        <div style={{ marginTop: '0.5rem' }}>
+                          <p style={{ marginBottom: '0.5rem' }}>You are operating on per-test negotiated pricing. Test costs are deducted directly from your wallet balance.</p>
+                          {isFixedPrice ? (
+                            <div style={{ background: 'rgba(0,0,0,0.1)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                              <strong>Fixed Price Per Report:</strong> ${parseFloat(String(fixedPriceAmount)).toFixed(2)}
+                            </div>
+                          ) : (
+                            customPrices.length > 0 && (
+                              <div style={{ background: 'rgba(0,0,0,0.1)', padding: '0.75rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)' }}>
+                                <strong style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Your Custom Test Prices:</strong>
+                                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.5rem' }}>
+                                  {customPrices.map(cp => (
+                                    <li key={cp.lab_test_id} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.25rem' }}>
+                                      <span>{cp.test_name || `Test #${cp.lab_test_id}`}</span>
+                                      <strong>${parseFloat(cp.custom_price).toFixed(2)}</strong>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      ) : (
+                        activeSub ? (
+                          <>Valid until: <strong>{formatDateTime(activeSub.end_date).split(',')[0]}</strong></>
+                        ) : (
+                          <>Your standard subscription has expired. Please renew to continue.</>
+                        )
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: '2.5rem', opacity: 0.3 }}><MdAssignment size={40} aria-hidden /></div>
+                </div>
+              </div>
+            </div>
+
             {/* Stats Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '1.5rem' }}>
               {/* Wallet Balance Card */}
@@ -63,15 +141,16 @@ export default function WalletPage() {
                   <div>
                     <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.25rem' }}>Current Wallet Balance</div>
                     <div style={{ fontSize: '2.25rem', fontWeight: 700, color: '#fff' }}>${balance.toFixed(2)}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.25rem' }}>
+                    
+                    <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)', marginTop: '0.5rem' }}>
                       {balance <= 0 ? (
                         <><MdWarning size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Insufficient funds — contact admin to recharge</>
                       ) : (
-                        <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Available for test deductions</>
+                        <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Sufficient funds available</>
                       )}
                     </div>
                   </div>
-                  <div style={{ fontSize: '2.5rem', opacity: 0.3 }}><MdAccountBalanceWallet size={40} aria-hidden /></div>
+                  <div style={{ fontSize: '3rem', opacity: 0.2 }}><MdAccountBalanceWallet size={48} aria-hidden /></div>
                 </div>
               </div>
 
