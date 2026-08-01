@@ -12,7 +12,7 @@ import PasswordInput from '../../../components/PasswordInput';
 import { formatDate, formatDateTime } from '../../../utils/dateFormat';
 import ListingTable, { ActionIcons, ListingColumn, ListingHeaderActions } from '../../../components/ListingTable';
 import TablePagination from '../../../components/TablePagination';
-import { apiFetch, toastApiSuccess, API_BASE } from '../../../../lib/api';
+import { apiFetch, toastApiSuccess, toastApiError, API_BASE } from '../../../../lib/api';
 import { createInvalidHandler, fieldStyle, formResolver, generateAutoPassword } from '../../../../lib/formHelpers';
 import { buildPageQuery, isPaginatedResult, PaginatedResult } from '../../../../lib/pagination';
 import {
@@ -390,7 +390,7 @@ export default function B2BClientsPage() {
 
   const { data: accessList = [] } = useQuery({
     queryKey: b2bLabTestAccessKey(selectedClientId ?? 0),
-    enabled: view === 'labtestaccess' && !!selectedClientId,
+    enabled: (view === 'labtestaccess' || view === 'subscription') && !!selectedClientId,
     queryFn: async () => {
       try {
         return await apiFetch<{ lab_test_id: number; creation_timestamp?: string }[]>(
@@ -731,10 +731,6 @@ export default function B2BClientsPage() {
 
   const handlePricingModeChange = async (mode: 'monthly' | 'yearly' | 'custom') => {
     setPricingMode(mode);
-    if (selectedClientId) {
-       await changeBillingModeMutation.mutateAsync({ clientId: selectedClientId, mode });
-       toastApiSuccess(`Billing mode updated to ${mode.toUpperCase()}`);
-    }
   };
 
   // ── B2B Client CRUD ──────────────────────────────────────────────────────
@@ -860,9 +856,14 @@ export default function B2BClientsPage() {
         subId: editingSubId,
         clientId: selectedClientId,
       });
+      if (pricingMode === 'monthly' || pricingMode === 'yearly') {
+        await changeBillingModeMutation.mutateAsync({ clientId: selectedClientId, mode: pricingMode });
+        await invalidateClients();
+      }
       resetSub({ start_date: '', end_date: '', amount: '' });
       setEditingSubId(null);
       await queryClient.invalidateQueries({ queryKey: b2bSubscriptionsKey(selectedClientId) });
+      toastApiSuccess(editingSubId ? 'Subscription updated successfully.' : 'Subscription added successfully.');
     } catch {
       /* error toasted by apiFetch */
     }
@@ -888,13 +889,31 @@ export default function B2BClientsPage() {
 
   const saveCustomPricing = async () => {
     if (!selectedClientId) return;
+    
+    const pricesToSave = draftCustomPrices ?? customPricesData;
+
+    // Validation
+    if (isFixedPrice) {
+      if (!fixedPriceAmount || parseFloat(fixedPriceAmount) <= 0) {
+        toastApiError('Please enter a valid fixed price amount.');
+        return;
+      }
+    } else {
+      const hasAnyPrice = pricesToSave && pricesToSave.some(p => p.custom_price && p.custom_price.trim() !== '');
+      if (!hasAnyPrice) {
+        toastApiError('Please set at least one custom test price.');
+        return;
+      }
+    }
+
     try {
       await saveCustomPricingMutation.mutateAsync({
         clientId: selectedClientId,
         fixedPrice: isFixedPrice,
         fixedAmount: fixedPriceAmount.trim() || '0',
-        prices: customPrices,
+        prices: pricesToSave,
       });
+      await changeBillingModeMutation.mutateAsync({ clientId: selectedClientId, mode: 'custom' });
       toastApiSuccess('Custom Pricing saved successfully');
       await invalidateClients();
       await queryClient.invalidateQueries({ queryKey: b2bCustomPricesKey(selectedClientId) });
@@ -1419,7 +1438,14 @@ export default function B2BClientsPage() {
                 {!isFixedPrice && (
                   <div style={{ marginTop: '1.5rem' }}>
                     {(() => {
-                      const filteredTests = globalLabTests.filter(test => test.name?.toLowerCase().includes(customPriceSearch.toLowerCase()));
+                      const accessSet = new Set(accessList.map(a => a.lab_test_id));
+                      const sortedGlobalTests = [...globalLabTests].sort((a, b) => {
+                         const hasA = accessSet.has(a.id) ? 1 : 0;
+                         const hasB = accessSet.has(b.id) ? 1 : 0;
+                         if (hasA !== hasB) return hasB - hasA; // Assigned tests first
+                         return (a.name || '').localeCompare(b.name || ''); // Then alphabetical
+                      });
+                      const filteredTests = sortedGlobalTests.filter(test => test.name?.toLowerCase().includes(customPriceSearch.toLowerCase()));
                       const totalPages = Math.ceil(filteredTests.length / CUSTOM_PRICE_PAGE_SIZE) || 1;
                       const page = Math.min(customPricePage, totalPages) || 1;
                       const start = (page - 1) * CUSTOM_PRICE_PAGE_SIZE;
