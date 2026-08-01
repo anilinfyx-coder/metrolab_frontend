@@ -57,6 +57,7 @@ interface EmployeeRecord {
   isSelectedForAlcohol?: boolean;
   isSelectedForAlternate?: boolean;
   is_selected_for_drug?: boolean;
+  is_selected_for_alcohol?: boolean;
   is_selected_for_alternate?: boolean;
   drugReportSubmitStatus?: boolean;
   drugReportId?: number;
