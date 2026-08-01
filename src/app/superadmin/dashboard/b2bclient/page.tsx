@@ -175,7 +175,10 @@ export default function B2BClientsPage() {
   // Subscriptions & Custom Pricing
   const [pricingMode, setPricingMode] = useState<'monthly' | 'yearly' | 'custom'>('monthly');
   const [editingSubId, setEditingSubId] = useState<number | null>(null);
-  const [draftCustomPrices, setDraftCustomPrices] = useState<{ lab_test_id: number; custom_price: string }[] | null>(null);
+  const [draftCustomPrices, setDraftCustomPrices] = useState<{ lab_test_id: number; custom_price: string; test_name?: string }[] | null>(null);
+  const [customPriceSearch, setCustomPriceSearch] = useState('');
+  const [customPricePage, setCustomPricePage] = useState(1);
+  const CUSTOM_PRICE_PAGE_SIZE = 10;
   const [draftSelectedIds, setDraftSelectedIds] = useState<Set<number> | null>(null);
   const [accessPage, setAccessPage] = useState(1);
   const [accessPageSize, setAccessPageSize] = useState(25);
@@ -1415,42 +1418,84 @@ export default function B2BClientsPage() {
 
                 {!isFixedPrice && (
                   <div style={{ marginTop: '1.5rem' }}>
-                    <h4 style={{ marginBottom: '1rem', color: 'var(--text-muted)' }}>Test-Wise Custom Pricing</h4>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ padding: '0.75rem', textAlign: 'left' }}>Lab Test</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'left', width: '250px' }}>Custom Price ($)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {globalLabTests.map(test => {
-                           const cp = customPrices.find(c => c.lab_test_id === test.id);
-                           const priceStr = cp ? cp.custom_price : '';
-                           return (
-                             <tr key={test.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                               <td style={{ padding: '0.75rem' }}>{test.name}</td>
-                               <td style={{ padding: '0.75rem' }}>
-                                 <input type="number" value={priceStr} placeholder="Free (0) if blank"
-                                   onChange={e => {
-                                     const val = e.target.value;
-                                     setDraftCustomPrices(prev => {
-                                       const base = prev ?? customPricesData;
-                                       const filtered = base.filter(x => x.lab_test_id !== test.id);
-                                       if (val === '') return filtered;
-                                       return [...filtered, { lab_test_id: test.id, custom_price: val }];
-                                     });
-                                   }}
-                                 />
-                               </td>
-                             </tr>
-                           );
-                        })}
-                        {globalLabTests.length === 0 && (
-                          <tr><td colSpan={2} style={{ padding: '1rem', textAlign: 'center' }}>No Lab Tests found.</td></tr>
-                        )}
-                      </tbody>
-                    </table>
+                    {(() => {
+                      const filteredTests = globalLabTests.filter(test => test.name?.toLowerCase().includes(customPriceSearch.toLowerCase()));
+                      const totalPages = Math.ceil(filteredTests.length / CUSTOM_PRICE_PAGE_SIZE) || 1;
+                      const page = Math.min(customPricePage, totalPages) || 1;
+                      const start = (page - 1) * CUSTOM_PRICE_PAGE_SIZE;
+                      const paginatedTests = filteredTests.slice(start, start + CUSTOM_PRICE_PAGE_SIZE);
+
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                            <h4 style={{ margin: 0, color: 'var(--text-muted)' }}>Test-Wise Custom Pricing</h4>
+                            <div className="search-bar" style={{ width: '300px', display: 'flex', alignItems: 'center', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.4rem 0.75rem' }}>
+                              <MdSearch className="search-icon" aria-hidden style={{ color: 'var(--text-muted)', marginRight: '0.5rem' }} size={18} />
+                              <input
+                                type="text"
+                                placeholder="Search tests..."
+                                value={customPriceSearch}
+                                onChange={(e) => {
+                                  setCustomPriceSearch(e.target.value);
+                                  setCustomPricePage(1);
+                                }}
+                                style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', color: 'var(--text-color)' }}
+                              />
+                            </div>
+                          </div>
+                          
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                                <th style={{ padding: '0.75rem', textAlign: 'left' }}>Lab Test</th>
+                                <th style={{ padding: '0.75rem', textAlign: 'left', width: '250px' }}>Custom Price ($)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedTests.map(test => {
+                                 const cp = customPrices.find(c => c.lab_test_id === test.id);
+                                 const priceStr = cp ? cp.custom_price : '';
+                                 return (
+                                   <tr key={test.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                     <td style={{ padding: '0.75rem' }}>{test.name}</td>
+                                     <td style={{ padding: '0.75rem' }}>
+                                       <input type="number" value={priceStr} placeholder="Free (0) if blank"
+                                         style={{ padding: '0.4rem 0.5rem', border: '1px solid var(--border)', borderRadius: '4px', width: '100%', background: 'var(--bg-input)', color: 'var(--text-color)' }}
+                                         onChange={e => {
+                                           const val = e.target.value;
+                                           setDraftCustomPrices(prev => {
+                                             const base = prev ?? customPricesData;
+                                             const filtered = base.filter(x => x.lab_test_id !== test.id);
+                                             if (val === '') return filtered;
+                                             return [...filtered, { lab_test_id: test.id, custom_price: val, test_name: test.name }];
+                                           });
+                                         }}
+                                       />
+                                     </td>
+                                   </tr>
+                                 );
+                              })}
+                              {paginatedTests.length === 0 && (
+                                <tr><td colSpan={2} style={{ padding: '1rem', textAlign: 'center' }}>No Lab Tests found.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+
+                          {totalPages > 1 && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', padding: '0.5rem 0' }}>
+                              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                Showing {start + 1} to {Math.min(start + CUSTOM_PRICE_PAGE_SIZE, filteredTests.length)} of {filteredTests.length} tests
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                <button type="button" className="btn btn-ghost" disabled={page === 1} onClick={() => setCustomPricePage(p => p - 1)} style={{ padding: '0.25rem 0.5rem' }}>Prev</button>
+                                <span style={{ padding: '0.25rem 0.5rem', fontWeight: 600, fontSize: '0.85rem' }}>{page} / {totalPages}</span>
+                                <button type="button" className="btn btn-ghost" disabled={page === totalPages} onClick={() => setCustomPricePage(p => p + 1)} style={{ padding: '0.25rem 0.5rem' }}>Next</button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
                 
@@ -1749,7 +1794,7 @@ export default function B2BClientsPage() {
                       <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
                         {customPrices.map(cp => (
                           <li key={cp.lab_test_id} style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '0.25rem' }}>
-                            <span>{cp.test_name || `Test #${cp.lab_test_id}`}</span>
+                            <span>{(cp as any).test_name || `Test #${cp.lab_test_id}`}</span>
                             <strong>${parseFloat(cp.custom_price).toFixed(2)}</strong>
                           </li>
                         ))}
