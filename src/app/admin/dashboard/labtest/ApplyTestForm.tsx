@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { MdCheckCircle, MdClose, MdScience, MdChevronRight } from 'react-icons/md';
 import PageLoader from '../../../components/PageLoader';
 import { apiFetch, handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../lib/api';
+import { FINAL_RESULT_OPTIONS, normalizeFinalResult } from '../../../../lib/finalResult';
 
 function formatCutoff(value?: string | null, unit?: string | null) {
   if (value === null || value === undefined || value === '' || value === 'Null' || value === 'null') {
@@ -53,7 +54,7 @@ export default function ApplyTestForm({
             reasonForTest: obj.reason_for_test || '',
             fasting: '1', requisitionNo: '', deviceIdentifier: '',
             lot: '', expiryDate: '', dateRead: '', mmIndurations: '', followUp: 'None',
-            finalResult: '1', finalResultText: '', testRemark: '', referenceRangeNote: '',
+            finalResult: 'Negative', finalResultText: '', testRemark: '', referenceRangeNote: '',
             clinicalSignificanceNote: '', resultInterpretationNote: '', finalResultDisposition: 'Negative',
             finalRemark: '', dateAdministered: '', appliedToArm: 'Right Arm',
             confirmed: false,
@@ -124,7 +125,7 @@ export default function ApplyTestForm({
 
   const handleParamChange = (idx: number, val: any) => {
     const newPs = [...form.parameters];
-    newPs[idx].value = val;
+    newPs[idx].value = typeof val === 'string' ? val.trim() : val;
     handleFormChange('parameters', newPs);
   };
 
@@ -140,7 +141,8 @@ export default function ApplyTestForm({
         waiting_list_id: waitingListId,
         lab_test_id: test.id,
         b2b_client_id: data.resolved_b2b_client_id || data.b2b_client_id || test.resolved_b2b_client_id || null,
-        ...form
+        ...form,
+        finalResult: normalizeFinalResult(form.finalResult, form.finalResultText),
       };
       await apiFetch('/api/LabTestReport', {
         method: 'POST',
@@ -269,6 +271,15 @@ export default function ApplyTestForm({
                   className={`wl-test-card${isActive ? ' active' : ''}${isSubmitted ? ' submitted' : ''}`}
                   onClick={() => {
                     if (isSubmitted) return;
+                    const waitingReason = data.reason_for_test || '';
+                    setFormData((prev: any) => {
+                      const current = prev[t.id] || {};
+                      if (current.reasonForTest) return prev;
+                      return {
+                        ...prev,
+                        [t.id]: { ...current, reasonForTest: waitingReason },
+                      };
+                    });
                     setSelectedTestId(t.id);
                   }}
                   disabled={isSubmitted}
@@ -352,7 +363,13 @@ export default function ApplyTestForm({
                 {test.show_reason_for_test && (
                   <div className="form-group">
                     <label>Reason for Test</label>
-                    <input type="text" className="form-input" placeholder="Enter Reason For Test" value={form.reasonForTest} onChange={e => handleFormChange('reasonForTest', e.target.value)} />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Enter Reason For Test"
+                      value={form.reasonForTest || data.reason_for_test || ''}
+                      onChange={e => handleFormChange('reasonForTest', e.target.value)}
+                    />
                   </div>
                 )}
               </div>
@@ -387,12 +404,18 @@ export default function ApplyTestForm({
                           <td>{formatCutoff(p.screening_cutoff, p.unit_text)}</td>
                           <td>{formatCutoff(p.confirmation_cutoff, p.unit_text)}</td>
                           <td>
-                            {p.input_type === 1 ? (
+                            {Number(p.input_type) === 1 ? (
                               <input type="text" className="form-input" value={p.value} onChange={e => handleParamChange(i, e.target.value)} />
-                            ) : p.input_type === 2 ? (
-                              <select className="form-input" value={p.value} onChange={e => handleParamChange(i, e.target.value)}>
+                            ) : Number(p.input_type) === 2 ? (
+                              <select className="form-input" value={p.value || ''} onChange={e => handleParamChange(i, e.target.value)}>
                                 <option value="">Select</option>
-                                {p.input_option?.split(',').map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                                {String(p.input_option || '')
+                                  .split(',')
+                                  .map((opt: string) => opt.trim())
+                                  .filter(Boolean)
+                                  .map((opt: string) => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
                               </select>
                             ) : null}
                           </td>
@@ -444,6 +467,18 @@ export default function ApplyTestForm({
                 {test.show_requisition_no && (
                   <div className="form-group"><label>Requisition No</label><input type="text" className="form-input" value={form.requisitionNo} onChange={e => handleFormChange('requisitionNo', e.target.value)} /></div>
                 )}
+                {test.show_device_identifier && (
+                  <div className="form-group">
+                    <label>Device Identifier</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Enter Device Identifier"
+                      value={form.deviceIdentifier || ''}
+                      onChange={e => handleFormChange('deviceIdentifier', e.target.value)}
+                    />
+                  </div>
+                )}
                 {test.show_date_administered && <div className="form-group"><label>Date Administered</label><input type="date" className="form-input" value={form.dateAdministered} onChange={e => handleFormChange('dateAdministered', e.target.value)} /></div>}
                 {test.show_applied_to && <div className="form-group"><label>Applied To</label><select className="form-input" value={form.appliedToArm} onChange={e => handleFormChange('appliedToArm', e.target.value)}><option>Right Arm</option><option>Left Arm</option></select></div>}
                 {test.show_lot && <div className="form-group"><label>Lot</label><input type="text" className="form-input" value={form.lot} onChange={e => handleFormChange('lot', e.target.value)} /></div>}
@@ -454,12 +489,36 @@ export default function ApplyTestForm({
                 {test.show_final_result && (
                   <div className="form-group">
                     <label>Final Result</label>
-                    <select className="form-input" value={form.finalResult} onChange={e => handleFormChange('finalResult', e.target.value)}>
-                      <option value="1">Negative</option><option value="2">Positive</option><option value="3">Test Cancelled</option>
-                      <option value="4">Refusal (Adulterated)</option><option value="5">Refusal (Substituted)</option>
-                      <option value="6">Dilute</option><option value="">Other</option>
+                    <select
+                      className="form-input"
+                      value={form.finalResult === '' || form.finalResult === '__other__' ? '__other__' : (form.finalResult || 'Negative')}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (!test) return;
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          [test.id]: {
+                            ...prev[test.id],
+                            finalResult: val === '__other__' ? '__other__' : val,
+                            finalResultText: val === '__other__' ? (prev[test.id]?.finalResultText || '') : '',
+                          },
+                        }));
+                      }}
+                    >
+                      {FINAL_RESULT_OPTIONS.map(opt => (
+                        <option key={opt.value || 'other'} value={opt.value}>{opt.label}</option>
+                      ))}
                     </select>
-                    {form.finalResult === '' && <input type="text" className="form-input" style={{ marginTop: '0.5rem' }} value={form.finalResultText} onChange={e => handleFormChange('finalResultText', e.target.value)} placeholder="Other Result" />}
+                    {(form.finalResult === '' || form.finalResult === '__other__') && (
+                      <input
+                        type="text"
+                        className="form-input"
+                        style={{ marginTop: '0.5rem' }}
+                        value={form.finalResultText}
+                        onChange={e => handleFormChange('finalResultText', e.target.value)}
+                        placeholder="Other Result"
+                      />
+                    )}
                   </div>
                 )}
                 {test.show_final_result_disposition && (

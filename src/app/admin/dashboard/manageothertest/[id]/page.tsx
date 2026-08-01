@@ -4,6 +4,11 @@ import { useParams, useRouter } from 'next/navigation';
 import TopNav from '../../../../components/TopNav';
 import PageLoader from '../../../../components/PageLoader';
 import { handleApiResponse, toastApiError, getToken, API_BASE } from '../../../../../lib/api';
+import {
+  FINAL_RESULT_OPTIONS,
+  finalResultSelectValue,
+  normalizeFinalResult,
+} from '../../../../../lib/finalResult';
 
 type LabTestFlags = Record<string, boolean | string | number | null | undefined> & {
   name?: string;
@@ -167,7 +172,7 @@ export default function EditTestReportPage() {
           date_read: toDateInput(report.date_read),
           mm_indurations: report.mm_indurations || '',
           follow_up: report.follow_up || 'None',
-          final_result: report.final_result || '',
+          final_result: normalizeFinalResult(report.final_result),
           final_result_disposition: report.final_result_disposition || '',
           test_remark: report.test_remark || '',
           final_remark: report.final_remark || '',
@@ -177,11 +182,12 @@ export default function EditTestReportPage() {
           device_identifier: report.device_identifier || '',
           testResultParameterList: (report.testResultParameterList || []).map((p: ParameterRow) => ({
             ...p,
-            value: p.value || '',
+            input_type: Number(p.input_type),
+            value: String(p.value || '').trim(),
           })),
           testReportQuestionList: (report.testReportQuestionList || []).map((q: QuestionRow) => ({
             ...q,
-            value: q.value || '',
+            value: String(q.value || '').trim(),
           })),
         });
       })
@@ -197,7 +203,7 @@ export default function EditTestReportPage() {
     setForm((prev) => {
       if (!prev) return prev;
       const list = [...prev.testResultParameterList];
-      list[index] = { ...list[index], value };
+      list[index] = { ...list[index], value: value.trim() };
       return { ...prev, testResultParameterList: list };
     });
   };
@@ -445,16 +451,20 @@ export default function EditTestReportPage() {
                               )}
                             </td>
                             <td>
-                              {p.input_type === 2 ? (
+                              {Number(p.input_type) === 2 ? (
                                 <select
                                   className="form-input report-edit-input"
-                                  value={p.value}
+                                  value={p.value || ''}
                                   onChange={(e) => setParamValue(i, e.target.value)}
                                 >
                                   <option value="">Select</option>
-                                  {p.input_option?.split(',').map((opt) => opt.trim()).filter(Boolean).map((opt) => (
-                                    <option key={opt} value={opt}>{opt}</option>
-                                  ))}
+                                  {String(p.input_option || '')
+                                    .split(',')
+                                    .map((opt) => opt.trim())
+                                    .filter(Boolean)
+                                    .map((opt) => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
                                 </select>
                               ) : (
                                 <input
@@ -602,7 +612,32 @@ export default function EditTestReportPage() {
                   {show('show_final_result') && (
                     <div className="form-group">
                       <label>Final Result:</label>
-                      <input type="text" className="form-input report-edit-input" value={form.final_result} onChange={(e) => setField('final_result', e.target.value)} />
+                      <select
+                        className="form-input report-edit-input"
+                        value={finalResultSelectValue(form.final_result)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === '__other__') {
+                            setField('final_result', '');
+                          } else {
+                            setField('final_result', val);
+                          }
+                        }}
+                      >
+                        {FINAL_RESULT_OPTIONS.map((opt) => (
+                          <option key={opt.value || 'other'} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
+                      {finalResultSelectValue(form.final_result) === '__other__' && (
+                        <input
+                          type="text"
+                          className="form-input report-edit-input"
+                          style={{ marginTop: '0.5rem' }}
+                          placeholder="Other Result"
+                          value={form.final_result || ''}
+                          onChange={(e) => setField('final_result', e.target.value)}
+                        />
+                      )}
                     </div>
                   )}
                   {show('show_final_result_disposition') && (
