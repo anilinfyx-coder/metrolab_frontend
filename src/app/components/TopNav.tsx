@@ -123,6 +123,10 @@ export default function TopNav({ title, children }: TopNavProps) {
   const signOut = () => {
     localStorage.removeItem(portal.tokenKey);
     localStorage.removeItem(portal.userKey);
+
+    // Reset any custom branding CSS variables so the login page shows default colors
+    document.documentElement.style.removeProperty('--primary-color');
+    document.documentElement.style.removeProperty('--sidebar-bg');
     
     // For local testing, clear the whitelabel domain on logout
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {

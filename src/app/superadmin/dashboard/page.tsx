@@ -63,6 +63,7 @@ interface RecentB2BClient {
   wallet_balance?: number | string;
   billing_mode?: string;
   has_active_subscription?: boolean;
+  active_subscription_amount?: number | string | null;
   status?: boolean;
   creation_timestamp?: string;
 }
@@ -258,7 +259,7 @@ export default function SuperAdminDashboard() {
               <DashboardCard
                 title="Income"
                 value={`$${Number(stats?.total_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
-                subtitle={`Sub $${Number(stats?.total_subscription_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} · Wallet $${Number(stats?.total_wallet_used || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                subtitle={`Sub $${Number(stats?.total_subscription_income || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} • Wallet $${Number(stats?.total_wallet_recharge || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
                 icon={<MdAttachMoney size={26} aria-hidden />}
                 gradient="linear-gradient(135deg, #0ba360 0%, #3cba92 100%)"
               />
@@ -523,7 +524,8 @@ export default function SuperAdminDashboard() {
                                   </>
                                 ) : client.has_active_subscription ? (
                                   <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.9rem' }}>
-                                    {client.billing_mode === 'yearly' ? 'Yearly Subscription Active' : 'Monthly Subscription Active'}
+                                    {client.billing_mode === 'yearly' ? 'Yearly' : 'Monthly'} Subscription Active
+                                    {client.active_subscription_amount && ` ($${Number(client.active_subscription_amount).toFixed(2)})`}
                                   </span>
                                 ) : (
                                   <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.9rem' }}>No Subscription Active</span>
