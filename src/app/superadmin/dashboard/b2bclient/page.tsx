@@ -44,6 +44,7 @@ interface B2BClient {
   custom_domain?: string;
   is_approval?: boolean;
   wallet_balance?: number;
+  wallet_total_recharged?: number | string;
   billing_mode?: 'monthly' | 'yearly' | 'custom';
   has_active_subscription?: boolean;
   active_subscription_amount?: number | string | null;
@@ -1054,11 +1055,14 @@ export default function B2BClientsPage() {
       filterable: false,
       render: (client) => {
         if (client.billing_mode === 'custom') {
+          const balance = parseFloat(String(client.wallet_balance || 0)).toFixed(2);
+          const totalRecharged = parseFloat(String(client.wallet_total_recharged || 0)).toFixed(2);
           return (
             <div>
               <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.8rem' }}>Custom Pricing</div>
-              <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
-                Wallet: ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
+              <div style={{ color: '#64748b', fontSize: '0.72rem', marginTop: '2px' }}>
+                <span style={{ display: 'block' }}>Recharged: <strong style={{ color: '#16a34a' }}>${totalRecharged}</strong></span>
+                <span style={{ display: 'block' }}>Balance: <strong style={{ color: parseFloat(balance) <= 0 ? '#ef4444' : '#0369a1' }}>${balance}</strong></span>
               </div>
             </div>
           );

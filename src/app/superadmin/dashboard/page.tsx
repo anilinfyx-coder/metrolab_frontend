@@ -61,6 +61,7 @@ interface RecentB2BClient {
   mobile?: string;
   email?: string;
   wallet_balance?: number | string;
+  wallet_total_recharged?: number | string;
   billing_mode?: string;
   has_active_subscription?: boolean;
   active_subscription_amount?: number | string | null;
@@ -513,14 +514,20 @@ export default function SuperAdminDashboard() {
                               <td style={{ padding: '16px 20px' }}>
                                 {client.billing_mode === 'custom' ? (
                                   <>
-                                    <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Custom Pricing Active</div>
-                                    <Link
-                                      href={`/superadmin/dashboard/b2bclient?view=wallet&clientId=${client.id}`}
-                                      style={{ color: '#3b82f6', textDecoration: 'none', fontWeight: 600 }}
-                                      title="Wallet Balance"
-                                    >
-                                      ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
-                                    </Link>
+                                    <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Custom Pricing</div>
+                                    <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '2px' }}>
+                                      <span style={{ display: 'block' }}>Recharged: <strong style={{ color: '#16a34a' }}>${parseFloat(String(client.wallet_total_recharged || 0)).toFixed(2)}</strong></span>
+                                      <span style={{ display: 'block' }}>
+                                        Balance:{' '}
+                                        <Link
+                                          href={`/superadmin/dashboard/b2bclient?view=wallet&clientId=${client.id}`}
+                                          style={{ color: parseFloat(String(client.wallet_balance || 0)) <= 0 ? '#ef4444' : '#0369a1', textDecoration: 'none', fontWeight: 600 }}
+                                          title="Wallet Balance"
+                                        >
+                                          ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
+                                        </Link>
+                                      </span>
+                                    </div>
                                   </>
                                 ) : client.has_active_subscription ? (
                                   <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.9rem' }}>
