@@ -45,6 +45,8 @@ interface B2BClient {
   is_approval?: boolean;
   wallet_balance?: number;
   billing_mode?: 'monthly' | 'yearly' | 'custom';
+  has_active_subscription?: boolean;
+  active_subscription_amount?: number | string | null;
 }
 interface GeoItem { id: number; name: string; country_id?: number; state_id?: number; }
 interface Subscription { id: number; start_date: string; end_date: string; amount: number; b2b_client_id: number; }
@@ -1042,8 +1044,42 @@ export default function B2BClientsPage() {
         </Link>
       ),
     },
-    { key: 'mobile', label: 'Mobile', width: '20%' },
-    { key: 'email', label: 'Email', width: '25%' },
+    { key: 'mobile', label: 'Mobile', width: '15%' },
+    { key: 'email', label: 'Email', width: '20%' },
+    {
+      key: 'has_active_subscription',
+      label: 'Subscription',
+      width: '18%',
+      sortable: false,
+      filterable: false,
+      render: (client) => {
+        if (client.billing_mode === 'custom') {
+          return (
+            <div>
+              <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.8rem' }}>Custom Pricing</div>
+              <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                Wallet: ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
+              </div>
+            </div>
+          );
+        }
+        if (client.has_active_subscription) {
+          return (
+            <div>
+              <div style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.8rem' }}>
+                {client.billing_mode === 'yearly' ? 'Yearly' : 'Monthly'} Active
+              </div>
+              {client.active_subscription_amount && (
+                <div style={{ color: '#64748b', fontSize: '0.75rem' }}>
+                  ${Number(client.active_subscription_amount).toFixed(2)}
+                </div>
+              )}
+            </div>
+          );
+        }
+        return <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.8rem' }}>No Subscription</span>;
+      },
+    },
     {
       key: 'configurations',
       label: 'Configurations',

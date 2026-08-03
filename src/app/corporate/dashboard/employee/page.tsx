@@ -1,5 +1,5 @@
-﻿'use client';
-import { useState, useEffect } from 'react';
+'use client';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { MdAdd, MdEdit, MdRefresh, MdSave } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
@@ -19,19 +19,10 @@ function getStoredUser() {
   try { return JSON.parse(localStorage.getItem('corporate_user') || '{}'); } catch { return {}; }
 }
 
-// US States for dropdown
-const US_STATES = [
-  'Alabama','Alaska','Arizona','Arkansas','California','Colorado','Connecticut','Delaware',
-  'Florida','Georgia','Hawaii','Idaho','Illinois','Indiana','Iowa','Kansas','Kentucky',
-  'Louisiana','Maine','Maryland','Massachusetts','Michigan','Minnesota','Mississippi',
-  'Missouri','Montana','Nebraska','Nevada','New Hampshire','New Jersey','New Mexico',
-  'New York','North Carolina','North Dakota','Ohio','Oklahoma','Oregon','Pennsylvania',
-  'Rhode Island','South Carolina','South Dakota','Tennessee','Texas','Utah','Vermont',
-  'Virginia','Washington','West Virginia','Wisconsin','Wyoming'
-];
+
 
 interface Employee {
-  id: number; first_name: string; last_name: string; mobile: string; department: string; status: boolean;
+  id: number; first_name: string; last_name: string; mobile: string; department: string; status: boolean; email?: string;
 }
 
 const employeeColumns: ListingColumn<Employee>[] = [
@@ -48,12 +39,19 @@ const emptyForm: CorporateEmployeeFormValues = {
 };
 
 export default function EmployeePage() {
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const confirmDialog = useConfirm();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [statesList, setStatesList] = useState<{id: number, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
 
   const {
     register,
@@ -84,7 +82,181 @@ export default function EmployeePage() {
 
   useEffect(() => {
     void Promise.resolve().then(loadEmployees);
+    apiFetch<any[]>('/api/State', { tokenKey: 'corporate_token' })
+      .then(data => { if (data) setStatesList(data); })
+      .catch(() => {});
   }, []);
+
+  const downloadFormat = () => {
+    const headers = "first_name,last_name,mobile,gender,dob,driving_license_state,driving_license,street1,street2,city,state,zipcode,email,ssn,department\n";
+    const sample = "John,Doe,1234567890,Male,1990-01-01,NY,DL1234,123 Main St,Apt 1,New York,NY,10001,john@example.com,1234,Sales\n";
+    const blob = new Blob([headers + sample], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'employee_import_format.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCSVSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n').filter(l => l.trim());
+      if (lines.length < 2) {
+        setImportErrors(['File is empty or missing data rows.']);
+        setImportData([]);
+        if (e.target) e.target.value = '';
+        return;
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const data = lines.slice(1).map(line => {
+        const values = line.split(',');
+        const obj: any = {};
+        headers.forEach((h, i) => {
+          obj[h] = (values[i] || '').trim();
+        });
+        return obj;
+      });
+
+      const errors: string[] = [];
+      const parsedEmployees: any[] = [];
+      const seenKeys = new Set<string>();
+
+      data.forEach((emp, index) => {
+        const rowNum = index + 2;
+        if (!emp.first_name || !emp.last_name || !emp.mobile) {
+          errors.push(`Row ${rowNum}: First Name, Last Name, and Mobile are required.`);
+        } else if (emp.mobile.length < 9 || emp.mobile.length > 10) {
+          errors.push(`Row ${rowNum}: Mobile must be 9-10 digits.`);
+        }
+
+        if (emp.email) {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(emp.email)) {
+            errors.push(`Row ${rowNum}: Invalid email format (${emp.email}).`);
+          }
+        }
+
+        const currentEmail = emp.email ? emp.email.toLowerCase() : '';
+        const compositeKey = `${emp.mobile}_${currentEmail}`;
+        
+        if (employees.some(e => e.mobile === emp.mobile && (e.email || '').toLowerCase() === currentEmail)) {
+          errors.push(`Row ${rowNum}: The combination of Mobile (${emp.mobile}) and Email (${emp.email || 'N/A'}) already exists in the system.`);
+        } else if (seenKeys.has(compositeKey)) {
+          errors.push(`Row ${rowNum}: The combination of Mobile and Email is duplicated within the CSV.`);
+        }
+        seenKeys.add(compositeKey);
+        
+        let gender = 1;
+        const genderStr = (emp.gender || '').toLowerCase();
+        if (genderStr === 'female' || genderStr === '2') gender = 2;
+        else if (genderStr.includes('prefer') || genderStr === '3') gender = 3;
+
+        parsedEmployees.push({
+          ...emp,
+          genderId: gender
+        });
+      });
+
+      setImportErrors(errors);
+      setImportData(parsedEmployees);
+      if (e.target) e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
+  const submitImport = async () => {
+    if (importErrors.length > 0 || importData.length === 0) return;
+    setIsImporting(true);
+    const user = getStoredUser();
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      const dbStatesResponse = await apiFetch<any[]>('/api/State', { tokenKey: 'corporate_token', errorFallback: 'Failed to load states.' });
+      const dbStates = dbStatesResponse || [];
+      
+      const stateMap = new Map<string, string>();
+      dbStates.forEach(s => {
+        if (s.name) stateMap.set(s.name.toLowerCase().trim(), String(s.id));
+      });
+
+      const resolveStateId = async (stateName: string) => {
+        if (!stateName) return '';
+        const nameLower = stateName.toLowerCase().trim();
+        if (stateMap.has(nameLower)) return stateMap.get(nameLower) as string;
+
+        try {
+          const res = await apiFetch<any>('/api/State', {
+            method: 'POST',
+            tokenKey: 'corporate_token',
+            body: JSON.stringify({ name: stateName.trim(), status: true }),
+            successMessage: '',
+            errorFallback: ''
+          });
+          if (res && res.id) {
+            stateMap.set(nameLower, String(res.id));
+            return String(res.id);
+          }
+        } catch {
+          // ignore
+        }
+        return stateName; // fallback to name
+      };
+
+      for (const emp of importData) {
+        const stateId = await resolveStateId(emp.state);
+        const dlStateId = await resolveStateId(emp.driving_license_state);
+
+        const payload = {
+          first_name: emp.first_name,
+          last_name: emp.last_name,
+          mobile: emp.mobile,
+          gender: emp.genderId,
+          dob: emp.dob || null,
+          driving_license_state: dlStateId || emp.driving_license_state || '',
+          driving_license: emp.driving_license || '',
+          street1: emp.street1 || '',
+          street2: emp.street2 || '',
+          city: emp.city || '',
+          state: stateId || emp.state || '',
+          zipcode: emp.zipcode || '',
+          email: emp.email || '',
+          ssn: emp.ssn || '',
+          department: emp.department || '',
+          corporate_client_id: user?.id,
+        };
+
+        try {
+          await apiFetch('/api/Employees', {
+            method: 'POST',
+            tokenKey: 'corporate_token',
+            body: JSON.stringify(payload),
+            successMessage: '',
+            errorFallback: ''
+          });
+          successCount++;
+        } catch {
+          errorCount++;
+        }
+      }
+    } catch (err) {
+      console.error("Import process failed:", err);
+    }
+
+    alert(`Import complete: ${successCount} added, ${errorCount} failed/skipped.`);
+    setShowImportModal(false);
+    setImportData([]);
+    setImportErrors([]);
+    setIsImporting(false);
+    loadEmployees();
+  };
 
   const openAdd = () => {
     setEditingId(null);
@@ -99,6 +271,16 @@ export default function EmployeePage() {
         .filter(([key]) => key !== 'id' && key !== 'status')
         .map(([key, value]) => [key, value == null ? '' : String(value)])
     );
+
+    const normalizeState = (val: string) => {
+      if (!val) return '';
+      if (!isNaN(Number(val))) return val;
+      const found = statesList.find(s => s.name?.toLowerCase() === val.toLowerCase());
+      return found ? String(found.id) : val;
+    };
+    employeeValues.state = normalizeState(employeeValues.state as string);
+    employeeValues.driving_license_state = normalizeState(employeeValues.driving_license_state as string);
+
     const dobParts = employeeValues.dob ? employeeValues.dob.split('T')[0].split('-') : ['', '1', '1'];
     reset({
       ...emptyForm,
@@ -299,7 +481,7 @@ export default function EmployeePage() {
                       {...register('driving_license_state')}
                     >
                       <option value="">Select State</option>
-                      {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      {statesList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </FormGroup>
                   <FormGroup label="Driving License Number / State ID" htmlFor="emp-dl">
@@ -371,7 +553,7 @@ export default function EmployeePage() {
                       {...register('state')}
                     >
                       <option value="">Select State</option>
-                      {US_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      {statesList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </FormGroup>
                   <FormGroup label="Zip Code" htmlFor="emp-zip">
@@ -454,9 +636,22 @@ export default function EmployeePage() {
           loading={loading}
           emptyText="No employees found."
           headerActions={(
-            <button type="button" className="employee-add-button" onClick={openAdd}>
-              Add Employee
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button 
+                type="button" 
+                onClick={() => {
+                  setImportData([]);
+                  setImportErrors([]);
+                  setShowImportModal(true);
+                }}
+                style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ccc', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}
+              >
+                Import CSV
+              </button>
+              <button type="button" className="employee-add-button" onClick={openAdd}>
+                Add Employee
+              </button>
+            </div>
           )}
           actionsLabel="Actions"
           actionsWidth={130}
@@ -473,6 +668,55 @@ export default function EmployeePage() {
           )}
         />
       </div>
+
+      {showImportModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="card" style={{ width: '600px', maxWidth: '90%', maxHeight: '90vh', overflowY: 'auto', background: '#fff', borderRadius: '8px', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '1rem', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#333' }}>Import Employees via CSV</h3>
+              <button onClick={() => setShowImportModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>&times;</button>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '1.5rem' }}>
+              <button type="button" onClick={downloadFormat} style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ccc', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>
+                Download CSV Format
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>Upload CSV File</label>
+              <input type="file" accept=".csv" onChange={handleCSVSelect} style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }} />
+            </div>
+
+            {importErrors.length > 0 && (
+              <div style={{ background: '#ffebee', color: '#c62828', padding: '1rem', borderRadius: '4px', marginBottom: '1.5rem', maxHeight: '200px', overflowY: 'auto' }}>
+                <strong>Validation Errors ({importErrors.length}):</strong>
+                <ul style={{ margin: 0, paddingLeft: '1.5rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>
+                  {importErrors.map((err, i) => <li key={i}>{err}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {importData.length > 0 && importErrors.length === 0 && (
+              <div style={{ background: '#e8f5e9', color: '#2e7d32', padding: '1rem', borderRadius: '4px', marginBottom: '1.5rem' }}>
+                <strong>Validation Passed!</strong> {importData.length} valid rows found. Ready to import.
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <button type="button" onClick={() => setShowImportModal(false)} style={{ background: '#f8f9fa', color: '#333', border: '1px solid #ccc', padding: '0.5rem 1rem', borderRadius: '4px', cursor: 'pointer' }}>Cancel</button>
+              <button 
+                type="button" 
+                onClick={submitImport} 
+                disabled={isImporting || importErrors.length > 0 || importData.length === 0}
+                style={{ background: '#17a2b8', color: '#fff', border: 'none', padding: '0.5rem 1.5rem', borderRadius: '4px', cursor: (isImporting || importErrors.length > 0 || importData.length === 0) ? 'not-allowed' : 'pointer', opacity: (isImporting || importErrors.length > 0 || importData.length === 0) ? 0.6 : 1 }}
+              >
+                {isImporting ? 'Importing...' : 'Submit Import'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
