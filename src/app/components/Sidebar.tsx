@@ -267,7 +267,7 @@ export default function Sidebar({
   // If we are on a whitelabel domain, use the config logo. Otherwise use the logged in user's logo.
   const activeLogoFile = isWhitelabel ? config?.logo_file : labBranding?.logoFile;
   const activeCompanyName = isWhitelabel ? config?.company_name : labBranding?.companyName;
-  const activeTagline = isWhitelabel ? null : labBranding?.tagline; // Can keep tagline blank or use config later if needed
+  const activeTagline = isWhitelabel ? (config?.tagline || labBranding?.tagline) : labBranding?.tagline;
 
   const hasLabLogo = Boolean(activeLogoFile);
   const showLabBranding = (usesLabBranding || isWhitelabel) && hasLabLogo;
