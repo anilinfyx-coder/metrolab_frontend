@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useEffect, useState } from 'react';
-import { MdMenu, MdMenuOpen } from 'react-icons/md';
+import { MdMenu, MdMenuOpen, MdExpandMore, MdExpandLess } from 'react-icons/md';
 import { apiFetch, getUploadUrl } from '../../lib/api';
 import { closeSidebarMobileNav } from '../lib/mobileNav';
 import { getStoredUser } from './portalConfig';
@@ -14,6 +14,7 @@ export type NavItem = {
   label: string;
   icon: ReactNode;
   section: string;
+  children?: NavItem[];
 };
 
 interface SidebarProps {
@@ -64,6 +65,71 @@ function MetroBrandBlock({ collapsed }: { collapsed: boolean }) {
         <div className="sidebar-logo-tagline">Precision is our Home Mark</div>
       )}
     </>
+  );
+}
+
+function NavGroupItem({
+  item,
+  basePath,
+  pathname,
+  collapsed,
+}: {
+  item: NavItem;
+  basePath: string;
+  pathname: string;
+  collapsed: boolean;
+}) {
+  const isAnyChildActive = (item.children || []).some(child => {
+    const fullHref = `${basePath}${child.href}`;
+    return pathname === fullHref || pathname.startsWith(fullHref + '/');
+  });
+
+  const [open, setOpen] = useState(isAnyChildActive);
+
+  // Auto-open when navigating to a child
+  useEffect(() => {
+    if (isAnyChildActive) setOpen(true);
+  }, [isAnyChildActive]);
+
+  return (
+    <div className={`sidebar-group${open ? ' sidebar-group-open' : ''}`}>
+      <button
+        type="button"
+        className={`sidebar-link sidebar-group-toggle${isAnyChildActive ? ' active' : ''}`}
+        onClick={() => setOpen(v => !v)}
+        title={item.label}
+        aria-expanded={open}
+      >
+        <span className="icon">{item.icon}</span>
+        <span className="sidebar-link-text">{item.label}</span>
+        {!collapsed && (
+          <span className="sidebar-group-chevron" aria-hidden>
+            {open ? <MdExpandLess size={16} /> : <MdExpandMore size={16} />}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="sidebar-group-children">
+          {(item.children || []).map(child => {
+            const fullHref = `${basePath}${child.href}`;
+            const isActive = pathname === fullHref || pathname.startsWith(fullHref + '/');
+            return (
+              <Link
+                key={child.href}
+                href={fullHref}
+                className={`sidebar-link sidebar-child-link${isActive ? ' active' : ''}`}
+                id={`nav-${child.label.toLowerCase().replace(/\s+/g, '-')}`}
+                title={child.label}
+                onClick={closeSidebarMobileNav}
+              >
+                <span className="icon">{child.icon}</span>
+                <span className="sidebar-link-text">{child.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -258,6 +324,20 @@ export default function Sidebar({
 
       <nav className="sidebar-nav">
         {navItems.map(item => {
+          // --- Submenu parent item ---
+          if (item.children && item.children.length > 0) {
+            return (
+              <NavGroupItem
+                key={item.label}
+                item={item}
+                basePath={basePath}
+                pathname={pathname}
+                collapsed={collapsed}
+              />
+            );
+          }
+
+          // --- Regular flat link ---
           const fullHref = `${basePath}${item.href}`;
           const isActive = item.href === ''
             ? pathname === fullHref

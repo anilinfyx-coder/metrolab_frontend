@@ -162,12 +162,13 @@ export default function SuperAdminStaffPage() {
   );
 
   const columns: ListingColumn<Staff>[] = [
-    { key: 'name', label: 'Name' },
-    { key: 'mobile', label: 'Mobile' },
-    { key: 'email', label: 'Email' },
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'mobile', label: 'Mobile', sortable: true },
+    { key: 'email', label: 'Email', sortable: true },
     {
       key: 'role',
       label: 'Role',
+      sortable: true,
       getValue: member => roleName(member.role_id),
       render: member => roleName(member.role_id),
     },

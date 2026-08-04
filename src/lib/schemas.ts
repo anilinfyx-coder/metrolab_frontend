@@ -615,3 +615,27 @@ export const physicalExaminationCertificateSchema = yup.object({
 export type PhysicalExaminationCertificateFormValues = yup.InferType<
   typeof physicalExaminationCertificateSchema
 >;
+
+export const countrySchema = yup.object({
+  id: yup.number().nullable(),
+  name: requiredTrimmed('the country name'),
+  description: yup.string().trim(),
+});
+export type CountryFormValues = yup.InferType<typeof countrySchema>;
+
+export const stateSchema = yup.object({
+  id: yup.number().nullable(),
+  country_id: requiredTrimmed('the country'),
+  name: requiredTrimmed('the state name'),
+  description: yup.string().trim(),
+});
+export type StateFormValues = yup.InferType<typeof stateSchema>;
+
+export const citySchema = yup.object({
+  id: yup.number().nullable(),
+  country_id: requiredTrimmed('the country'),
+  state_id: requiredTrimmed('the state'),
+  name: requiredTrimmed('the city name'),
+  description: yup.string().trim(),
+});
+export type CityFormValues = yup.InferType<typeof citySchema>;

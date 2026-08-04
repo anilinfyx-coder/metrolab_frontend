@@ -8,15 +8,15 @@ import { FormGroup } from '../../../components/FormField';
 import { apiFetch } from '../../../../lib/api';
 import { patchListItem } from '../../../../lib/listState';
 import { createInvalidHandler, fieldStyle, formResolver } from '../../../../lib/formHelpers';
-import { documentTypeSchema, type DocumentTypeFormValues } from '../../../../lib/schemas';
+import { countrySchema, type CountryFormValues } from '../../../../lib/schemas';
 
-interface DocumentType { id: number; name: string; description: string; status: boolean; }
+interface Country { id: number; name: string; description: string; status: boolean; }
 
-const emptyForm: DocumentTypeFormValues = { name: '', description: '' };
+const emptyForm: CountryFormValues = { name: '', description: '' };
 
-export default function DocumentTypePage() {
+export default function CountryPage() {
   const confirmDialog = useConfirm();
-  const [types, setTypes] = useState<DocumentType[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -26,18 +26,18 @@ export default function DocumentTypePage() {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<DocumentTypeFormValues>({
-    resolver: formResolver<DocumentTypeFormValues>(documentTypeSchema),
+  } = useForm<CountryFormValues>({
+    resolver: formResolver<CountryFormValues>(countrySchema),
     defaultValues: emptyForm,
   });
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<DocumentType[]>('/api/TypeData', { tokenKey: 'superadmin_token' });
-      setTypes(data || []);
+      const data = await apiFetch<Country[]>('/api/Country', { tokenKey: 'superadmin_token' });
+      setCountries(data || []);
     } catch {
-      setTypes([]);
+      setCountries([]);
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export default function DocumentTypePage() {
   const save = handleSubmit(async values => {
     setSaving(true);
     const method = editingId ? 'PUT' : 'POST';
-    const path = `/api/TypeData${editingId ? `/${editingId}` : ''}`;
+    const path = '/api/Country' + (editingId ? '/' + editingId : '');
     try {
       await apiFetch(path, {
         method,
@@ -64,8 +64,8 @@ export default function DocumentTypePage() {
           name: values.name.trim(),
           description: (values.description || '').trim(),
         }),
-        successMessage: `Document type ${editingId ? 'updated' : 'added'} successfully.`,
-        errorFallback: 'Unable to save document type.',
+        successMessage: `Country ${editingId ? 'updated' : 'added'} successfully.`,
+        errorFallback: 'Unable to save country.',
       });
       resetForm();
       loadData();
@@ -74,22 +74,22 @@ export default function DocumentTypePage() {
     } finally {
       setSaving(false);
     }
-  }, createInvalidHandler<DocumentTypeFormValues>());
+  }, createInvalidHandler<CountryFormValues>());
 
   const remove = async (id: number) => {
     const ok = await confirmDialog({
-      title: 'You are trying to delete Document Type, Please confirm',
+      title: 'You are trying to delete a Country, Please confirm',
       message: 'This cannot be restored once deleted.',
       cancelText: 'NO, WAIT!',
       confirmText: 'CONFIRM DELETION',
     });
     if (!ok) return;
     try {
-      await apiFetch(`/api/TypeData/${id}`, {
+      await apiFetch(`/api/Country/${id}`, {
         method: 'DELETE',
         tokenKey: 'superadmin_token',
-        successMessage: 'Document type deleted successfully.',
-        errorFallback: 'Unable to delete document type.',
+        successMessage: 'Country deleted successfully.',
+        errorFallback: 'Unable to delete country.',
       });
       if (editingId === id) resetForm();
       loadData();
@@ -98,78 +98,69 @@ export default function DocumentTypePage() {
     }
   };
 
-  const toggleStatus = async (t: DocumentType) => {
-    const enabling = !t.status;
-    const ok = await confirmDialog({
-      title: enabling ? 'Enable Document Type?' : 'Disable Document Type?',
-      message: enabling
-        ? 'This Document Type will become active and available for use.'
-        : 'This Document Type will become inactive. You can enable it again later.',
-      cancelText: 'Cancel',
-      confirmText: enabling ? 'Enable' : 'Disable',
-    });
-    if (!ok) return;
+  const toggleStatus = async (c: Country) => {
     try {
-      await apiFetch(`/api/TypeData/${t.id}`, {
+      await apiFetch(`/api/Country/${c.id}`, {
         method: 'PUT',
         tokenKey: 'superadmin_token',
-        body: JSON.stringify({ status: !t.status }),
-        successMessage: 'Status Updated Successfully',
-        errorFallback: 'Failed to update status.',
+        body: JSON.stringify({ status: !c.status }),
+        successMessage: 'Status updated successfully.',
       });
-      setTypes(prev => patchListItem(prev, t.id, { status: !t.status }));
+      setCountries(prev => patchListItem(prev, c.id, { status: !c.status }));
     } catch {
       /* error toasted by apiFetch */
     }
   };
 
-  const openEdit = (t: DocumentType) => {
-    setEditingId(t.id);
-    reset({ name: t.name || '', description: t.description || '' });
+  const openEdit = (c: Country) => {
+    reset({
+      name: c.name || '',
+      description: c.description || '',
+      id: c.id,
+    });
+    setEditingId(c.id);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const columns: ListingColumn<DocumentType>[] = [
-    { key: 'name', label: 'Title', width: '70%', sortable: true },
+  const columns: ListingColumn<Country>[] = [
+    { key: 'name', label: 'Name', width: '70%', sortable: true },
   ];
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
-      <TopNav title="Manage Document Type" />
+      <TopNav title="Country Master" />
       <div className="page-body">
-        <div className="document-type-split">
+        <div className="specimen-type-split">
           <div className="card">
             <div className="card-header">
-              <span className="card-title">
-                {editingId ? 'Edit Document Type Detail' : 'Document Type Detail'}
-              </span>
+              <span className="card-title">{editingId ? 'Edit Country Detail' : 'Country Detail'}</span>
             </div>
             <form onSubmit={save} noValidate>
               <div className="card-body">
-                <FormGroup label="Title" htmlFor="document-type-title" required error={errors.name?.message}>
+                <FormGroup label="Name" htmlFor="country-name" required error={errors.name?.message}>
                   <input
-                    id="document-type-title"
+                    id="country-name"
                     type="text"
-                    placeholder="Enter Title"
+                    placeholder="Enter Name"
                     data-field="name"
                     aria-invalid={!!errors.name}
                     style={fieldStyle(!!errors.name)}
                     {...register('name')}
                   />
                 </FormGroup>
-
-                <FormGroup label="Description" htmlFor="document-type-description" error={errors.description?.message}>
+                <FormGroup label="Description" htmlFor="country-description" error={errors.description?.message}>
                   <textarea
-                    id="document-type-description"
+                    id="country-description"
+                    placeholder="Enter Description"
                     rows={4}
                     data-field="description"
                     aria-invalid={!!errors.description}
-                    style={{ ...fieldStyle(!!errors.description), resize: 'vertical' }}
+                    style={fieldStyle(!!errors.description)}
                     {...register('description')}
                   />
                 </FormGroup>
               </div>
-              <div className="document-type-form-actions">
+              <div className="specimen-type-form-actions">
                 <button type="submit" className="btn btn-primary" disabled={saving}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>
@@ -181,22 +172,20 @@ export default function DocumentTypePage() {
           </div>
 
           <ListingTable
-            title="List of Document Types"
+            title="List of Country Details"
             columns={columns}
-            rows={types}
+            rows={countries}
             loading={loading}
-            emptyText="No document types found."
+            emptyText="No country records found."
             actionsLabel="Actions"
-            actionsWidth={150}
+            actionsWidth={120}
             defaultPageSize={10}
-            rowActions={documentType => (
+            rowActions={c => (
               <ActionIcons
-                onEdit={() => openEdit(documentType)}
-                onToggleStatus={() => toggleStatus(documentType)}
-                onDelete={() => remove(documentType.id)}
-                statusActive={!!documentType.status}
-                editTitle="Edit Document Type"
-                deleteTitle="Delete Document Type"
+                onEdit={() => openEdit(c)}
+                onDelete={() => remove(c.id)}
+                onToggleStatus={() => toggleStatus(c)}
+                statusActive={c.status !== false}
               />
             )}
           />

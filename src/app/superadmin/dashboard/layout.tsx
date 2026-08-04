@@ -14,6 +14,10 @@ import {
   MdSettings,
   MdVpnKey,
   MdAdd,
+  MdPublic,
+  MdMap,
+  MdLocationCity,
+  MdPinDrop,
 } from 'react-icons/md';
 
 const superAdminNavItems: NavItem[] = [
@@ -26,6 +30,17 @@ const superAdminNavItems: NavItem[] = [
   // { href: '/testresultparameter', label: 'Test Result Parameters', icon: <MdBarChart size={18} />, section: 'Master Configurations' },
   { href: '/b2bclient', label: 'B2B Labs', icon: <MdBusiness size={18} />, section: 'Master Configurations' },
   // { href: '/globalsettings', label: 'Global Settings', icon: <MdSettings size={18} />, section: 'Master Configurations' },
+  {
+    href: '/location',
+    label: 'Location Master',
+    icon: <MdPinDrop size={18} />,
+    section: 'Master Configurations',
+    children: [
+      { href: '/country', label: 'Country', icon: <MdPublic size={16} />, section: 'Master Configurations' },
+      { href: '/state', label: 'State', icon: <MdMap size={16} />, section: 'Master Configurations' },
+      { href: '/city', label: 'City', icon: <MdLocationCity size={16} />, section: 'Master Configurations' },
+    ],
+  },
   { href: '/profile', label: 'My Profile', icon: <MdPerson size={18} />, section: 'Account' },
 ];
 
