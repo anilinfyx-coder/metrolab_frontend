@@ -27,6 +27,8 @@ const WhitelabelContext = createContext<WhitelabelContextType>({
 
 export const useWhitelabel = () => useContext(WhitelabelContext);
 
+import PageLoader from './PageLoader';
+
 export function WhitelabelProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<WhitelabelConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,6 +115,10 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
 
     fetchConfig();
   }, []);
+
+  if (isLoading) {
+    return <PageLoader centered message="" />;
+  }
 
   return (
     <WhitelabelContext.Provider value={{ config, isLoading, isWhitelabel }}>
