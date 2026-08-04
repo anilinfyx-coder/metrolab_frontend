@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { API_BASE, getUploadUrl } from '../../lib/api';
+import { getApiBase, getUploadUrl } from '../../lib/api';
 
 export interface WhitelabelConfig {
   id: number;
@@ -59,14 +59,15 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('test_domain');
         }
 
-        // Skip for default domain
-        if (hostname === 'lab.metrolab.biz') {
+        // Skip whitelabel lookup for primary platform domains
+        const primaryDomains = ['lab.metrolab.biz', 'lab.orbitmedcare.com'];
+        if (primaryDomains.includes(hostname)) {
           setIsWhitelabel(false);
           setIsLoading(false);
           return;
         }
 
-        const res = await fetch(`${API_BASE}/api/B2bClients/whitelabelConfig?domain=${hostname}`);
+        const res = await fetch(`${getApiBase()}/api/B2bClients/whitelabelConfig?domain=${hostname}`);
         if (!res.ok) {
           setIsLoading(false);
           return;

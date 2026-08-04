@@ -1,6 +1,31 @@
 import toast from 'react-hot-toast';
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+/** Frontend hostname → matching API origin (keeps brand domains paired). */
+const FRONTEND_API_ORIGINS: Record<string, string> = {
+  'lab.metrolab.biz': 'https://api.lab.metrolab.biz',
+  'lab.orbitmedcare.com': 'https://api.lab.orbitmedcare.com',
+};
+
+const DEFAULT_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+/** Resolves API origin from the current host when mapped; else build-time default. */
+export function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const mapped = FRONTEND_API_ORIGINS[window.location.hostname];
+    if (mapped) return mapped;
+  }
+  return DEFAULT_API_BASE;
+}
+
+/**
+ * Same as getApiBase(), usable in existing `${API_BASE}/...` call sites.
+ * Coerces to the hostname-matched origin at stringification time.
+ */
+export const API_BASE = {
+  toString: () => getApiBase(),
+  valueOf: () => getApiBase(),
+  [Symbol.toPrimitive]: () => getApiBase(),
+} as unknown as string;
 
 /**
  * Public URL for an uploaded file stored in GCS.
@@ -25,7 +50,7 @@ export function getUploadUrl(
     ? `/api/B2bClientDocument/file/${encodeURIComponent(baseName)}`
     : `/api/B2bClients/file/${encodeURIComponent(baseName)}`;
 
-  return `${API_BASE}${endpoint}`;
+  return `${getApiBase()}${endpoint}`;
 }
 
 export type ApiEnvelope<T = unknown> = {
@@ -156,7 +181,7 @@ export async function apiFetch<T = unknown>(
 
   let res: Response;
   try {
-    res = await fetch(path.startsWith('http') ? path : `${API_BASE}${path}`, {
+    res = await fetch(path.startsWith('http') ? path : `${getApiBase()}${path}`, {
       ...rest,
       headers: requestHeaders,
       body,
