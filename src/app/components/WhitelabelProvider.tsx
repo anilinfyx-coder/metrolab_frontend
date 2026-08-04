@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { getApiBase, getUploadUrl } from '../../lib/api';
+import { API_BASE, getUploadUrl } from '../../lib/api';
 
 export interface WhitelabelConfig {
   id: number;
@@ -35,18 +35,18 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
     const fetchConfig = async () => {
       try {
         let hostname = window.location.hostname;
-        
+
         // Allow local testing override via query param or localStorage
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
           const urlParams = new URLSearchParams(window.location.search);
           const override = urlParams.get('test_domain');
-          
+
           if (override === 'reset' || override === 'clear') {
             localStorage.removeItem('test_domain');
           } else if (override) {
             localStorage.setItem('test_domain', override);
           }
-          
+
           const testDomain = override || localStorage.getItem('test_domain');
           if (testDomain) {
             hostname = testDomain;
@@ -59,15 +59,14 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem('test_domain');
         }
 
-        // Skip whitelabel lookup for primary platform domains
-        const primaryDomains = ['lab.metrolab.biz', 'lab.orbitmedcare.com'];
-        if (primaryDomains.includes(hostname)) {
+        // Skip for default domain
+        if (hostname === 'lab.metrolab.biz') {
           setIsWhitelabel(false);
           setIsLoading(false);
           return;
         }
 
-        const res = await fetch(`${getApiBase()}/api/B2bClients/whitelabelConfig?domain=${hostname}`);
+        const res = await fetch(`${API_BASE}/api/B2bClients/whitelabelConfig?domain=${hostname}`);
         if (!res.ok) {
           setIsLoading(false);
           return;
