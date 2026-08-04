@@ -1,8 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import PageLoader from './PageLoader';
-
-const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+import { getApiBase } from '../../lib/api';
 
 type Props = {
   labTestId: number;
@@ -52,15 +51,16 @@ export default function ViewLabTestForm({ labTestId, token, b2bClientId }: Props
     setLoading(true);
 
     const b2bQuery = b2bClientId ? `&b2b_client_id=${b2bClientId}` : '';
+    const api = getApiBase();
     const testUrl = b2bClientId
-      ? `${API}/api/B2bClientLabTestAccess/display-options?b2b_client_id=${b2bClientId}&lab_test_id=${labTestId}`
-      : `${API}/api/LabTests/${labTestId}`;
+      ? `${api}/api/B2bClientLabTestAccess/display-options?b2b_client_id=${b2bClientId}&lab_test_id=${labTestId}`
+      : `${api}/api/LabTests/${labTestId}`;
 
     Promise.all([
       fetch(testUrl, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/ReportQuestions?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/ReportRequestParameters?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
-      fetch(`${API}/api/SpecimenTypeDrugLinking?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${api}/api/ReportQuestions?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${api}/api/ReportRequestParameters?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
+      fetch(`${api}/api/SpecimenTypeDrugLinking?lab_test_id=${labTestId}${b2bQuery}&status=true`, { headers: { token } }).then(r => r.json()),
     ])
       .then(([testRes, qRes, pRes, sRes]) => {
         if (testRes.response_code === '200') setTest(testRes.obj);
