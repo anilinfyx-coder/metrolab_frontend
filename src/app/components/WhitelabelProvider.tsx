@@ -10,6 +10,7 @@ export interface WhitelabelConfig {
   logo_file: string;
   logo_url: string | null;
   custom_domain: string;
+  tagline?: string | null;
 }
 
 interface WhitelabelContextType {
@@ -81,6 +82,26 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
           if (data.obj.primary_color_code) {
             document.documentElement.style.setProperty('--primary-color', data.obj.primary_color_code);
             document.documentElement.style.setProperty('--sidebar-bg', data.obj.primary_color_code);
+          }
+
+          // Update page title
+          if (data.obj.company_name) {
+            document.title = data.obj.company_name;
+          }
+
+          // Update favicon
+          if (data.obj.logo_url) {
+            const iconLinks = document.querySelectorAll<HTMLLinkElement>("link[rel~='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon']");
+            if (iconLinks.length > 0) {
+              iconLinks.forEach(link => {
+                link.href = data.obj.logo_url!;
+              });
+            } else {
+              const link = document.createElement('link');
+              link.rel = 'icon';
+              link.href = data.obj.logo_url;
+              document.head.appendChild(link);
+            }
           }
         }
       } catch (err) {

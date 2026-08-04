@@ -159,11 +159,7 @@ export default function TopNav({ title, children }: TopNavProps) {
             <MdMenu size={22} aria-hidden />
           </button>
           <h1 className="topnav-title">{title}</h1>
-          {portal.key === 'b2b' && isWhitelabel && config && (
-            <span className="topnav-mode-badge topnav-mode-badge-whitelabel">
-              Whitelabel Mode: {config.custom_domain}
-            </span>
-          )}
+
         </div>
         <div className="topnav-actions">
           {children}

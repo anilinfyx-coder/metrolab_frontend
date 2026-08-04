@@ -107,9 +107,13 @@ export default function UnifiedLoginPage() {
           )}
         </div>
 
-        {!isWhitelabel && (
+        {!isWhitelabel ? (
           <p className={styles.tagline}>
             Precision is our Home Mark
+          </p>
+        ) : (
+          <p className={styles.tagline} style={{ color: '#1a1a54' }}>
+            {config?.tagline ? config.tagline : `Welcome to ${config?.company_name || 'our portal'}`}
           </p>
         )}
 
