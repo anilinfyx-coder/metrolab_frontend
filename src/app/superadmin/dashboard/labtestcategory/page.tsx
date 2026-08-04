@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from 'react';
 import {
   MdAdd,
@@ -10,6 +10,7 @@ import {
   MdRefresh,
   MdSave,
   MdScience,
+  MdSearch,
   MdVisibility,
 } from 'react-icons/md';
 import TopNav from '../../../components/TopNav';
@@ -136,11 +137,15 @@ export default function LabTestCategoryPage() {
   const [resultErrors, setResultErrors] = useState<ResultErrors>({});
   const [savingResult, setSavingResult] = useState(false);
 
-  const loadTests = async (p = page, ps = pageSize) => {
+  // Search
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+
+  const loadTests = async (p = page, ps = pageSize, q = search) => {
     setLoading(true);
     try {
       const result = await apiFetch<PaginatedResult<LabTest> | LabTest[]>(
-        `/api/LabTests?${buildPageQuery(p, ps)}`,
+        `/api/LabTests?${buildPageQuery(p, ps, { search: q || undefined })}`,
         { tokenKey: 'superadmin_token' },
       );
       if (isPaginatedResult<LabTest>(result)) {
@@ -158,9 +163,21 @@ export default function LabTestCategoryPage() {
     }
   };
 
+  // Debounce search input → update `search` state
   useEffect(() => {
-    void loadTests(page, pageSize);
-  }, [page, pageSize]);
+    const t = window.setTimeout(() => {
+      const next = searchInput.trim();
+      setSearch(prev => {
+        if (prev !== next) setPage(1);
+        return next;
+      });
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
+
+  useEffect(() => {
+    void loadTests(page, pageSize, search);
+  }, [page, pageSize, search]);
 
   const [isReadOnly, setIsReadOnly] = useState(false);
   
@@ -1123,7 +1140,22 @@ export default function LabTestCategoryPage() {
           rows={tests}
           loading={loading}
           emptyText="No Lab Tests found."
-          headerActions={<ListingHeaderActions onAdd={openAdd} />}
+          headerActions={
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <div className="listing-search-box">
+                <MdSearch size={16} className="listing-search-icon" aria-hidden />
+                <input
+                  type="text"
+                  className="listing-search-input"
+                  placeholder="Search by name..."
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  aria-label="Search lab tests"
+                />
+              </div>
+              <ListingHeaderActions onAdd={openAdd} />
+            </div>
+          }
           actionsLabel="Actions"
           actionsWidth={150}
           defaultPageSize={10}

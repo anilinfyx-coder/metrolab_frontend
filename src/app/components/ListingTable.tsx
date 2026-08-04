@@ -269,8 +269,6 @@ export default function ListingTable<T extends { id: number | string }>({
   const [sortAsc, setSortAsc] = useState(true);
 
   const filteredSorted = useMemo(() => {
-    if (isServerPagination) return rows;
-
     let list = [...rows];
 
     list = list.filter(row =>
@@ -282,7 +280,7 @@ export default function ListingTable<T extends { id: number | string }>({
       })
     );
 
-    if (sortKey) {
+    if (!isServerPagination && sortKey) {
       const col = columns.find(c => c.key === sortKey);
       if (col) {
         list.sort((a, b) => {
@@ -306,7 +304,7 @@ export default function ListingTable<T extends { id: number | string }>({
   const totalPages = isServerPagination
     ? Math.max(1, Math.ceil(total / pageSize) || 1)
     : clientPagination.totalPages;
-  const pageItems = isServerPagination ? rows : clientPagination.pageItems;
+  const pageItems = isServerPagination ? filteredSorted : clientPagination.pageItems;
 
   const handlePageChange = (nextPage: number) => {
     if (isServerPagination) onPageChange?.(nextPage);
@@ -381,7 +379,6 @@ export default function ListingTable<T extends { id: number | string }>({
                       </th>
                     )}
                   </tr>
-                  {!isServerPagination && (
                   <tr className="table-filter-row">
                     {columns.map(col => (
                       <td key={col.key} style={{ width: col.width }}>
@@ -404,7 +401,6 @@ export default function ListingTable<T extends { id: number | string }>({
                     ))}
                     {rowActions && <td className="td-actions-col" style={{ width: actionsWidth }} />}
                   </tr>
-                  )}
                 </thead>
                 <tbody>
                   {pageItems.map(row => (

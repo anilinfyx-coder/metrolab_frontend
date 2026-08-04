@@ -1036,6 +1036,8 @@ export default function B2BClientsPage() {
       key: 'company_name',
       label: 'Company Name',
       width: '25%',
+      sortable: true,
+      getValue: client => client.company_name || '',
       render: client => (
         <Link
           href={`/superadmin/dashboard/b2bclient/${client.id}`}
@@ -1045,8 +1047,8 @@ export default function B2BClientsPage() {
         </Link>
       ),
     },
-    { key: 'mobile', label: 'Mobile', width: '15%' },
-    { key: 'email', label: 'Email', width: '20%' },
+    { key: 'mobile', label: 'Mobile', width: '15%', sortable: true },
+    { key: 'email', label: 'Email', width: '20%', sortable: true },
     {
       key: 'has_active_subscription',
       label: 'Subscription',

@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import TopNav from '../../../components/TopNav';
@@ -61,7 +61,7 @@ export default function SpecimenTypePage() {
       await apiFetch(path, {
         method,
         tokenKey: 'superadmin_token',
-        body: JSON.stringify({ name: values.name.trim(), description: values.description.trim() }),
+        body: JSON.stringify({ name: values.name.trim(), description: values.description?.trim() ?? '' }),
         successMessage: `Specimen type ${values.id ? 'updated' : 'added'} successfully.`,
         errorFallback: 'Unable to save specimen type.',
       });
@@ -131,7 +131,7 @@ export default function SpecimenTypePage() {
   };
 
   const columns: ListingColumn<SpecimenType>[] = [
-    { key: 'name', label: 'Name', width: '70%' },
+    { key: 'name', label: 'Name', width: '70%', sortable: true },
   ];
 
   return (
@@ -156,7 +156,7 @@ export default function SpecimenTypePage() {
                     {...register('name')}
                   />
                 </FormGroup>
-                <FormGroup label="Description" htmlFor="specimen-type-description" required error={errors.description?.message}>
+                <FormGroup label="Description" htmlFor="specimen-type-description" error={errors.description?.message}>
                   <textarea
                     id="specimen-type-description"
                     rows={4}
