@@ -16,6 +16,9 @@ function formatCutoff(value?: string | null, unit?: string | null) {
   return `${value}${unitText}`;
 }
 
+import AdultHealthInlineForm from './AdultHealthInlineForm';
+import PhysicalExamInlineForm from './PhysicalExamInlineForm';
+
 export default function ApplyTestForm({
   waitingListId,
   onClose,
@@ -311,6 +314,44 @@ export default function ApplyTestForm({
         {test && !test.submitStatus && selectedTestId === test.id ? (
           <div className="card wl-test-form-card">
             <h3 className="wl-test-form-title">{test.name}</h3>
+            {test.name?.toLowerCase() === 'adult health certificate (tb)' ? (
+              <AdultHealthInlineForm
+                patientId={data.patient_id}
+                waitingListId={waitingListId}
+                labTestId={test.id}
+                onSuccess={() => {
+                  setData((prev: any) => {
+                    const newList = prev.labTestList.map((t: any) =>
+                      t.id === test.id ? { ...t, submitStatus: true } : t
+                    );
+                    if (newList.every((t: any) => t.submitStatus)) {
+                      setTimeout(() => onSuccess(), 0);
+                    }
+                    return { ...prev, labTestList: newList };
+                  });
+                  setSelectedTestId(null);
+                }}
+              />
+            ) : test.name?.toLowerCase() === 'physical examination certificate' ? (
+              <PhysicalExamInlineForm
+                patientId={data.patient_id}
+                waitingListId={waitingListId}
+                labTestId={test.id}
+                onSuccess={() => {
+                  setData((prev: any) => {
+                    const newList = prev.labTestList.map((t: any) =>
+                      t.id === test.id ? { ...t, submitStatus: true } : t
+                    );
+                    if (newList.every((t: any) => t.submitStatus)) {
+                      setTimeout(() => onSuccess(), 0);
+                    }
+                    return { ...prev, labTestList: newList };
+                  });
+                  setSelectedTestId(null);
+                }}
+              />
+            ) : (
+            <>
             <div className="card-body wl-test-form-body">
               <div className="wl-form-row wl-form-row-2">
                 {test.show_regulation && (
@@ -544,6 +585,8 @@ export default function ApplyTestForm({
                 {saving ? 'Saving...' : 'Submit'}
               </button>
             </div>
+            </>
+          )}
           </div>
         ) : data.labTestList.every((t: any) => t.submitStatus) ? (
           <div className="wl-all-submitted">All tests have been successfully submitted for this patient!</div>
