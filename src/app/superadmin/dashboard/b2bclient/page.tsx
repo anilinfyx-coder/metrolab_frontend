@@ -43,6 +43,7 @@ interface B2BClient {
   fixed_price_amount?: number | string;
   custom_domain?: string;
   is_approval?: boolean;
+  is_corporate_enabled?: boolean;
   wallet_balance?: number;
   wallet_total_recharged?: number | string;
   billing_mode?: 'monthly' | 'yearly' | 'custom';
@@ -111,7 +112,9 @@ type SaveClientPayload = {
   editingId: number | null;
   isApproval: boolean;
   isFixedPrice: boolean;
+  isCorporateEnabled: boolean;
   logoFile: File | null;
+  faviconFile: File | null;
   reportHeaderFile: File | null;
   reportFooterFile: File | null;
   medOfficerSigFile: File | null;
@@ -207,10 +210,12 @@ export default function B2BClientsPage() {
 
   // File uploads for B2B Client
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
   const [reportHeaderFile, setReportHeaderFile] = useState<File | null>(null);
   const [reportFooterFile, setReportFooterFile] = useState<File | null>(null);
   const [medOfficerSigFile, setMedOfficerSigFile] = useState<File | null>(null);
   const [isApproval, setIsApproval] = useState(false);
+  const [isCorporateEnabled, setIsCorporateEnabled] = useState(true);
   const [isFixedPrice, setIsFixedPrice] = useState(false);
   const [isWhitelabel, setIsWhitelabel] = useState(false);
   const [fixedPriceAmount, setFixedPriceAmount] = useState('');
@@ -477,9 +482,11 @@ export default function B2BClientsPage() {
       setEditingId(null);
       resetClient({ ...emptyClient, password: generateAutoPassword() });
       setIsApproval(false);
+      setIsCorporateEnabled(true);
       setIsFixedPrice(false);
       setFixedPriceAmount('');
       setLogoFile(null);
+      setFaviconFile(null);
       setReportHeaderFile(null);
       setReportFooterFile(null);
       setMedOfficerSigFile(null);
@@ -535,7 +542,9 @@ export default function B2BClientsPage() {
       editingId: editId,
       isApproval: approval,
       isFixedPrice: fixedPrice,
+      isCorporateEnabled: corporateEnabled,
       logoFile: logo,
+      faviconFile: favicon,
       reportHeaderFile: header,
       reportFooterFile: footer,
       medOfficerSigFile: sig,
@@ -552,8 +561,9 @@ export default function B2BClientsPage() {
         deleted: false,
         is_approval: approval,
         is_fixed_price: fixedPrice,
+        is_corporate_enabled: corporateEnabled,
       };
-      const hasFiles = logo || header || footer || sig;
+      const hasFiles = logo || favicon || header || footer || sig;
       if (hasFiles) {
         const fd = new FormData();
         Object.entries(payload).forEach(([k, v]) => {
@@ -741,6 +751,7 @@ export default function B2BClientsPage() {
     setEditingId(null);
     resetClient({ ...emptyClient, password: generateAutoPassword() });
     setIsApproval(false);
+    setIsCorporateEnabled(true);
     setIsFixedPrice(false);
     setIsWhitelabel(false);
     setView('form');
@@ -766,6 +777,7 @@ export default function B2BClientsPage() {
       city_id: c.city_id != null ? String(c.city_id) : '',
     });
     setIsApproval(!!c.is_approval);
+    setIsCorporateEnabled(typeof c.is_corporate_enabled === 'boolean' ? c.is_corporate_enabled : true);
     setIsFixedPrice(!!c.is_fixed_price);
     setIsWhitelabel(!!c.custom_domain);
     setView('form');
@@ -778,7 +790,9 @@ export default function B2BClientsPage() {
         editingId,
         isApproval,
         isFixedPrice,
+        isCorporateEnabled,
         logoFile,
+        faviconFile,
         reportHeaderFile,
         reportFooterFile,
         medOfficerSigFile,
@@ -788,6 +802,7 @@ export default function B2BClientsPage() {
       setReportFooterFile(null);
       setMedOfficerSigFile(null);
       setIsApproval(false);
+      setIsCorporateEnabled(true);
       setIsFixedPrice(false);
       setView('list');
       await invalidateClients();
@@ -1280,13 +1295,22 @@ export default function B2BClientsPage() {
                 {inp('smtp_email', 'SMTP Email', 'email')}
                 {inp('smtp_password', 'SMTP Password', 'password')}
 
-                {/* Is Approval Toggle */}
-                <div className="form-group" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                {/* Approval & Corporate Toggles */}
+                <div className="form-group">
                   <label style={{ marginBottom: '0.5rem' }}>Approval Required</label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
                     <input type="checkbox" checked={isApproval} onChange={e => setIsApproval(e.target.checked)}
                       style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
                     <span style={{ fontSize: '0.875rem' }}>{isApproval ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Approval Required</> : 'No Approval Required'}</span>
+                  </label>
+                </div>
+                
+                <div className="form-group">
+                  <label style={{ marginBottom: '0.5rem' }}>Corporate Client Enabled</label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', padding: '0.55rem 0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)' }}>
+                    <input type="checkbox" checked={isCorporateEnabled} onChange={e => setIsCorporateEnabled(e.target.checked)}
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: '#6366f1' }} />
+                    <span style={{ fontSize: '0.875rem' }}>{isCorporateEnabled ? <><MdCheckCircle size={16} style={{ verticalAlign: 'text-bottom', marginRight: '0.35rem' }} aria-hidden />Enabled</> : 'Disabled'}</span>
                   </label>
                 </div>
 
@@ -1300,6 +1324,12 @@ export default function B2BClientsPage() {
                   <input type="file" accept="image/*" onChange={e => setLogoFile(e.target.files?.[0] || null)}
                     style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
                   {logoFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {logoFile.name}</small>}
+                </div>
+                <div className="form-group">
+                  <label>Favicon File</label>
+                  <input type="file" accept="image/png, image/x-icon" onChange={e => setFaviconFile(e.target.files?.[0] || null)}
+                    style={{ display: 'block', width: '100%', padding: '0.4rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }} />
+                  {faviconFile && <small style={{ color: 'var(--text-muted)' }}>Selected: {faviconFile.name}</small>}
                 </div>
                 <div className="form-group">
                   <label>Report Header File</label>
