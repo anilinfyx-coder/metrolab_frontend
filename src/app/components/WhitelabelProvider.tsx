@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { API_BASE, getUploadUrl } from '../../lib/api';
 
 export interface WhitelabelConfig {
@@ -9,6 +10,8 @@ export interface WhitelabelConfig {
   primary_color_code: string;
   logo_file: string;
   logo_url: string | null;
+  favicon_file?: string | null;
+  favicon_url?: string | null;
   custom_domain: string;
   tagline?: string | null;
 }
@@ -33,6 +36,7 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<WhitelabelConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWhitelabel, setIsWhitelabel] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -86,22 +90,23 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
             document.documentElement.style.setProperty('--sidebar-bg', data.obj.primary_color_code);
           }
 
-          // Update page title
+          // Update page title initially
           if (data.obj.company_name) {
             document.title = data.obj.company_name;
           }
 
-          // Update favicon
-          if (data.obj.logo_url) {
+          // Update favicon initially
+          const iconUrl = data.obj.favicon_url || (data.obj.favicon_file ? getUploadUrl(data.obj.favicon_file) : null) || data.obj.logo_url || (data.obj.logo_file ? getUploadUrl(data.obj.logo_file) : null);
+          if (iconUrl) {
             const iconLinks = document.querySelectorAll<HTMLLinkElement>("link[rel~='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon']");
             if (iconLinks.length > 0) {
               iconLinks.forEach(link => {
-                link.href = data.obj.logo_url!;
+                link.href = iconUrl;
               });
             } else {
               const link = document.createElement('link');
               link.rel = 'icon';
-              link.href = data.obj.logo_url;
+              link.href = iconUrl;
               document.head.appendChild(link);
             }
           }
@@ -115,6 +120,23 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
 
     fetchConfig();
   }, []);
+
+  // Re-apply title and favicon on navigation (Next.js client-side routing can override it)
+  useEffect(() => {
+    if (config) {
+      if (config.company_name) {
+        document.title = config.company_name;
+      }
+      
+      const iconUrl = config.favicon_url || (config.favicon_file ? getUploadUrl(config.favicon_file) : null) || config.logo_url || (config.logo_file ? getUploadUrl(config.logo_file) : null);
+      if (iconUrl) {
+        const iconLinks = document.querySelectorAll<HTMLLinkElement>("link[rel~='icon'], link[rel='shortcut icon'], link[rel='apple-touch-icon']");
+        iconLinks.forEach(link => {
+          link.href = iconUrl;
+        });
+      }
+    }
+  }, [config, pathname]);
 
   if (isLoading) {
     return <PageLoader centered message="" />;

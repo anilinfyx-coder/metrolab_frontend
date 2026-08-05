@@ -281,24 +281,17 @@ export default function TestsReportsPage() {
               ))}
             </select>
           }
-          rowActions={(r) =>
-            r.status ? (
-              <ActionIcons
-                onMail={() => emailReport(r)}
-                mailTitle={`Email report ${r.uid || r.id}`}
-              />
-            ) : (
-              <ActionIcons
-                onDownload={() => downloadReport(r)}
-                onEdit={() => router.push(`/admin/dashboard/manageothertest/${r.id}`)}
-                editTitle="Edit"
-                onLock={() => toggleLock(r)}
-                locked={false}
-                lockTitle="Lock"
-                onMail={() => emailReport(r)}
-              />
-            )
-          }
+          rowActions={(r) => (
+            <ActionIcons
+              onDownload={() => downloadReport(r)}
+              onEdit={r.status ? undefined : () => router.push(`/admin/dashboard/manageothertest/${r.id}`)}
+              editDisabled={r.status}
+              onLock={() => toggleLock(r)}
+              locked={r.status}
+              onMail={() => emailReport(r)}
+              mailTitle={`Email report ${r.uid || r.id}`}
+            />
+          )}
         />
       </div>
     </div>

@@ -9,6 +9,8 @@ import {
   finalResultSelectValue,
   normalizeFinalResult,
 } from '../../../../../lib/finalResult';
+import AdultHealthEditForm from './AdultHealthEditForm';
+import PhysicalExamEditForm from './PhysicalExamEditForm';
 
 type LabTestFlags = Record<string, boolean | string | number | null | undefined> & {
   name?: string;
@@ -41,6 +43,9 @@ type Specimen = { id: number; name: string };
 
 type FormState = {
   id: number;
+  waiting_list_id: number;
+  lab_test_id: number;
+  patient_id: number;
   regulation: string;
   specimen_type_id: string;
   collected_date: string;
@@ -125,6 +130,8 @@ export default function EditTestReportPage() {
 
   const goBack = () => router.push('/admin/dashboard/manageothertest');
 
+  const isCustomCert = labTest?.name?.toLowerCase().includes('adult health certificate') || labTest?.name?.toLowerCase().includes('physical examination');
+
   useEffect(() => {
     if (!id || Number.isNaN(id)) {
       setLoading(false);
@@ -150,6 +157,9 @@ export default function EditTestReportPage() {
         setLocked(!!report.status);
         setForm({
           id: report.id,
+          waiting_list_id: report.waiting_list_id,
+          lab_test_id: report.lab_test_id,
+          patient_id: report.patient_id,
           regulation: report.regulation || 'Non-DOT',
           specimen_type_id: report.specimen_type_id ? String(report.specimen_type_id) : '',
           collected_date: collected.date,
@@ -285,7 +295,9 @@ export default function EditTestReportPage() {
               )}
 
               <fieldset disabled={locked || saving} className="report-edit-fieldset">
-                <div className="wl-form-row wl-form-row-2">
+                {!isCustomCert && (
+                  <>
+                    <div className="wl-form-row wl-form-row-2">
                   {show('show_regulation') && (
                     <div className="form-group">
                       <label>Regulation:</label>
@@ -427,12 +439,34 @@ export default function EditTestReportPage() {
                         onChange={(e) => setField('report_status', e.target.value)}
                       />
                     </div>
-                  </div>
+                    </div>
+                  )}
+                  </>
                 )}
 
-                {form.testResultParameterList.length > 0 && (
-                  <div className="report-param-table-wrap">
-                    <table className="report-param-table">
+                {isCustomCert && labTest?.name?.toLowerCase().includes('adult health certificate') ? (
+                  <AdultHealthEditForm 
+                    waitingListId={Number(form.waiting_list_id)} 
+                    labTestId={Number(form.lab_test_id)} 
+                    patientId={Number(form.patient_id)}
+                    onSuccess={() => {}} 
+                    onClose={goBack}
+                    locked={locked} 
+                  />
+                ) : isCustomCert && labTest?.name?.toLowerCase().includes('physical examination') ? (
+                  <PhysicalExamEditForm 
+                    waitingListId={Number(form.waiting_list_id)} 
+                    labTestId={Number(form.lab_test_id)} 
+                    patientId={Number(form.patient_id)}
+                    onSuccess={() => {}} 
+                    onClose={goBack}
+                    locked={locked} 
+                  />
+                ) : (
+                  <>
+                    {form.testResultParameterList.length > 0 && (
+                      <div className="report-param-table-wrap">
+                        <table className="report-param-table">
                       <thead>
                         <tr>
                           <th>Parameter Name</th>
@@ -673,22 +707,26 @@ export default function EditTestReportPage() {
                     </div>
                   )}
                 </div>
+              </>
+              )}
               </fieldset>
 
-              <div className="report-edit-footer">
-                <button type="button" className="btn btn-ghost" onClick={goBack} disabled={saving}>
-                  Close
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary report-edit-save-btn"
-                  onClick={save}
-                  disabled={saving || locked}
-                >
-                  {saving && <span className="report-edit-spinner report-edit-spinner-btn" aria-hidden />}
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
+              {!isCustomCert && (
+                <div className="report-edit-footer">
+                  <button type="button" className="btn btn-ghost" onClick={goBack} disabled={saving}>
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary report-edit-save-btn"
+                    onClick={save}
+                    disabled={saving || locked}
+                  >
+                    {saving && <span className="report-edit-spinner report-edit-spinner-btn" aria-hidden />}
+                    {saving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

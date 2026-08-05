@@ -35,6 +35,14 @@ export default function B2bDashboardLayout({ children }: { children: React.React
           const billingMode = clientProfile?.billing_mode || 'monthly';
           let hasActiveSub = false;
 
+          const isCorporateEnabled = clientProfile && typeof clientProfile.is_corporate_enabled === 'boolean' 
+            ? clientProfile.is_corporate_enabled 
+            : true;
+            
+          const filteredNavItems = isCorporateEnabled 
+            ? baseB2bNavItems 
+            : baseB2bNavItems.filter(item => item.href !== '/corporateclient');
+
           // Custom pricing is always considered an active subscription
           if (billingMode === 'custom') {
             hasActiveSub = true;
@@ -50,12 +58,12 @@ export default function B2bDashboardLayout({ children }: { children: React.React
 
           if (hasActiveSub) {
             setNavItems([
-              ...baseB2bNavItems,
+              ...filteredNavItems,
               { href: billingMode === 'custom' ? '/wallet' : '/subscription', label: 'Active Subscription', icon: <MdCardMembership size={18} />, section: 'Billing' }
             ]);
           } else {
             setNavItems([
-              ...baseB2bNavItems,
+              ...filteredNavItems,
               { href: '/wallet', label: 'Wallet & Transactions', icon: <MdAccountBalanceWallet size={18} />, section: 'Billing' }
             ]);
           }
