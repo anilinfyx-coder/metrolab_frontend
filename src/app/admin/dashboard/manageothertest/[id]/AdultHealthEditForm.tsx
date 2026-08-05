@@ -43,8 +43,8 @@ export default function AdultHealthEditForm({ waitingListId, labTestId, patientI
     setLoading(true);
     apiFetch<any>(`/api/AdultHealthCertificates?waiting_list_id=${waitingListId}&lab_test_id=${labTestId}`, { tokenKey: 'admin_token' })
       .then(res => {
-        if (res?.data && res.data.length > 0) {
-          const cert = res.data[0];
+        if (Array.isArray(res) && res.length > 0) {
+          const cert = res[0];
           setCertId(cert.id);
           setForm({
             free_from_disease: cert.free_from_disease || false,
@@ -69,7 +69,7 @@ export default function AdultHealthEditForm({ waitingListId, labTestId, patientI
   const handleSubmit = async () => {
     if (locked) return;
     setSaving(true);
-    
+
     const payload = {
       ...form,
       patient_id: patientId,
@@ -236,9 +236,9 @@ export default function AdultHealthEditForm({ waitingListId, labTestId, patientI
             <div className="cert-radio-group" style={{ display: 'flex', gap: '1.25rem', marginTop: '0.5rem' }}>
               {(['MD', 'PA', 'NP'] as const).map(spec => (
                 <label key={spec} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem', cursor: 'pointer' }}>
-                  <input 
-                    type="radio" 
-                    value={spec} 
+                  <input
+                    type="radio"
+                    value={spec}
                     checked={form.clinician_specialty === spec}
                     onChange={() => handleFormChange('clinician_specialty', spec)}
                   />
@@ -272,11 +272,11 @@ export default function AdultHealthEditForm({ waitingListId, labTestId, patientI
         </div>
       </div>
 
-      <div className="wl-test-form-footer" style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
-          Close
+      <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', justifyContent: 'flex-end', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+        <button type="button" className="btn btn-ghost" style={{ minWidth: '100px' }} onClick={onClose} disabled={saving}>
+          Cancel
         </button>
-        <button type="button" className="btn btn-primary wl-submit-btn" onClick={handleSubmit} disabled={saving || locked}>
+        <button type="button" className="btn btn-primary" style={{ minWidth: '160px' }} onClick={handleSubmit} disabled={saving || locked}>
           {saving ? 'Saving...' : 'Save Certificate Details'}
         </button>
       </div>

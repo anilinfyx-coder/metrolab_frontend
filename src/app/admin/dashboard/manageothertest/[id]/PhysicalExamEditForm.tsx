@@ -73,8 +73,8 @@ export default function PhysicalExamEditForm({ waitingListId, labTestId, patient
     setLoading(true);
     apiFetch<any>(`/api/PhysicalExaminationCertificates?waiting_list_id=${waitingListId}&lab_test_id=${labTestId}`, { tokenKey: 'admin_token' })
       .then(res => {
-        if (res?.data && res.data.length > 0) {
-          const cert = res.data[0];
+        if (Array.isArray(res) && res.length > 0) {
+          const cert = res[0];
           setCertId(cert.id);
           setForm({
             age: cert.age || '',
@@ -114,7 +114,7 @@ export default function PhysicalExamEditForm({ waitingListId, labTestId, patient
   const handleSubmit = async () => {
     if (locked) return;
     setSaving(true);
-    
+
     const payload = {
       ...form,
       patient_id: patientId,
@@ -285,11 +285,7 @@ export default function PhysicalExamEditForm({ waitingListId, labTestId, patient
               <option value="Unfit">Unfit</option>
             </select>
           </FormGroup>
-          <FormGroup
-            label="Examining Clinician Name"
-            htmlFor="clinician_name"
-            required
-          >
+          <FormGroup label="Examining Clinician Name" htmlFor="clinician_name" required>
             <input
               id="clinician_name"
               type="text"
@@ -318,11 +314,7 @@ export default function PhysicalExamEditForm({ waitingListId, labTestId, patient
               ))}
             </div>
           </div>
-          <FormGroup
-            label="Date of Examination"
-            htmlFor="date_of_examination"
-            required
-          >
+          <FormGroup label="Date of Examination" htmlFor="date_of_examination" required>
             <input
               id="date_of_examination"
               type="date"
@@ -347,11 +339,11 @@ export default function PhysicalExamEditForm({ waitingListId, labTestId, patient
         </div>
       </div>
 
-      <div className="wl-test-form-footer" style={{ marginTop: '2rem', display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
-          Close
+      <div style={{ marginTop: '2rem', display: 'flex', flexDirection: 'row', gap: '0.75rem', justifyContent: 'flex-end', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+        <button type="button" className="btn btn-ghost" style={{ minWidth: '100px' }} onClick={onClose} disabled={saving}>
+          Cancel
         </button>
-        <button type="button" className="btn btn-primary wl-submit-btn" onClick={handleSubmit} disabled={saving || locked}>
+        <button type="button" className="btn btn-primary" style={{ minWidth: '160px' }} onClick={handleSubmit} disabled={saving || locked}>
           {saving ? 'Saving...' : 'Save Certificate Details'}
         </button>
       </div>
