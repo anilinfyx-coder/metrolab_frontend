@@ -6,7 +6,6 @@ import { MdLogout, MdMenu, MdPerson, MdNotifications, MdAccountBalanceWallet } f
 import { getPortalFromPath, getStoredUser } from './portalConfig';
 import { apiFetch } from '../../lib/api';
 import { SIDEBAR_MOBILE_CLOSE_EVENT, setSidebarMobileOpen } from '../lib/mobileNav';
-
 import { useWhitelabel } from './WhitelabelProvider';
 
 interface TopNavProps {
@@ -18,6 +17,7 @@ export default function TopNav({ title, children }: TopNavProps) {
   const pathname = usePathname();
   const router = useRouter();
   const portal = getPortalFromPath(pathname || '');
+  const { b2bBasePath, isWhitelabel, config } = useWhitelabel();
   const [userName, setUserName] = useState('');
   const [alerts, setAlerts] = useState<any[]>([]);
   const [hasActiveSub, setHasActiveSub] = useState(false);
@@ -26,7 +26,6 @@ export default function TopNav({ title, children }: TopNavProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { isWhitelabel, config } = useWhitelabel();
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -184,7 +183,7 @@ export default function TopNav({ title, children }: TopNavProps) {
                 </div>
               )}
               <Link 
-                href={activeSubMode === 'custom' ? '/b2b/dashboard/wallet' : '/b2b/dashboard/subscription'} 
+                href={activeSubMode === 'custom' ? `${b2bBasePath}/wallet` : `${b2bBasePath}/subscription`} 
                 className="topnav-user-link" 
                 style={{ background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '6px 16px', borderRadius: '20px', fontWeight: 600, fontSize: '0.85rem', marginRight: '10px', textDecoration: 'none' }}
               >
@@ -240,7 +239,7 @@ export default function TopNav({ title, children }: TopNavProps) {
             </div>
           )}
 
-          <Link href={portal.profilePath} className="topnav-user-link" title="Update Profile">
+          <Link href={portal.key === 'b2b' ? `${b2bBasePath}/profile` : portal.profilePath} className="topnav-user-link" title="Update Profile">
             <span className="topnav-user-icon" aria-hidden>
               <MdPerson size={18} />
             </span>

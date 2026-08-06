@@ -8,6 +8,7 @@ import {
   MdPeople,
   MdWarning,
   MdCardMembership,
+  MdPendingActions,
 } from 'react-icons/md';
 import Link from 'next/link';
 import {
@@ -22,6 +23,7 @@ import PageLoader from '../../components/PageLoader';
 import TestStatusDonutCenter, { statusPieData } from '../../components/TestStatusDonutCenter';
 import { apiFetch } from '../../../lib/api';
 import { formatDate } from '../../utils/dateFormat';
+import { useWhitelabel } from '../../components/WhitelabelProvider';
 
 const genderLabel = (g: string | number | null | undefined) => {
   if (!g) return '—';
@@ -66,11 +68,20 @@ export default function B2bDashboardPage() {
   const [activeSubscription, setActiveSubscription] = useState<any>(null);
   const [corporateClients, setCorporateClients] = useState<any[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
-  const [testRequests, setTestRequests] = useState<any[]>([]);
   const [completedTests, setCompletedTests] = useState<number>(0);
   const [statusRange, setStatusRange] = useState<StatusRange>('today');
   const [statusDist, setStatusDist] = useState<StatusDistribution>({ completed: 0, pending: 0, total: 0 });
   const [loading, setLoading] = useState(true);
+  const [isCorporateEnabled, setIsCorporateEnabled] = useState(true);
+  const [patientsTotal, setPatientsTotal] = useState(0);
+  const [testRequestsTotal, setTestRequestsTotal] = useState(0);
+  const [testRequests, setTestRequests] = useState<any[]>([]);
+  const [corporateTotal, setCorporateTotal] = useState(0);
+  const [waitingTotal, setWaitingTotal] = useState(0);
+  const [waitingList, setWaitingList] = useState<any[]>([]);
+
+  const { b2bBasePath } = useWhitelabel();
+
   const initialLoadDone = useRef(false);
 
   useEffect(() => {
@@ -80,19 +91,19 @@ export default function B2bDashboardPage() {
         setUser(currentUser);
 
         if (currentUser?.id) {
-          const [wallet, corp, patientList, testReqList, stats, subs] = await Promise.all([
-            apiFetch<{ wallet_balance?: string | number }>(`/api/B2bClients/${currentUser.id}`, {
+          const [clientProfile, corp, patientList, testReqList, stats, subs, badgeCounts, waitingListObj] = await Promise.all([
+            apiFetch<{ wallet_balance?: string | number, is_corporate_enabled?: boolean }>(`/api/B2bClients/${currentUser.id}`, {
               tokenKey: 'b2b_token',
             }).catch(() => null),
-            apiFetch<unknown[]>(`/api/CorporateClients?b2b_client_id=${currentUser.id}&status=true`, {
+            apiFetch<any>(`/api/CorporateClients?b2b_client_id=${currentUser.id}&status=true&page=1&limit=5`, {
               tokenKey: 'b2b_token',
-            }).catch(() => []),
-            apiFetch<unknown[]>(`/api/Patient?b2b_client_id=${currentUser.id}`, {
+            }).catch(() => null),
+            apiFetch<any>(`/api/Patient?b2b_client_id=${currentUser.id}&page=1&limit=5`, {
               tokenKey: 'b2b_token',
-            }).catch(() => []),
-            apiFetch<unknown[]>(`/api/TestRequest?b2b_client_id=${currentUser.id}`, {
+            }).catch(() => null),
+            apiFetch<any>(`/api/TestRequest?b2b_client_id=${currentUser.id}&page=1&limit=5`, {
               tokenKey: 'b2b_token',
-            }).catch(() => []),
+            }).catch(() => null),
             apiFetch<{
               total_completed_tests?: number;
               status_distribution?: StatusDistribution;
@@ -102,12 +113,53 @@ export default function B2bDashboardPage() {
             apiFetch<any[]>(`/api/B2bClientSubscription?b2b_client_id=${currentUser.id}`, {
               tokenKey: 'b2b_token',
             }).catch(() => []),
+            apiFetch<{ corporateRequests: number; waitingList: number }>(`/api/TestRequest/sidebarBadgeCounts`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => null),
+            apiFetch<any>(`/api/WaitingList?b2b_client_id=${currentUser.id}&page=1&limit=5&pending_only=true`, {
+              tokenKey: 'b2b_token',
+            }).catch(() => null),
           ]);
 
-          if (wallet) setWalletBalance(parseFloat(String(wallet.wallet_balance || 0)));
-          setCorporateClients((corp as any[]) || []);
-          setPatients((patientList as any[]) || []);
-          setTestRequests((testReqList as any[]) || []);
+          if (clientProfile) {
+            setIsCorporateEnabled(clientProfile.is_corporate_enabled !== false);
+            setWalletBalance(parseFloat(String(clientProfile.wallet_balance || 0)));
+          }
+
+          if (corp && typeof corp === 'object' && 'items' in corp) {
+            setCorporateClients(corp.items);
+            setCorporateTotal(corp.total);
+          } else if (Array.isArray(corp)) {
+            setCorporateClients(corp.slice(0, 5));
+            setCorporateTotal(corp.length);
+          }
+
+          if (patientList && typeof patientList === 'object' && 'items' in patientList) {
+            setPatients(patientList.items);
+            setPatientsTotal(patientList.total);
+          } else if (Array.isArray(patientList)) {
+            setPatients(patientList.slice(0, 5));
+            setPatientsTotal(patientList.length);
+          }
+
+          if (testReqList && typeof testReqList === 'object' && 'items' in testReqList) {
+            setTestRequestsTotal(testReqList.total);
+            setTestRequests(testReqList.items);
+          } else if (Array.isArray(testReqList)) {
+            setTestRequestsTotal(testReqList.length);
+            setTestRequests(testReqList.slice(0, 5));
+          }
+
+          if (badgeCounts) {
+            setWaitingTotal(badgeCounts.waitingList || 0);
+          }
+
+          if (waitingListObj && typeof waitingListObj === 'object' && 'items' in waitingListObj) {
+            setWaitingList(waitingListObj.items);
+          } else if (Array.isArray(waitingListObj)) {
+            setWaitingList(waitingListObj.slice(0, 5));
+          }
+
           setCompletedTests(stats?.total_completed_tests ?? 0);
           if (stats?.status_distribution) {
             setStatusDist(stats.status_distribution);
@@ -161,7 +213,7 @@ export default function B2bDashboardPage() {
 
   const recentCorporate = corporateClients.slice(0, 5);
   const recentPatients = patients.slice(0, 5);
-  const recentTestRequests = testRequests.slice(0, 5);
+  const recentWaiting = waitingList.slice(0, 5);
 
   const statusChartData = useMemo(() => ([
     { name: 'Completed', value: statusDist.completed || 0, color: STATUS_COLORS.completed },
@@ -198,15 +250,23 @@ export default function B2bDashboardPage() {
 
               <DashboardCard 
                 title="Total Patients" 
-                value={patients.length} 
+                value={patientsTotal} 
                 icon={<MdPeople size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)" 
               />
+              {isCorporateEnabled && (
+                <DashboardCard 
+                  title="Corporate Clients" 
+                  value={corporateTotal} 
+                  icon={<MdApartment size={28} aria-hidden />}
+                  gradient="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" 
+                />
+              )}
               <DashboardCard 
-                title="Corporate Clients" 
-                value={corporateClients.length} 
-                icon={<MdApartment size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)" 
+                title="Waiting List" 
+                value={waitingTotal} 
+                icon={<MdPendingActions size={28} aria-hidden />}
+                gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)" 
               />
               <DashboardCard 
                 title="Completed tests" 
@@ -224,10 +284,10 @@ export default function B2bDashboardPage() {
               marginBottom: '24px'
             }}>
               
-              {/* Recent Test Requests */}
+              {/* Recent Waiting List */}
               <div className="card" style={cardStyle}>
                 <div className="card-header" style={cardHeaderStyle}>
-                  <h3 className="card-title" style={cardTitleStyle}>Recent Test Requests</h3>
+                  <h3 className="card-title" style={cardTitleStyle}>Recent Waiting List</h3>
                 </div>
                 <div className="card-body" style={{ padding: 0 }}>
                   <div style={{ overflowX: 'auto' }}>
@@ -235,22 +295,25 @@ export default function B2bDashboardPage() {
                       <thead>
                         <tr style={tableHeaderStyle}>
                           <th style={thStyle}>ID</th>
-                          <th style={thStyle}>Title</th>
-                          <th style={thStyle}>Corporate Client</th>
+                          <th style={thStyle}>Patient</th>
+                          <th style={thStyle}>Tests</th>
                           <th style={thStyle}>Date</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {recentTestRequests.length === 0 ? (
-                          <tr><td colSpan={4} style={emptyTdStyle}>No recent test requests.</td></tr>
+                        {recentWaiting.length === 0 ? (
+                          <tr><td colSpan={4} style={emptyTdStyle}>No recent waiting list entries.</td></tr>
                         ) : (
-                          recentTestRequests.map((tr, i) => (
+                          recentWaiting.map((row, i) => (
                             <tr key={i} style={trStyle}>
-                              <td style={{...tdStyle, color: '#3b82f6', fontWeight: 500}}>#{tr.id}</td>
-                              <td style={{...tdStyle, color: '#334155', fontWeight: 500}}>{tr.title || 'N/A'}</td>
-                              <td style={tdStyle}>{tr.corporateClientCompany || 'Self'}</td>
+                              <td style={{...tdStyle, color: '#3b82f6', fontWeight: 500}}>#{row.id}</td>
+                              <td style={{...tdStyle, color: '#334155', fontWeight: 500}}>
+                                {row.patient_name || 'N/A'}
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 400 }}>{row.patient_mobile || 'N/A'}</div>
+                              </td>
+                              <td style={tdStyle}>{row.tests || `${row.test_count || 0} test(s)`}</td>
                               <td style={{...tdStyle, fontSize: '0.85rem'}}>
-                                {tr.creation_timestamp ? formatDate(tr.creation_timestamp) : (tr.creationTimestamp || 'N/A')}
+                                {row.creation_timestamp ? formatDate(row.creation_timestamp) : 'N/A'}
                               </td>
                             </tr>
                           ))
@@ -262,45 +325,47 @@ export default function B2bDashboardPage() {
               </div>
 
               {/* Recent Corporate Clients */}
-              <div className="card" style={cardStyle}>
-                <div className="card-header" style={cardHeaderStyle}>
-                  <h3 className="card-title" style={cardTitleStyle}>New Corporate Clients</h3>
-                  <Link href="/b2b/dashboard/corporateclient" style={linkStyle}>
-                    View All →
-                  </Link>
-                </div>
-                <div className="card-body" style={{ padding: 0 }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={tableStyle}>
-                      <thead>
-                        <tr style={tableHeaderStyle}>
-                          <th style={thStyle}>Company</th>
-                          <th style={thStyle}>Contact</th>
-                          <th style={thStyle}>Date Added</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {recentCorporate.length === 0 ? (
-                          <tr><td colSpan={3} style={emptyTdStyle}>No corporate clients found.</td></tr>
-                        ) : (
-                          recentCorporate.map((corp, i) => (
-                            <tr key={i} style={trStyle}>
-                              <td style={{...tdStyle, color: '#334155', fontWeight: 500}}>
-                                {corp.company_name}
-                                <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 400 }}>{corp.email}</div>
-                              </td>
-                              <td style={tdStyle}>{corp.contact_person_name || 'N/A'}</td>
-                              <td style={{...tdStyle, fontSize: '0.85rem'}}>
-                                {corp.creation_timestamp ? formatDate(corp.creation_timestamp) : 'N/A'}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
+              {isCorporateEnabled && (
+                <div className="card" style={cardStyle}>
+                  <div className="card-header" style={cardHeaderStyle}>
+                    <h3 className="card-title" style={cardTitleStyle}>New Corporate Clients</h3>
+                    <Link href={`${b2bBasePath}/corporateclient`} style={linkStyle}>
+                      View All →
+                    </Link>
+                  </div>
+                  <div className="card-body" style={{ padding: 0 }}>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={tableStyle}>
+                        <thead>
+                          <tr style={tableHeaderStyle}>
+                            <th style={thStyle}>Company</th>
+                            <th style={thStyle}>Contact</th>
+                            <th style={thStyle}>Date Added</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentCorporate.length === 0 ? (
+                            <tr><td colSpan={3} style={emptyTdStyle}>No corporate clients found.</td></tr>
+                          ) : (
+                            recentCorporate.map((corp, i) => (
+                              <tr key={i} style={trStyle}>
+                                <td style={{...tdStyle, color: '#334155', fontWeight: 500}}>
+                                  {corp.company_name}
+                                  <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 400 }}>{corp.email}</div>
+                                </td>
+                                <td style={tdStyle}>{corp.contact_person_name || 'N/A'}</td>
+                                <td style={{...tdStyle, fontSize: '0.85rem'}}>
+                                  {corp.creation_timestamp ? formatDate(corp.creation_timestamp) : 'N/A'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Patients + Test Status row */}
@@ -315,7 +380,7 @@ export default function B2bDashboardPage() {
               <div className="card" style={cardStyle}>
                 <div className="card-header" style={cardHeaderStyle}>
                   <h3 className="card-title" style={cardTitleStyle}>Recently Registered Patients</h3>
-                  <Link href="/b2b/dashboard/patients" style={linkStyle}>
+                  <Link href={`${b2bBasePath}/patients`} style={linkStyle}>
                     View All →
                   </Link>
                 </div>
@@ -338,7 +403,7 @@ export default function B2bDashboardPage() {
                             <tr key={i} style={trStyle}>
                               <td style={{...tdStyle, color: '#10b981', fontWeight: 500}}>#{pat.patient_id_number || pat.id}</td>
                               <td style={{...tdStyle, color: '#334155', fontWeight: 500}}>
-                                {pat.first_name} {pat.last_name}
+                                {pat.name || `${pat.first_name || ''} ${pat.last_name || ''}`.trim() || 'N/A'}
                                 <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 400 }}>{pat.email}</div>
                               </td>
                               <td style={tdStyle}>{pat.age} Y / {genderLabel(pat.gender)}</td>

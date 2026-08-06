@@ -53,6 +53,7 @@ type ListingTableProps<T extends { id: number | string }> = {
   total?: number;
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
+  hidePaginationTotal?: boolean;
 };
 
 function getCellText<T>(row: T, col: ListingColumn<T>): string {
@@ -260,6 +261,7 @@ export default function ListingTable<T extends { id: number | string }>({
   total: serverTotal,
   onPageChange,
   onPageSizeChange,
+  hidePaginationTotal = false,
 }: ListingTableProps<T>) {
   const isServerPagination = paginationMode === 'server';
   const [filters, setFilters] = useState<Record<string, string>>({});
@@ -442,6 +444,7 @@ export default function ListingTable<T extends { id: number | string }>({
               totalPages={totalPages}
               onPageChange={handlePageChange}
               total={total}
+              hideTotalCountInfo={hidePaginationTotal}
             />
           </>
         )}

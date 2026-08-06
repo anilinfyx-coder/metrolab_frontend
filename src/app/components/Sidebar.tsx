@@ -23,6 +23,7 @@ interface SidebarProps {
   tokenKey?: string;
   userKey?: string;
   loginPath?: string;
+  badges?: Record<string, number | string>;
 };
 
 type LabBranding = {
@@ -138,6 +139,7 @@ export default function Sidebar({
   basePath = '/admin/dashboard',
   tokenKey,
   userKey,
+  badges,
 }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
@@ -353,6 +355,20 @@ export default function Sidebar({
             >
               <span className="icon">{item.icon}</span>
               <span className="sidebar-link-text">{item.label}</span>
+              {badges && badges[item.label] != null && badges[item.label] !== 0 && (
+                <span style={{ 
+                  marginLeft: 'auto', 
+                  backgroundColor: '#ef4444', 
+                  color: '#fff', 
+                  fontSize: '11px', 
+                  fontWeight: 'bold', 
+                  padding: '2px 6px', 
+                  borderRadius: '10px', 
+                  lineHeight: 1 
+                }}>
+                  {badges[item.label]}
+                </span>
+              )}
             </Link>
           );
         })}

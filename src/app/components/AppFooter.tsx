@@ -23,8 +23,6 @@ export default function AppFooter() {
       </div>
       <div className="app-footer-right">
         <a href="mailto:metrolabdc@gmail.com">metrolabdc@gmail.com</a>
-        <span className="app-footer-sep">|</span>
-        <a href="mailto:manager@metrolabdc.com">manager@metrolabdc.com</a>
       </div>
     </footer>
   );

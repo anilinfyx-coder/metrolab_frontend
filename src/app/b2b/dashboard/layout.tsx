@@ -3,6 +3,7 @@ import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useWhitelabel } from '../../components/WhitelabelProvider';
 import { MdAccountBalanceWallet, MdAssignment, MdBusiness, MdComputer, MdDashboard, MdPeople, MdCardMembership } from 'react-icons/md';
 import { apiFetch } from '../../../lib/api';
 
@@ -15,6 +16,7 @@ const baseB2bNavItems: NavItem[] = [
 
 export default function B2bDashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const { b2bBasePath } = useWhitelabel();
   const [navItems, setNavItems] = useState<NavItem[]>([...baseB2bNavItems, { href: '/wallet', label: 'Wallet & Transactions', icon: <MdAccountBalanceWallet size={18} />, section: 'Billing' }]);
 
   useEffect(() => {
@@ -74,7 +76,7 @@ export default function B2bDashboardLayout({ children }: { children: React.React
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={navItems} basePath="/b2b/dashboard" tokenKey="b2b_token" userKey="b2b_user" loginPath="/" />
+      <Sidebar navItems={navItems} basePath={b2bBasePath} tokenKey="b2b_token" userKey="b2b_user" loginPath="/" />
       <div className="main-content">
         <div className="main-content-body">{children}</div>
         <AppFooter />

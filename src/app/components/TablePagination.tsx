@@ -41,6 +41,7 @@ type TablePaginationProps = {
   totalPages?: number;
   onPageChange?: (page: number) => void;
   total?: number;
+  hideTotalCountInfo?: boolean;
 };
 
 export default function TablePagination({
@@ -50,6 +51,7 @@ export default function TablePagination({
   totalPages = 1,
   onPageChange,
   total,
+  hideTotalCountInfo = false,
 }: TablePaginationProps) {
   return (
     <div className="table-pagination">
@@ -57,7 +59,8 @@ export default function TablePagination({
         {typeof total === 'number' ? (
           <span>
             Showing {total === 0 ? 0 : (page - 1) * pageSize + 1}
-            –{Math.min(page * pageSize, total)} of {total}
+            –{Math.min(page * pageSize, total)}
+            {!hideTotalCountInfo && ` of ${total}`}
           </span>
         ) : (
           <span />
