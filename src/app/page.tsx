@@ -25,13 +25,15 @@ const portalConfig: Record<Portal, { tokenKey: string; userKey: string; path: st
 export default function UnifiedLoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
-  const { isWhitelabel, config } = useWhitelabel();
+  const { isWhitelabel, config, b2bBasePath, isLoading } = useWhitelabel();
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: formResolver<LoginFormValues>(loginSchema),
     defaultValues: { username: '', password: '' },
   });
 
   useEffect(() => {
+    if (isLoading) return; // Wait for whitelabel config to load before automatic redirects
+
     if (localStorage.getItem('superadmin_token')) {
       router.push('/superadmin/dashboard');
       return;
@@ -41,7 +43,7 @@ export default function UnifiedLoginPage() {
       return;
     }
     if (localStorage.getItem('b2b_token')) {
-      router.push('/b2b/dashboard');
+      router.push(b2bBasePath);
       return;
     }
     if (localStorage.getItem('corporate_token')) {
@@ -49,7 +51,7 @@ export default function UnifiedLoginPage() {
       return;
     }
     dispatch(clearCredentials());
-  }, [dispatch, router]);
+  }, [dispatch, router, b2bBasePath, isLoading]);
 
   const loginMutation = useMutation({
     mutationFn: (values: LoginFormValues) =>
@@ -68,7 +70,12 @@ export default function UnifiedLoginPage() {
       localStorage.setItem(config.tokenKey, user.token);
       localStorage.setItem(config.userKey, JSON.stringify(user));
       dispatch(setCredentials(user));
-      router.push(config.path);
+      // Use hard redirect so WhitelabelProvider re-runs and applies custom theme colors before sidebar renders
+      if (user.portal === 'b2b') {
+        window.location.href = b2bBasePath;
+      } else {
+        window.location.href = config.path;
+      }
     },
   });
 

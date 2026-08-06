@@ -341,7 +341,8 @@ export default function PatientListPage() {
           loading={loading}
           emptyText="No patients found."
           defaultPageSize={25}
-          showTotal
+          showTotal={false}
+          hidePaginationTotal={true}
           paginationMode="server"
           page={page}
           pageSize={pageSize}

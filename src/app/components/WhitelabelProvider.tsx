@@ -20,12 +20,14 @@ interface WhitelabelContextType {
   config: WhitelabelConfig | null;
   isLoading: boolean;
   isWhitelabel: boolean;
+  b2bBasePath: string;
 }
 
 const WhitelabelContext = createContext<WhitelabelContextType>({
   config: null,
   isLoading: true,
   isWhitelabel: false,
+  b2bBasePath: '/b2b/dashboard',
 });
 
 export const useWhitelabel = () => useContext(WhitelabelContext);
@@ -36,6 +38,7 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
   const [config, setConfig] = useState<WhitelabelConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isWhitelabel, setIsWhitelabel] = useState(false);
+  const [b2bBasePath, setB2bBasePath] = useState('/b2b/dashboard');
   const pathname = usePathname();
 
   useEffect(() => {
@@ -50,8 +53,10 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
 
           if (override === 'reset' || override === 'clear') {
             localStorage.removeItem('test_domain');
+            document.cookie = 'test_domain=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
           } else if (override) {
             localStorage.setItem('test_domain', override);
+            document.cookie = `test_domain=${override}; path=/; max-age=86400`;
           }
 
           const testDomain = override || localStorage.getItem('test_domain');
@@ -59,16 +64,18 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
             hostname = testDomain;
           } else {
             setIsWhitelabel(false);
+            setB2bBasePath('/b2b/dashboard');
             setIsLoading(false);
             return;
           }
         } else {
           localStorage.removeItem('test_domain');
+          document.cookie = 'test_domain=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
         }
 
-        // Skip for default domain
         if (hostname === 'lab.metrolab.biz') {
           setIsWhitelabel(false);
+          setB2bBasePath('/b2b/dashboard');
           setIsLoading(false);
           return;
         }
@@ -83,6 +90,7 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
         if (data.response_code === '200' && data.obj) {
           setConfig(data.obj);
           setIsWhitelabel(true);
+          setB2bBasePath('/dashboard');
 
           // Apply primary color to theme if available
           if (data.obj.primary_color_code) {
@@ -143,7 +151,7 @@ export function WhitelabelProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <WhitelabelContext.Provider value={{ config, isLoading, isWhitelabel }}>
+    <WhitelabelContext.Provider value={{ config, isLoading, isWhitelabel, b2bBasePath }}>
       {children}
     </WhitelabelContext.Provider>
   );

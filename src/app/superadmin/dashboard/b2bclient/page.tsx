@@ -576,6 +576,7 @@ export default function B2BClientsPage() {
           fd.append(k, String(v));
         });
         if (logo) fd.append('logo_file', logo);
+        if (favicon) fd.append('favicon_file', favicon);
         if (header) fd.append('report_header_file', header);
         if (footer) fd.append('report_footer_file', footer);
         if (sig) fd.append('medical_officer_signature_file', sig);

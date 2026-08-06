@@ -59,7 +59,7 @@ const PORTALS: PortalConfig[] = [
 export function getPortalFromPath(pathname: string): PortalConfig {
   if (pathname.startsWith('/superadmin')) return PORTALS[0];
   if (pathname.startsWith('/admin')) return PORTALS[1];
-  if (pathname.startsWith('/b2b')) return PORTALS[2];
+  if (pathname.startsWith('/b2b') || pathname.startsWith('/dashboard')) return PORTALS[2];
   if (pathname.startsWith('/corporate')) return PORTALS[3];
   return PORTALS[1];
 }

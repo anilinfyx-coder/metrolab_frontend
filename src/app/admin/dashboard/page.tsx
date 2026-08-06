@@ -9,6 +9,7 @@ import {
   MdPeople,
   MdPendingActions,
   MdCorporateFare,
+  MdAssignment,
 } from 'react-icons/md';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
@@ -53,40 +54,93 @@ interface TestRequestRow {
   creation_timestamp?: string;
 }
 
+interface PaginatedEnvelope<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+function isPagedResult<T>(v: unknown): v is PaginatedEnvelope<T> {
+  return !!v && typeof v === 'object' && Array.isArray((v as PaginatedEnvelope<T>).items) && typeof (v as PaginatedEnvelope<T>).total === 'number';
+}
+
 export default function AdminDashboardPage() {
-  const [patients, setPatients] = useState<PatientRow[]>([]);
-  const [waitingList, setWaitingList] = useState<WaitingListRow[]>([]);
-  const [testReports, setTestReports] = useState<TestReportRow[]>([]);
-  const [testRequests, setTestRequests] = useState<TestRequestRow[]>([]);
-  const [healthCertificates, setHealthCertificates] = useState<unknown[]>([]);
-  const [physicalExams, setPhysicalExams] = useState<unknown[]>([]);
+  const [waitingCount, setWaitingCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [requestCount, setRequestCount] = useState(0);
+  const [todaysPatients, setTodaysPatients] = useState(0);
+  const [todaysCompletedTests, setTodaysCompletedTests] = useState(0);
+  const [isCorporateEnabled, setIsCorporateEnabled] = useState(true);
+
+  const [recentPatients, setRecentPatients] = useState<PatientRow[]>([]);
+  const [recentWaiting, setRecentWaiting] = useState<WaitingListRow[]>([]);
+  const [recentReports, setRecentReports] = useState<TestReportRow[]>([]);
+  const [recentRequests, setRecentRequests] = useState<TestRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch counts (limit=1 just to get the total field) and recent 5 rows in parallel
         const [
           patientData,
           waitingData,
+          pendingData,
           reportData,
           requestData,
-          healthData,
-          physicalData,
+          badgesRes,
         ] = await Promise.all([
-          apiFetch<PatientRow[]>('/api/Patient', { tokenKey: 'admin_token' }).catch(() => []),
-          apiFetch<WaitingListRow[]>('/api/WaitingList?pending_only=true&limit=5', { tokenKey: 'admin_token' }).catch(() => []),
-          apiFetch<TestReportRow[]>('/api/LabTestCategoryReport', { tokenKey: 'admin_token' }).catch(() => []),
-          apiFetch<TestRequestRow[]>('/api/TestRequest', { tokenKey: 'admin_token' }).catch(() => []),
-          apiFetch<unknown[]>('/api/AdultHealthCertificates', { tokenKey: 'admin_token' }).catch(() => []),
-          apiFetch<unknown[]>('/api/PhysicalExaminationCertificates', { tokenKey: 'admin_token' }).catch(() => []),
+          apiFetch<PaginatedEnvelope<PatientRow> | PatientRow[]>('/api/Patient?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<WaitingListRow> | WaitingListRow[]>('/api/WaitingList?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<WaitingListRow> | WaitingListRow[]>('/api/WaitingList?page=1&limit=1&pending_only=true', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<TestReportRow> | TestReportRow[]>('/api/LabTestCategoryReport?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<TestRequestRow> | TestRequestRow[]>('/api/TestRequest?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<{ isCorporateEnabled?: boolean, todaysPatients?: number, todaysCompletedTests?: number }>('/api/TestRequest/sidebarBadgeCounts', { tokenKey: 'admin_token' }).catch(() => null),
         ]);
 
-        setPatients(Array.isArray(patientData) ? patientData : []);
-        setWaitingList(Array.isArray(waitingData) ? waitingData : []);
-        setTestReports(Array.isArray(reportData) ? reportData : []);
-        setTestRequests(Array.isArray(requestData) ? requestData : []);
-        setHealthCertificates(Array.isArray(healthData) ? healthData : []);
-        setPhysicalExams(Array.isArray(physicalData) ? physicalData : []);
+        if (isPagedResult<PatientRow>(patientData)) {
+          setRecentPatients(patientData.items);
+        } else if (Array.isArray(patientData)) {
+          setRecentPatients(patientData.slice(0, 5));
+        }
+
+        if (isPagedResult<WaitingListRow>(waitingData)) {
+          setWaitingCount(waitingData.total);
+          setRecentWaiting(waitingData.items);
+        } else if (Array.isArray(waitingData)) {
+          setWaitingCount(waitingData.length);
+          setRecentWaiting(waitingData.slice(0, 5));
+        }
+
+        if (isPagedResult<WaitingListRow>(pendingData)) {
+          setPendingCount(pendingData.total);
+        } else if (Array.isArray(pendingData)) {
+          setPendingCount(pendingData.length);
+        }
+
+        if (isPagedResult<TestReportRow>(reportData)) {
+          setRecentReports(reportData.items);
+        } else if (Array.isArray(reportData)) {
+          setRecentReports(reportData.slice(0, 5));
+        }
+
+        if (isPagedResult<TestRequestRow>(requestData)) {
+          setRequestCount(requestData.total);
+          setRecentRequests(requestData.items);
+        } else if (Array.isArray(requestData)) {
+          setRequestCount(requestData.length);
+          setRecentRequests(requestData.slice(0, 5));
+        }
+
+        if (badgesRes && typeof badgesRes === 'object') {
+          if ('isCorporateEnabled' in badgesRes && badgesRes.isCorporateEnabled === false) {
+            setIsCorporateEnabled(false);
+          }
+          setTodaysPatients(badgesRes.todaysPatients || 0);
+          setTodaysCompletedTests(badgesRes.todaysCompletedTests || 0);
+        }
       } finally {
         setLoading(false);
       }
@@ -95,11 +149,7 @@ export default function AdminDashboardPage() {
     void fetchData();
   }, []);
 
-  const recentPatients = patients.slice(0, 5);
-  const recentWaiting = waitingList.slice(0, 5);
-  const recentReports = testReports.slice(0, 5);
-  const recentRequests = testRequests.slice(0, 5);
-  const pendingWaiting = waitingList.filter((row) => (row.test_count || 0) > 0).length;
+
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
@@ -112,53 +162,34 @@ export default function AdminDashboardPage() {
           <div className="admin-dashboard-inner">
             <div className="admin-dashboard-cards">
               <DashboardCard
-                title="Total Patients"
-                value={patients.length}
-                icon={<MdPeople size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #f12711 0%, #f5af19 100%)"
-                link="/admin/dashboard/patientList"
-              />
-              <DashboardCard
                 title="Waiting List"
-                value={waitingList.length}
+                value={pendingCount}
                 icon={<MdPendingActions size={28} aria-hidden />}
                 gradient="linear-gradient(135deg, #0072ff 0%, #00c6ff 100%)"
                 link="/admin/dashboard/labtest"
               />
+              {isCorporateEnabled && (
+                <DashboardCard
+                  title="Corporate Requests"
+                  value={requestCount}
+                  icon={<MdCorporateFare size={28} aria-hidden />}
+                  gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
+                  link="/admin/dashboard/testrequests"
+                />
+              )}
               <DashboardCard
-                title="Pending Tests"
-                value={pendingWaiting}
-                icon={<MdHourglassEmpty size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)"
-                link="/admin/dashboard/labtest"
+                title="Patients (Today)"
+                value={todaysPatients}
+                icon={<MdPeople size={28} aria-hidden />}
+                gradient="linear-gradient(135deg, #8b5cf6 0%, #c4b5fd 100%)"
+                link="/admin/dashboard/patientList"
               />
               <DashboardCard
-                title="Test Reports"
-                value={testReports.length}
-                icon={<MdDescription size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%)"
+                title="Tests Completed (Today)"
+                value={todaysCompletedTests}
+                icon={<MdAssignment size={28} aria-hidden />}
+                gradient="linear-gradient(135deg, #f59e0b 0%, #fcd34d 100%)"
                 link="/admin/dashboard/manageothertest"
-              />
-              <DashboardCard
-                title="Corporate Requests"
-                value={testRequests.length}
-                icon={<MdCorporateFare size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #11998e 0%, #38ef7d 100%)"
-                link="/admin/dashboard/testrequests"
-              />
-              <DashboardCard
-                title="Health Certificates"
-                value={healthCertificates.length}
-                icon={<MdHealthAndSafety size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)"
-                link="/admin/dashboard/health-certificates"
-              />
-              <DashboardCard
-                title="Physical Exams"
-                value={physicalExams.length}
-                icon={<MdMedicalServices size={28} aria-hidden />}
-                gradient="linear-gradient(135deg, #ec4899 0%, #db2777 100%)"
-                link="/admin/dashboard/physical-examinations"
               />
             </div>
 

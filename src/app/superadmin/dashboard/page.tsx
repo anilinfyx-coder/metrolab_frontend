@@ -111,6 +111,7 @@ const cardShell: React.CSSProperties = {
 export default function SuperAdminDashboard() {
   const [stats, setStats] = useState<Record<string, number> | null>(null);
   const [recentB2BClients, setRecentB2BClients] = useState<RecentB2BClient[]>([]);
+  const [recentWhitelabelClients, setRecentWhitelabelClients] = useState<RecentB2BClient[]>([]);
   const [activeSubscriptions, setActiveSubscriptions] = useState<ActiveSubscription[]>([]);
   const [topLabTests, setTopLabTests] = useState<TopLabTest[]>([]);
   const [activityRange, setActivityRange] = useState<'7d' | '30d'>('7d');
@@ -134,6 +135,7 @@ export default function SuperAdminDashboard() {
         const overview = await apiFetch<{
           stats?: Record<string, number>;
           latest_b2b_clients?: RecentB2BClient[];
+          latest_whitelabel_clients?: RecentB2BClient[];
           active_subscriptions?: ActiveSubscription[];
           top_lab_tests?: TopLabTest[];
           activity?: { items?: ActivityPoint[] };
@@ -148,6 +150,7 @@ export default function SuperAdminDashboard() {
 
         if (overview.stats) setStats(overview.stats);
         setRecentB2BClients(overview.latest_b2b_clients || []);
+        setRecentWhitelabelClients(overview.latest_whitelabel_clients || []);
         setActiveSubscriptions(overview.active_subscriptions || []);
         setTopLabTests(overview.top_lab_tests || []);
         setActivity(overview.activity?.items || []);
@@ -459,8 +462,9 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            {/* Bottom tables: left = clients/tests, right = alerts/subscriptions */}
-            <div className="sa-dash-bottom-row">
+            {/* Bottom row 1: Latest B2B Clients + Latest Whitelabel Clients */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginTop: '20px' }}>
+              {/* Latest B2B Clients */}
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
                   <h3 className="sa-dash-card-title">Latest B2B Clients</h3>
@@ -487,7 +491,7 @@ export default function SuperAdminDashboard() {
                         ) : (
                           recentB2BClients.map((client) => (
                             <tr key={client.id} style={{ borderBottom: '1px solid #edf2f9' }}>
-                              <td style={{ padding: '16px 20px', color: '#334155' }}>
+                              <td style={{ padding: '14px 20px', color: '#334155' }}>
                                 <Link
                                   href={`/superadmin/dashboard/b2bclient/${client.id}`}
                                   style={{ color: '#334155', textDecoration: 'none', fontWeight: 600 }}
@@ -507,11 +511,11 @@ export default function SuperAdminDashboard() {
                                   </span>
                                 </div>
                               </td>
-                              <td style={{ padding: '16px 20px', color: '#334155' }}>
+                              <td style={{ padding: '14px 20px', color: '#334155' }}>
                                 <div style={{ fontWeight: 500 }}>{client.contact_person_name || '—'}</div>
                                 <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{client.mobile || client.email || '—'}</div>
                               </td>
-                              <td style={{ padding: '16px 20px' }}>
+                              <td style={{ padding: '14px 20px' }}>
                                 {client.billing_mode === 'custom' ? (
                                   <>
                                     <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Custom Pricing</div>
@@ -538,7 +542,7 @@ export default function SuperAdminDashboard() {
                                   <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.9rem' }}>No Subscription Active</span>
                                 )}
                               </td>
-                              <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                              <td style={{ padding: '14px 20px', color: '#64748b', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
                                 {client.creation_timestamp ? formatDate(client.creation_timestamp) : 'N/A'}
                               </td>
                             </tr>
@@ -550,36 +554,99 @@ export default function SuperAdminDashboard() {
                 </div>
               </div>
 
+              {/* Latest Whitelabel Clients */}
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
-                  <h3 className="sa-dash-card-title">Subscription & Wallet Alerts</h3>
-                  <Link href="/superadmin/dashboard/b2bclient" className="sa-dash-link">View All →</Link>
+                  <h3 className="sa-dash-card-title">Latest WhiteLabel Clients</h3>
+                  <Link href="/superadmin/dashboard/b2bclient?type=whitelabel" className="sa-dash-link">View All →</Link>
                 </div>
-                <div className="sa-dash-alerts">
-                  <AlertRow
-                    href="/superadmin/dashboard/b2bclient"
-                    icon={<MdWarningAmber size={18} />}
-                    tone="red"
-                    title={`${alerts.expiring_subscriptions} Subscriptions Expiring`}
-                    subtitle="Within next 7 days"
-                  />
-                  <AlertRow
-                    href="/superadmin/dashboard/b2bclient"
-                    icon={<MdErrorOutline size={18} />}
-                    tone="orange"
-                    title={`${alerts.expired_subscriptions} Expired Subscriptions`}
-                    subtitle="Action required"
-                  />
-                  <AlertRow
-                    href="/superadmin/dashboard/b2bclient"
-                    icon={<MdAccountBalanceWallet size={18} />}
-                    tone="yellow"
-                    title={`${alerts.low_wallets} Low Wallet Balances`}
-                    subtitle={`Below $${alerts.low_wallet_threshold}`}
-                  />
+                <div className="card-body" style={{ padding: 0 }}>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Company</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Contact</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Subscription & Wallet</th>
+                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Added</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentWhitelabelClients.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>
+                              No WhiteLabel clients found.
+                            </td>
+                          </tr>
+                        ) : (
+                          recentWhitelabelClients.map((client) => (
+                            <tr key={client.id} style={{ borderBottom: '1px solid #edf2f9' }}>
+                              <td style={{ padding: '14px 20px', color: '#334155' }}>
+                                <Link
+                                  href={`/superadmin/dashboard/b2bclient/${client.id}`}
+                                  style={{ color: '#334155', textDecoration: 'none', fontWeight: 600 }}
+                                >
+                                  {client.company_name || `Client #${client.id}`}
+                                </Link>
+                                <div style={{ marginTop: 4 }}>
+                                  <span style={{
+                                    backgroundColor: client.status !== false ? '#dcfce7' : '#fee2e2',
+                                    color: client.status !== false ? '#16a34a' : '#dc2626',
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                  }}>
+                                    {client.status !== false ? 'Active' : 'Inactive'}
+                                  </span>
+                                </div>
+                              </td>
+                              <td style={{ padding: '14px 20px', color: '#334155' }}>
+                                <div style={{ fontWeight: 500 }}>{client.contact_person_name || '—'}</div>
+                                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{client.mobile || client.email || '—'}</div>
+                              </td>
+                              <td style={{ padding: '14px 20px' }}>
+                                {client.billing_mode === 'custom' ? (
+                                  <>
+                                    <div style={{ color: '#0ea5e9', fontWeight: 600, fontSize: '0.9rem', marginBottom: '4px' }}>Custom Pricing</div>
+                                    <div style={{ color: '#64748b', fontSize: '0.8rem', marginTop: '2px' }}>
+                                      <span style={{ display: 'block' }}>Recharged: <strong style={{ color: '#16a34a' }}>${parseFloat(String(client.wallet_total_recharged || 0)).toFixed(2)}</strong></span>
+                                      <span style={{ display: 'block' }}>
+                                        Balance:{' '}
+                                        <Link
+                                          href={`/superadmin/dashboard/b2bclient?view=wallet&clientId=${client.id}`}
+                                          style={{ color: parseFloat(String(client.wallet_balance || 0)) <= 0 ? '#ef4444' : '#0369a1', textDecoration: 'none', fontWeight: 600 }}
+                                          title="Wallet Balance"
+                                        >
+                                          ${parseFloat(String(client.wallet_balance || 0)).toFixed(2)}
+                                        </Link>
+                                      </span>
+                                    </div>
+                                  </>
+                                ) : client.has_active_subscription ? (
+                                  <span style={{ color: '#16a34a', fontWeight: 600, fontSize: '0.9rem' }}>
+                                    {client.billing_mode === 'yearly' ? 'Yearly' : 'Monthly'} Subscription Active
+                                    {client.active_subscription_amount && ` ($${Number(client.active_subscription_amount).toFixed(2)})`}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.9rem' }}>No Subscription Active</span>
+                                )}
+                              </td>
+                              <td style={{ padding: '14px 20px', color: '#64748b', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                                {client.creation_timestamp ? formatDate(client.creation_timestamp) : 'N/A'}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
+            </div>
 
+            {/* Bottom row 2: Most Running Lab Tests */}
+            <div style={{ marginTop: '20px' }}>
               <div className="card" style={cardShell}>
                 <div className="sa-dash-card-header">
                   <h3 className="sa-dash-card-title">Most Running Lab Tests</h3>
@@ -605,15 +672,15 @@ export default function SuperAdminDashboard() {
                         ) : (
                           topLabTests.map((test, index) => (
                             <tr key={test.lab_test_id} style={{ borderBottom: '1px solid #edf2f9' }}>
-                              <td style={{ padding: '16px 20px', color: '#94a3b8', fontWeight: 600 }}>{index + 1}</td>
-                              <td style={{ padding: '16px 20px', color: '#334155', fontWeight: 500 }}>
+                              <td style={{ padding: '14px 20px', color: '#94a3b8', fontWeight: 600 }}>{index + 1}</td>
+                              <td style={{ padding: '14px 20px', color: '#334155', fontWeight: 500 }}>
                                 {test.lab_test_name || `Test #${test.lab_test_id}`}
                               </td>
-                              <td style={{ padding: '16px 20px' }}>
+                              <td style={{ padding: '14px 20px' }}>
                                 <span style={{
                                   backgroundColor: '#dbeafe',
                                   color: '#1d4ed8',
-                                  padding: '4px 10px',
+                                  padding: '4px 12px',
                                   borderRadius: '999px',
                                   fontSize: '0.8rem',
                                   fontWeight: 700,
@@ -629,56 +696,8 @@ export default function SuperAdminDashboard() {
                   </div>
                 </div>
               </div>
-
-              <div className="card" style={cardShell}>
-                <div className="sa-dash-card-header">
-                  <h3 className="sa-dash-card-title">Latest Active Subscriptions</h3>
-                  <Link href="/superadmin/dashboard/b2bclient" className="sa-dash-link">View All →</Link>
-                </div>
-                <div className="card-body" style={{ padding: 0 }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>B2B Client</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Period</th>
-                          <th style={{ padding: '12px 20px', fontWeight: 700, color: '#64748b' }}>Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeSubscriptions.length === 0 ? (
-                          <tr>
-                            <td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>
-                              No active subscriptions found.
-                            </td>
-                          </tr>
-                        ) : (
-                          activeSubscriptions.slice(0, 5).map((sub) => (
-                            <tr key={sub.id} style={{ borderBottom: '1px solid #edf2f9' }}>
-                              <td style={{ padding: '16px 20px', color: '#334155' }}>
-                                <Link
-                                  href={`/superadmin/dashboard/b2bclient?view=subscription&clientId=${sub.b2b_client_id}`}
-                                  style={{ color: '#334155', textDecoration: 'none', fontWeight: 500 }}
-                                >
-                                  {sub.company_name || `Client #${sub.b2b_client_id}`}
-                                </Link>
-                                <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{sub.email || sub.mobile || '—'}</div>
-                              </td>
-                              <td style={{ padding: '16px 20px', color: '#64748b', fontSize: '0.85rem' }}>
-                                {(sub.start_date ? formatDate(sub.start_date) : '—')} – {(sub.end_date ? formatDate(sub.end_date) : '—')}
-                              </td>
-                              <td style={{ padding: '16px 20px', color: '#0f172a', fontWeight: 600 }}>
-                                ${parseFloat(String(sub.amount || 0)).toFixed(2)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
             </div>
+
           </div>
         )}
       </div>

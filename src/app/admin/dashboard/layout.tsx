@@ -1,16 +1,15 @@
 'use client';
 import Sidebar, { NavItem } from '../../components/Sidebar';
 import AppFooter from '../../components/AppFooter';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { apiFetch } from '../../../lib/api';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   MdAssignment,
   MdDashboard,
   MdDescription,
-  MdHealthAndSafety,
   MdLocalHospital,
-  MdMedicalServices,
   MdPeople,
   MdScience,
   MdAdd,
@@ -25,8 +24,6 @@ const adminNavItems: NavItem[] = [
   { href: '/testrequests', label: 'Corporate Requests', icon: <MdScience size={18} />, section: 'Corporate' },
   { href: '/patient', label: 'Patient Demographic', icon: <MdLocalHospital size={18} />, section: 'Patients' },
   { href: '/patientList', label: 'Patient List', icon: <MdPeople size={18} />, section: 'Patients' },
-  { href: '/health-certificates', label: 'Health Certificates', icon: <MdHealthAndSafety size={18} />, section: 'Patients' },
-  { href: '/physical-examinations', label: 'Physical Examinations', icon: <MdMedicalServices size={18} />, section: 'Patients' },
 ];
 
 export default function AdminDashboardLayout({ children }: { children: React.ReactNode }) {
@@ -34,10 +31,30 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
   const pathname = usePathname();
   const isPrintView = pathname?.includes('/print/') ?? false;
 
+  const [badges, setBadges] = useState<{ corporateRequests: number; waitingList: number }>({ corporateRequests: 0, waitingList: 0 });
+  const [navItems, setNavItems] = useState<NavItem[]>(adminNavItems);
+
   useEffect(() => {
     const token = localStorage.getItem('admin_token');
     if (!token) router.push('/');
   }, [router]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('admin_token');
+    if (!token) return;
+    apiFetch<{ corporateRequests: number; waitingList: number; isCorporateEnabled?: boolean }>('/api/TestRequest/sidebarBadgeCounts', { tokenKey: 'admin_token' })
+      .then(res => {
+        if (res) {
+          setBadges({ corporateRequests: res.corporateRequests || 0, waitingList: res.waitingList || 0 });
+          if (res.isCorporateEnabled === false) {
+            setNavItems(adminNavItems.filter(item => item.section !== 'Corporate'));
+          } else {
+            setNavItems(adminNavItems);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   // Certificate print/preview pages: certificate only (no sidebar/footer)
   if (isPrintView) {
@@ -46,7 +63,17 @@ export default function AdminDashboardLayout({ children }: { children: React.Rea
 
   return (
     <div className="app-layout">
-      <Sidebar navItems={adminNavItems} basePath="/admin/dashboard" tokenKey="admin_token" userKey="admin_user" loginPath="/" />
+      <Sidebar 
+        navItems={navItems} 
+        basePath="/admin/dashboard" 
+        tokenKey="admin_token" 
+        userKey="admin_user" 
+        loginPath="/"
+        badges={{
+          'Corporate Requests': badges.corporateRequests,
+          'Waiting List': badges.waitingList
+        }}
+      />
       <div className="main-content">
         <div className="main-content-body">{children}</div>
         <AppFooter />

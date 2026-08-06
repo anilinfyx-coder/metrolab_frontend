@@ -260,7 +260,8 @@ export default function TestsReportsPage() {
           actionsLabel="Actions"
           actionsWidth={170}
           defaultPageSize={25}
-          showTotal={true}
+          showTotal={false}
+          hidePaginationTotal={true}
           paginationMode="server"
           page={page}
           pageSize={pageSize}
