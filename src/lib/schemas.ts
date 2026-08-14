@@ -357,6 +357,14 @@ export function b2bClientFormSchema(isEditing = false) {
     smtp_password: yup.string().trim().required('SMTP password is required.'),
     approval_note: yup.string().trim(),
     fixed_price_amount: yup.string().trim(),
+    wallet_balance: yup
+      .string()
+      .trim()
+      .test('valid-balance', 'Please enter a valid non-negative balance.', value => {
+        if (!value) return true;
+        const n = Number(value);
+        return !Number.isNaN(n) && n >= 0;
+      }),
   });
 }
 
@@ -402,6 +410,20 @@ export const walletRechargeSchema = yup.object({
 });
 
 export type WalletRechargeFormValues = yup.InferType<typeof walletRechargeSchema>;
+
+export const walletEditSchema = yup.object({
+  new_balance: yup
+    .string()
+    .required('New balance amount is required.')
+    .test('non-negative-balance', 'Please enter a valid non-negative balance.', value => {
+      if (!value) return false;
+      const n = Number(value);
+      return !Number.isNaN(n) && n >= 0;
+    }),
+  description: yup.string().trim(),
+});
+
+export type WalletEditFormValues = yup.InferType<typeof walletEditSchema>;
 
 export const b2bManageParameterSchema = yup.object({
   name: yup.string().trim().required('Please enter the parameter name.'),

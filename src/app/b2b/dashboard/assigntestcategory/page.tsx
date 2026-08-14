@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import {
+  MdBadge,
   MdEdit,
   MdHelpOutline,
   MdHourglassEmpty,
@@ -14,7 +15,7 @@ import TopNav from '../../../components/TopNav';
 import { useConfirm } from '../../../components/ConfirmModal';
 import ViewLabTestForm from '../../../components/ViewLabTestForm';
 import ListingTable, { ActionIcons, ListingColumn } from '../../../components/ListingTable';
-import { apiFetch, getToken, toastApiError, toastApiSuccess } from '../../../../lib/api';
+import { API_BASE, apiFetch, getToken, toastApiError, toastApiSuccess } from '../../../../lib/api';
 import { patchListItem } from '../../../../lib/listState';
 
 interface B2BUser {
@@ -73,7 +74,27 @@ interface ResultParam {
   global_parameter_id?: number | null;
 }
 
-type View = 'list' | 'form' | 'edit' | 'specimen' | 'question' | 'result';
+interface TestMedicalOfficerData {
+  b2b_client_id: number;
+  lab_test_id: number;
+  medical_officer_name: string | null;
+  medical_officer_position: string | null;
+  mrocc: string | null;
+  clia_number: string | null;
+  medical_officer_signature_file_name: string | null;
+  signature_url: string | null;
+  is_customized: boolean;
+  default_medical_officer: {
+    medical_officer_name: string | null;
+    medical_officer_position: string | null;
+    mrocc: string | null;
+    clia_number: string | null;
+    medical_officer_signature_file_name: string | null;
+    default_signature_url: string | null;
+  };
+}
+
+type View = 'list' | 'form' | 'edit' | 'specimen' | 'question' | 'result' | 'medical_officer';
 
 const DISPLAY_CHECKBOX_FIELDS: [string, string][] = [
   ['show_collected_date', 'Show Collected Date'], ['show_collected_time', 'Show Collected Time'],
@@ -169,7 +190,118 @@ export default function AssignedTestCategoryPage() {
   const [editingRId, setEditingRId] = useState<number | null>(null);
   const [savingResult, setSavingResult] = useState(false);
 
+  // Medical Officer Test Override
+  const [moData, setMoData] = useState<TestMedicalOfficerData | null>(null);
+  const [moLoading, setMoLoading] = useState(false);
+  const [savingMo, setSavingMo] = useState(false);
+  const [moForm, setMoForm] = useState({
+    medical_officer_name: '',
+    medical_officer_position: '',
+    mrocc: '',
+    clia_number: '',
+  });
+  const [moSigFile, setMoSigFile] = useState<File | null>(null);
+
   const b2bId = getUser().id;
+
+  const openMedicalOfficer = async (test: LabTest) => {
+    if (!b2bId) {
+      toastApiError('B2B client not found. Please log in again.');
+      return;
+    }
+    setSelectedTest(test);
+    setMoLoading(true);
+    setMoSigFile(null);
+    setView('medical_officer');
+    try {
+      const data = await apiFetch<TestMedicalOfficerData>(
+        `/api/B2bClientLabTestAccess/medical-officer?b2b_client_id=${b2bId}&lab_test_id=${test.id}`,
+        { tokenKey: 'b2b_token', errorFallback: 'Unable to load Medical Officer details.' }
+      );
+      setMoData(data);
+      setMoForm({
+        medical_officer_name: data?.medical_officer_name || '',
+        medical_officer_position: data?.medical_officer_position || '',
+        mrocc: data?.mrocc || '',
+        clia_number: data?.clia_number || '',
+      });
+    } catch {
+      setMoData(null);
+    } finally {
+      setMoLoading(false);
+    }
+  };
+
+  const saveMedicalOfficer = async () => {
+    if (!b2bId || !selectedTest) return;
+    setSavingMo(true);
+    try {
+      const formData = new FormData();
+      formData.append('b2b_client_id', String(b2bId));
+      formData.append('lab_test_id', String(selectedTest.id));
+      formData.append('medical_officer_name', moForm.medical_officer_name.trim());
+      formData.append('medical_officer_position', moForm.medical_officer_position.trim());
+      formData.append('mrocc', moForm.mrocc.trim());
+      formData.append('clia_number', moForm.clia_number.trim());
+      if (moSigFile) {
+        formData.append('medical_officer_signature_file', moSigFile);
+      }
+
+      const token = getToken('b2b_token');
+      const res = await fetch(`${API_BASE}/api/B2bClientLabTestAccess/medical-officer`, {
+        method: 'POST',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      const json = await res.json();
+      if (json.response_code === '200') {
+        toastApiSuccess(json.obj?.message || 'Medical Officer saved successfully.');
+        void openMedicalOfficer(selectedTest);
+      } else {
+        toastApiError(json.obj || 'Unable to save Medical Officer.');
+      }
+    } catch (err: any) {
+      toastApiError(err?.message || 'Saving Medical Officer failed.');
+    } finally {
+      setSavingMo(false);
+    }
+  };
+
+  const revertMedicalOfficer = async () => {
+    if (!b2bId || !selectedTest) return;
+    const ok = await confirmDialog({
+      title: 'Revert to Default Lab Medical Officer?',
+      message: 'This will remove the test-specific Medical Officer details and signature for this test, and revert to your main lab profile officer.',
+      confirmText: 'Revert to Default',
+      cancelText: 'Cancel',
+    });
+    if (!ok) return;
+    setSavingMo(true);
+    try {
+      const formData = new FormData();
+      formData.append('b2b_client_id', String(b2bId));
+      formData.append('lab_test_id', String(selectedTest.id));
+      formData.append('clear_custom', 'true');
+
+      const token = getToken('b2b_token');
+      const res = await fetch(`${API_BASE}/api/B2bClientLabTestAccess/medical-officer`, {
+        method: 'POST',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      const json = await res.json();
+      if (json.response_code === '200') {
+        toastApiSuccess('Reverted to default lab Medical Officer successfully.');
+        void openMedicalOfficer(selectedTest);
+      } else {
+        toastApiError(json.obj || 'Failed to revert.');
+      }
+    } catch (err: any) {
+      toastApiError(err?.message || 'Revert failed.');
+    } finally {
+      setSavingMo(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -855,6 +987,129 @@ export default function AssignedTestCategoryPage() {
     );
   }
 
+  if (view === 'medical_officer' && selectedTest) {
+    const fieldStyle = { width: '100%', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '0.5rem', color: 'var(--text)', marginBottom: '0.75rem' };
+    return (
+      <div className="page-content">
+        <TopNav title={`Medical Officer & Signature — ${selectedTest.name}`} />
+        <div className="page-body" style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
+          
+          {/* Active status banner */}
+          <div className="card" style={{ marginBottom: '1.5rem', background: moData?.is_customized ? 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)' : 'var(--bg-card)', border: moData?.is_customized ? 'none' : '1px solid var(--border)' }}>
+            <div className="card-body" style={{ color: moData?.is_customized ? '#fff' : 'var(--text-color)' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
+                {moData?.is_customized ? 'Test-Specific Medical Officer Active' : 'Using Default B2B Lab Profile Officer'}
+              </div>
+              <p style={{ fontSize: '0.85rem', margin: 0, opacity: moData?.is_customized ? 0.9 : 0.7 }}>
+                {moData?.is_customized
+                  ? `Reports generated for "${selectedTest.name}" will use this custom Medical Officer and signature.`
+                  : `Reports generated for "${selectedTest.name}" currently use your main B2B lab profile Medical Officer signature (${moData?.default_medical_officer?.medical_officer_name || 'Default Officer'}). You can override it below.`}
+              </p>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                <MdBadge size={20} />
+                Medical Officer & Signature Details
+              </span>
+              <button type="button" className="btn btn-ghost" onClick={() => setView('list')}>
+                Close
+              </button>
+            </div>
+            <div className="card-body">
+              {moLoading ? (
+                <div style={{ textAlign: 'center', padding: '2rem' }}>
+                  <MdHourglassEmpty size={24} className="spin" />
+                  <p>Loading details...</p>
+                </div>
+              ) : (
+                <form onSubmit={e => { e.preventDefault(); void saveMedicalOfficer(); }}>
+                  <div className="form-group">
+                    <label>Medical Officer Name</label>
+                    <input
+                      type="text"
+                      placeholder={moData?.default_medical_officer?.medical_officer_name ? `Default: ${moData.default_medical_officer.medical_officer_name}` : 'e.g. Dr. John Smith, M.D.'}
+                      value={moForm.medical_officer_name}
+                      onChange={e => setMoForm(f => ({ ...f, medical_officer_name: e.target.value }))}
+                      style={fieldStyle}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Position / Title</label>
+                    <input
+                      type="text"
+                      placeholder={moData?.default_medical_officer?.medical_officer_position ? `Default: ${moData.default_medical_officer.medical_officer_position}` : 'e.g. Medical Review Officer'}
+                      value={moForm.medical_officer_position}
+                      onChange={e => setMoForm(f => ({ ...f, medical_officer_position: e.target.value }))}
+                      style={fieldStyle}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>MROCC</label>
+                    <input
+                      type="text"
+                      placeholder={moData?.default_medical_officer?.mrocc ? `Default: ${moData.default_medical_officer.mrocc}` : 'e.g. MRO-12345'}
+                      value={moForm.mrocc}
+                      onChange={e => setMoForm(f => ({ ...f, mrocc: e.target.value }))}
+                      style={fieldStyle}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>CLIA Number</label>
+                    <input
+                      type="text"
+                      placeholder={moData?.default_medical_officer?.clia_number ? `Default: ${moData.default_medical_officer.clia_number}` : 'e.g. CLIA-98765'}
+                      value={moForm.clia_number}
+                      onChange={e => setMoForm(f => ({ ...f, clia_number: e.target.value }))}
+                      style={fieldStyle}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '0.4rem', fontWeight: 600 }}>Medical Officer Signature Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => setMoSigFile(e.target.files?.[0] || null)}
+                      style={{ display: 'block', width: '100%', padding: '0.45rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-input)', color: 'var(--text)' }}
+                    />
+                    {moSigFile && <small style={{ color: '#10b981', display: 'block', marginTop: 4 }}>Selected: {moSigFile.name}</small>}
+                    
+                    {/* Existing Signature Preview */}
+                    {moData?.signature_url ? (
+                      <div style={{ marginTop: '0.75rem', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-card)' }}>
+                        <small style={{ display: 'block', fontWeight: 600, marginBottom: 4, color: 'var(--text-muted)' }}>Current Test Signature:</small>
+                        <img src={moData.signature_url} alt="Test Signature" style={{ maxHeight: '60px', objectFit: 'contain' }} />
+                      </div>
+                    ) : moData?.default_medical_officer?.default_signature_url ? (
+                      <div style={{ marginTop: '0.75rem', padding: '0.75rem', border: '1px dashed var(--border)', borderRadius: 6, background: 'var(--bg-card)' }}>
+                        <small style={{ display: 'block', fontWeight: 600, marginBottom: 4, color: 'var(--text-muted)' }}>Default B2B Profile Signature (Fallback):</small>
+                        <img src={moData.default_medical_officer.default_signature_url} alt="Default Signature" style={{ maxHeight: '50px', objectFit: 'contain', opacity: 0.8 }} />
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                    <button type="submit" className="btn btn-primary" disabled={savingMo}>
+                      {savingMo ? <><MdHourglassEmpty size={16} className="spin" /> Saving...</> : <><MdSave size={16} aria-hidden /> Save Medical Officer</>}
+                    </button>
+                    {moData?.is_customized && (
+                      <button type="button" className="btn btn-ghost" onClick={revertMedicalOfficer} disabled={savingMo} style={{ color: '#ef4444' }}>
+                        Revert to Default
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const columns: ListingColumn<LabTest>[] = [
     { key: 'name', label: 'Name', sortable: true, width: '34%', getValue: t => t.name || '', render: t => <span style={{ fontWeight: 500 }}>{t.name}</span> },
     { key: 'description', label: 'Description', sortable: true, width: '28%', getValue: t => t.description || '—', render: t => t.description || '—' },
@@ -868,6 +1123,15 @@ export default function AssignedTestCategoryPage() {
         <div className="listing-actions">
           <button type="button" className="action-btn action-btn-view-eye" title="View Form" onClick={() => openView(test)}>
             <MdVisibility size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="action-btn"
+            title="Medical Officer & Signature"
+            onClick={() => openMedicalOfficer(test)}
+            style={{ background: 'rgba(99, 102, 241, 0.12)', color: '#4f46e5', border: '1px solid rgba(99, 102, 241, 0.25)' }}
+          >
+            <MdBadge size={16} aria-hidden />
           </button>
           {!test.default_view && (
             <>
