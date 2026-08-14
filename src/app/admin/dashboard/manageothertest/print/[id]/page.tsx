@@ -17,6 +17,10 @@ type LabBranding = {
   public_email?: string | null;
   logo_file?: string | null;
   medical_officer_name?: string | null;
+  medical_officer_position?: string | null;
+  mrocc?: string | null;
+  clia_number?: string | null;
+  medical_officer_signature_file_name?: string | null;
 };
 
 function textOrNull(value: unknown): string | null {
@@ -107,7 +111,20 @@ export default function PrintLabTestReport() {
         if (cancelled) return;
         setReport(details);
         setPatient(patientRow);
-        setLab(profile);
+        const resolvedLab: LabBranding = {
+          company_name: details?.b2b_company_name || profile?.company_name,
+          logo_file: details?.b2b_logo || profile?.logo_file,
+          address: details?.b2b_address || profile?.address,
+          public_phone_no: details?.b2b_phone || profile?.public_phone_no,
+          public_fax: details?.b2b_fax || profile?.public_fax,
+          public_email: details?.b2b_email || profile?.public_email,
+          medical_officer_name: details?.medical_officer_name || profile?.medical_officer_name,
+          medical_officer_position: details?.medical_officer_position || profile?.medical_officer_position,
+          mrocc: details?.mrocc || profile?.mrocc,
+          clia_number: details?.clia_number || profile?.clia_number,
+          medical_officer_signature_file_name: details?.medical_officer_signature_file_name || profile?.medical_officer_signature_file_name,
+        };
+        setLab(resolvedLab);
         setLogoFailed(false);
       } catch (err) {
         if (!cancelled) {

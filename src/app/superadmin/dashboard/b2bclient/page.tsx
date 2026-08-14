@@ -20,10 +20,12 @@ import {
   b2bDocumentSchema,
   b2bSubscriptionSchema,
   walletRechargeSchema,
+  walletEditSchema,
   type B2bClientFormValues,
   type B2bDocumentFormValues,
   type B2bSubscriptionFormValues,
   type WalletRechargeFormValues,
+  type WalletEditFormValues,
 } from '../../../../lib/schemas';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -158,6 +160,8 @@ export default function B2BClientsPage() {
     defaultValues: { start_date: '', end_date: '', amount: '' },
   });
 
+  const [walletMode, setWalletMode] = useState<'recharge' | 'edit'>('recharge');
+
   const {
     register: registerWallet,
     handleSubmit: handleWalletSubmit,
@@ -166,6 +170,16 @@ export default function B2BClientsPage() {
   } = useForm<WalletRechargeFormValues>({
     resolver: formResolver<WalletRechargeFormValues>(walletRechargeSchema),
     defaultValues: { amount: '', description: '' },
+  });
+
+  const {
+    register: registerWalletEdit,
+    handleSubmit: handleWalletEditSubmit,
+    reset: resetWalletEdit,
+    formState: { errors: walletEditErrors },
+  } = useForm<WalletEditFormValues>({
+    resolver: formResolver<WalletEditFormValues>(walletEditSchema),
+    defaultValues: { new_balance: '', description: '' },
   });
 
   const {
@@ -733,6 +747,28 @@ export default function B2BClientsPage() {
       }),
   });
 
+  const editWalletBalanceMutation = useMutation({
+    mutationFn: ({
+      clientId,
+      new_balance,
+      description,
+    }: {
+      clientId: number;
+      new_balance: number;
+      description: string;
+    }) =>
+      apiFetch<{ newBalance: number }>('/api/B2bClients/editWalletBalance', {
+        method: 'POST',
+        tokenKey: 'superadmin_token',
+        body: JSON.stringify({
+          b2b_client_id: clientId,
+          new_balance,
+          description,
+        }),
+        errorFallback: 'Wallet balance update failed.',
+      }),
+  });
+
   const changeBillingModeMutation = useMutation({
     mutationFn: ({ clientId, mode }: { clientId: number; mode: 'monthly' | 'yearly' | 'custom' }) =>
       apiFetch(`/api/B2bClients/${clientId}/billingMode`, {
@@ -776,6 +812,7 @@ export default function B2BClientsPage() {
       country_id: c.country_id != null ? String(c.country_id) : '',
       state_id: c.state_id != null ? String(c.state_id) : '',
       city_id: c.city_id != null ? String(c.city_id) : '',
+      wallet_balance: c.wallet_balance != null ? String(c.wallet_balance) : '0',
     });
     setIsApproval(!!c.is_approval);
     setIsCorporateEnabled(typeof c.is_corporate_enabled === 'boolean' ? c.is_corporate_enabled : true);
@@ -1024,8 +1061,11 @@ export default function B2BClientsPage() {
   // ── Wallet ────────────────────────────────────────────────────────────────
   const openWallet = (c: B2BClient) => {
     setSelectedClient(c);
-    setWalletBalanceOverride(c.wallet_balance != null ? Number(c.wallet_balance) : 0);
+    const balance = c.wallet_balance != null ? Number(c.wallet_balance) : 0;
+    setWalletBalanceOverride(balance);
+    setWalletMode('recharge');
     resetWallet({ amount: '', description: '' });
+    resetWalletEdit({ new_balance: String(balance), description: '' });
     setView('wallet');
   };
 
@@ -1046,6 +1086,24 @@ export default function B2BClientsPage() {
       /* error toasted by apiFetch */
     }
   }, createInvalidHandler<WalletRechargeFormValues>());
+
+  const editWalletBalance = handleWalletEditSubmit(async values => {
+    if (!selectedClientId) return;
+    try {
+      const result = await editWalletBalanceMutation.mutateAsync({
+        clientId: selectedClientId,
+        new_balance: Number(values.new_balance),
+        description: values.description || 'Wallet Balance edited by Super Admin',
+      });
+      toastApiSuccess(`Wallet balance updated successfully. New Balance: $${result.newBalance}`);
+      setWalletBalanceOverride(result.newBalance);
+      resetWalletEdit({ new_balance: String(result.newBalance), description: '' });
+      await invalidateClients();
+      await queryClient.invalidateQueries({ queryKey: b2bWalletHistoryKey(selectedClientId) });
+    } catch {
+      /* error toasted by apiFetch */
+    }
+  }, createInvalidHandler<WalletEditFormValues>());
 
   const clientColumns: ListingColumn<B2BClient>[] = [
     {
@@ -1905,56 +1963,131 @@ export default function B2BClientsPage() {
             </div>
           )}
 
-          {/* Recharge Form */}
+          {/* Wallet Actions Card (Add Funds / Edit Balance) */}
           <div className="card" style={{ marginBottom: '1.5rem' }}>
-            <div className="card-header"><span className="card-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}><MdAdd size={18} aria-hidden />Add Funds</span></div>
-            <form onSubmit={rechargeWallet} noValidate>
-            <div className="card-body">
-              <div className="wallet-funds-row">
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label htmlFor="wallet-amount">
-                    Amount ($)<span className="required-star">*</span>
-                  </label>
-                  <input
-                    id="wallet-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    data-field="amount"
-                    placeholder="e.g. 500.00"
-                    aria-invalid={!!walletErrors.amount}
-                    style={fieldStyle(!!walletErrors.amount)}
-                    {...registerWallet('amount')}
-                  />
-                  <FieldError message={walletErrors.amount?.message} />
-                </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label htmlFor="wallet-desc">Description / Note</label>
-                  <input
-                    id="wallet-desc"
-                    type="text"
-                    data-field="description"
-                    placeholder="e.g. Payment received via bank transfer"
-                    style={fieldStyle(!!walletErrors.description)}
-                    {...registerWallet('description')}
-                  />
-                  <FieldError message={walletErrors.description?.message} />
-                </div>
-                <div className="form-group wallet-funds-action" style={{ marginBottom: 0 }}>
-                  <label className="wallet-funds-action-label" aria-hidden="true">&nbsp;</label>
-                  <button
-                    type="submit"
-                    className="btn btn-primary wallet-funds-submit"
-                    disabled={rechargeWalletMutation.isPending}
-                  >
-                    {rechargeWalletMutation.isPending
-                      ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</>
-                      : <><MdPayment size={16} aria-hidden /> Add Funds</>}
-                  </button>
-                </div>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  type="button"
+                  className={`btn ${walletMode === 'recharge' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setWalletMode('recharge')}
+                  style={{ padding: '0.4rem 0.85rem', fontSize: '0.875rem' }}
+                >
+                  <MdAdd size={16} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} aria-hidden />
+                  Add Funds (+)
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${walletMode === 'edit' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => {
+                    setWalletMode('edit');
+                    resetWalletEdit({ new_balance: String(walletBalance || 0), description: '' });
+                  }}
+                  style={{ padding: '0.4rem 0.85rem', fontSize: '0.875rem' }}
+                >
+                  <MdEdit size={16} style={{ verticalAlign: 'text-bottom', marginRight: 4 }} aria-hidden />
+                  Edit / Set Balance (=)
+                </button>
               </div>
             </div>
-            </form>
+
+            {walletMode === 'recharge' ? (
+              <form onSubmit={rechargeWallet} noValidate>
+                <div className="card-body">
+                  <div className="wallet-funds-row">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label htmlFor="wallet-amount">
+                        Add Amount ($)<span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="wallet-amount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        data-field="amount"
+                        placeholder="e.g. 500.00"
+                        aria-invalid={!!walletErrors.amount}
+                        style={fieldStyle(!!walletErrors.amount)}
+                        {...registerWallet('amount')}
+                      />
+                      <FieldError message={walletErrors.amount?.message} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label htmlFor="wallet-desc">Description / Note</label>
+                      <input
+                        id="wallet-desc"
+                        type="text"
+                        data-field="description"
+                        placeholder="e.g. Payment received via bank transfer"
+                        style={fieldStyle(!!walletErrors.description)}
+                        {...registerWallet('description')}
+                      />
+                      <FieldError message={walletErrors.description?.message} />
+                    </div>
+                    <div className="form-group wallet-funds-action" style={{ marginBottom: 0 }}>
+                      <label className="wallet-funds-action-label" aria-hidden="true">&nbsp;</label>
+                      <button
+                        type="submit"
+                        className="btn btn-primary wallet-funds-submit"
+                        disabled={rechargeWalletMutation.isPending}
+                      >
+                        {rechargeWalletMutation.isPending
+                          ? <><MdHourglassEmpty size={16} aria-hidden /> Adding...</>
+                          : <><MdPayment size={16} aria-hidden /> Add Funds</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={editWalletBalance} noValidate>
+                <div className="card-body">
+                  <div className="wallet-funds-row">
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label htmlFor="wallet-new-balance">
+                        New Target Balance ($)<span className="required-star">*</span>
+                      </label>
+                      <input
+                        id="wallet-new-balance"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        data-field="new_balance"
+                        placeholder="e.g. 1000.00"
+                        aria-invalid={!!walletEditErrors.new_balance}
+                        style={fieldStyle(!!walletEditErrors.new_balance)}
+                        {...registerWalletEdit('new_balance')}
+                      />
+                      <FieldError message={walletEditErrors.new_balance?.message} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label htmlFor="wallet-edit-desc">Reason / Note</label>
+                      <input
+                        id="wallet-edit-desc"
+                        type="text"
+                        data-field="description"
+                        placeholder="e.g. Adjust balance per agreement"
+                        style={fieldStyle(!!walletEditErrors.description)}
+                        {...registerWalletEdit('description')}
+                      />
+                      <FieldError message={walletEditErrors.description?.message} />
+                    </div>
+                    <div className="form-group wallet-funds-action" style={{ marginBottom: 0 }}>
+                      <label className="wallet-funds-action-label" aria-hidden="true">&nbsp;</label>
+                      <button
+                        type="submit"
+                        className="btn btn-primary wallet-funds-submit"
+                        disabled={editWalletBalanceMutation.isPending}
+                      >
+                        {editWalletBalanceMutation.isPending
+                          ? <><MdHourglassEmpty size={16} aria-hidden /> Saving...</>
+                          : <><MdSave size={16} aria-hidden /> Set Balance</>}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            )}
           </div>
 
           {/* Transaction History */}
