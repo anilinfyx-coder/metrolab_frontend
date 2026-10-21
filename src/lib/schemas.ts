@@ -197,7 +197,7 @@ export const patientDemographicSchema = yup.object({
   state_id: yup.string().required('Please select a state.'),
   city_id: yup.string().required('Please select a city.'),
   zipcode: requiredTrimmed('the zip code'),
-  email: emailSchema,
+  email: optionalEmailSchema,
   ssn: yup.string().trim(),
   accept: yup
     .boolean()
