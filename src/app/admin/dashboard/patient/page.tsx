@@ -591,7 +591,7 @@ export default function PatientDemographicPage() {
 
               <div className="patient-form-row patient-form-row-3">
                 <div className="form-group">
-                  <label>Email <span className="req">*</span></label>
+                  <label>Email</label>
                   <input
                     type="email"
                     className={inputClass('email')}
