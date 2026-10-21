@@ -19,6 +19,30 @@ function formatCutoff(value?: string | null, unit?: string | null) {
 import AdultHealthInlineForm from './AdultHealthInlineForm';
 import PhysicalExamInlineForm from './PhysicalExamInlineForm';
 
+function splitDateTime(value?: string | null) {
+  if (!value) {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return {
+      date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+      time: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
+    };
+  }
+  const d = new Date(value);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  if (Number.isNaN(d.getTime())) {
+    const [datePart, timePart] = String(value).split(/[T\s]/);
+    return {
+      date: datePart || '',
+      time: timePart ? timePart.slice(0, 5) : '',
+    };
+  }
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
 export default function ApplyTestForm({
   waitingListId,
   onClose,
@@ -48,18 +72,41 @@ export default function ApplyTestForm({
           errorFallback: 'Failed to load test details.',
         });
         setData(obj);
+        const defaultDT = splitDateTime(obj?.creation_timestamp);
         const initialForm: any = {};
         obj.labTestList.forEach((t: any) => {
           initialForm[t.id] = {
-            collectedDate: '', collectedTime: '', receivedDate: '', receivedTime: '',
-            reportedDate: '', reportedTime: '', regulation: 'Non-DOT', specimenTypeId: t.specimenTypeList?.[0]?.id || '',
-            dateOfTest: '', dateOfTime: '', testPerformedBy: '', reportStatus: 'Pending',
+            collectedDate: defaultDT.date,
+            collectedTime: defaultDT.time,
+            receivedDate: defaultDT.date,
+            receivedTime: defaultDT.time,
+            reportedDate: defaultDT.date,
+            reportedTime: defaultDT.time,
+            regulation: 'Non-DOT',
+            specimenTypeId: t.specimenTypeList?.[0]?.id || '',
+            dateOfTest: defaultDT.date,
+            dateOfTime: defaultDT.time,
+            testPerformedBy: '',
+            reportStatus: 'Pending',
             reasonForTest: obj.reason_for_test || '',
-            fasting: '1', requisitionNo: '', deviceIdentifier: '',
-            lot: '', expiryDate: '', dateRead: '', mmIndurations: '', followUp: 'None',
-            finalResult: 'Negative', finalResultText: '', testRemark: '', referenceRangeNote: '',
-            clinicalSignificanceNote: '', resultInterpretationNote: '', finalResultDisposition: 'Negative',
-            finalRemark: '', dateAdministered: '', appliedToArm: 'Right Arm',
+            fasting: '1',
+            requisitionNo: '',
+            deviceIdentifier: '',
+            lot: '',
+            expiryDate: '',
+            dateRead: '',
+            mmIndurations: '',
+            followUp: 'None',
+            finalResult: 'Negative',
+            finalResultText: '',
+            testRemark: '',
+            referenceRangeNote: '',
+            clinicalSignificanceNote: '',
+            resultInterpretationNote: '',
+            finalResultDisposition: 'Negative',
+            finalRemark: '',
+            dateAdministered: '',
+            appliedToArm: 'Right Arm',
             confirmed: false,
             questions: t.testReportQuestionList.map((q: any) => ({ ...q, value: q.answer_type === 1 ? 'Yes' : '' })),
             parameters: t.testResultParameterList.map((p: any) => ({ ...p, value: '' }))
@@ -129,6 +176,72 @@ export default function ApplyTestForm({
   const handleParamChange = (idx: number, val: any) => {
     const newPs = [...form.parameters];
     newPs[idx].value = typeof val === 'string' ? val.trim() : val;
+    handleFormChange('parameters', newPs);
+  };
+
+  const uniqueParamOptions = (() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    (form?.parameters || []).forEach((p: any) => {
+      if (Number(p.input_type) === 2 && p.input_option) {
+        String(p.input_option)
+          .split(',')
+          .map((opt: string) => opt.trim())
+          .filter(Boolean)
+          .forEach((opt: string) => {
+            const lower = opt.toLowerCase();
+            if (!seen.has(lower)) {
+              seen.add(lower);
+              list.push(opt);
+            }
+          });
+      }
+    });
+    return list;
+  })();
+
+  const isOptionAllSelected = (opt: string) => {
+    const optLower = opt.toLowerCase();
+    const applicable = (form?.parameters || []).filter(
+      (p: any) =>
+        Number(p.input_type) === 2 &&
+        String(p.input_option || '')
+          .split(',')
+          .map((s: string) => s.trim().toLowerCase())
+          .includes(optLower)
+    );
+    if (applicable.length === 0) return false;
+    return applicable.every(
+      (p: any) => String(p.value || '').trim().toLowerCase() === optLower
+    );
+  };
+
+  const handleBulkSelectOption = (opt: string, forceApply: boolean = false) => {
+    if (opt === '__clear_all__') {
+      const newPs = (form?.parameters || []).map((p: any) => {
+        if (Number(p.input_type) === 2) {
+          return { ...p, value: '' };
+        }
+        return p;
+      });
+      handleFormChange('parameters', newPs);
+      return;
+    }
+    const optLower = opt.toLowerCase();
+    const currentlyAll = isOptionAllSelected(opt);
+    const shouldClear = !forceApply && currentlyAll;
+    const newPs = (form?.parameters || []).map((p: any) => {
+      if (Number(p.input_type) === 2) {
+        const options = String(p.input_option || '')
+          .split(',')
+          .map((s: string) => s.trim());
+        const matchingOpt = options.find((s: string) => s.toLowerCase() === optLower);
+        if (matchingOpt) {
+          return { ...p, value: shouldClear ? '' : matchingOpt };
+        }
+      }
+      return p;
+    });
     handleFormChange('parameters', newPs);
   };
 
@@ -432,7 +545,83 @@ export default function ApplyTestForm({
                         <th>Report Parameter</th>
                         <th>Screening Cutt-off Value</th>
                         <th>Confirmation Cutt-off Value</th>
-                        <th>Value</th>
+                        <th style={{ minWidth: '220px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                            <span>Value</span>
+                            {uniqueParamOptions.length > 0 && (
+                              uniqueParamOptions.length <= 3 ? (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'normal' }}>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Select All:</span>
+                                  {uniqueParamOptions.map((opt) => {
+                                    const checked = isOptionAllSelected(opt);
+                                    return (
+                                      <label
+                                        key={opt}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.3rem',
+                                          fontSize: '0.75rem',
+                                          fontWeight: 500,
+                                          cursor: 'pointer',
+                                          userSelect: 'none',
+                                          padding: '0.15rem 0.45rem',
+                                          borderRadius: '4px',
+                                          backgroundColor: checked ? '#eff6ff' : '#f8fafc',
+                                          color: checked ? '#1d4ed8' : '#334155',
+                                          border: `1px solid ${checked ? '#93c5fd' : '#cbd5e1'}`,
+                                          lineHeight: 1.2,
+                                          transition: 'all 0.15s ease',
+                                        }}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => handleBulkSelectOption(opt)}
+                                          style={{ cursor: 'pointer', margin: 0, width: '13px', height: '13px', accentColor: '#2563eb' }}
+                                        />
+                                        <span>{opt}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'normal' }}>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Select All:</span>
+                                  <select
+                                    value={uniqueParamOptions.find(opt => isOptionAllSelected(opt)) || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (!val || val === '__clear__') {
+                                        handleBulkSelectOption('__clear_all__');
+                                      } else {
+                                        handleBulkSelectOption(val, true);
+                                      }
+                                    }}
+                                    style={{
+                                      fontSize: '0.75rem',
+                                      padding: '0.15rem 0.5rem',
+                                      borderRadius: '4px',
+                                      border: '1px solid #cbd5e1',
+                                      backgroundColor: '#f8fafc',
+                                      color: '#334155',
+                                      cursor: 'pointer',
+                                      outline: 'none',
+                                      height: '24px',
+                                      maxWidth: '180px',
+                                    }}
+                                  >
+                                    <option value="">Choose value...</option>
+                                    {uniqueParamOptions.map(opt => (
+                                      <option key={opt} value={opt}>{opt}</option>
+                                    ))}
+                                    <option value="__clear__">— Clear All —</option>
+                                  </select>
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>

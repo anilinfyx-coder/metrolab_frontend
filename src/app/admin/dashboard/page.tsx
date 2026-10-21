@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   MdDescription,
   MdHealthAndSafety,
@@ -13,27 +14,72 @@ import {
 } from 'react-icons/md';
 import TopNav from '../../components/TopNav';
 import PageLoader from '../../components/PageLoader';
-import { formatDate } from '../../utils/dateFormat';
-import { apiFetch } from '../../../lib/api';
-
-interface PatientRow {
-  id: number;
-  uid?: string;
-  name?: string;
-  mobile?: string;
-  email?: string;
-  creation_timestamp?: string;
-}
+import { formatDate, formatDateTime } from '../../utils/dateFormat';
+import { apiFetch, handleApiResponse, getToken, API_BASE } from '../../../lib/api';
+import { useConfirm } from '../../components/ConfirmModal';
+import ListingTable, { ActionIcons, ListingColumn } from '../../components/ListingTable';
 
 interface WaitingListRow {
   id: number;
+  patient_id?: number;
   patient_name?: string;
   patient_mobile?: string;
+  patient_uid?: string;
+  reason_for_test?: string;
+  requisition_no?: string;
+  creation_timestamp?: string;
+  status?: boolean;
   tests?: string;
   test_count?: number;
-  reason_for_test?: string;
-  creation_timestamp?: string;
 }
+
+const waitingColumns: ListingColumn<WaitingListRow>[] = [
+  {
+    key: 'creation_timestamp',
+    label: 'Date Time',
+    sortable: false,
+    filterable: false,
+    width: 160,
+    getValue: (row) => formatDateTime(row.creation_timestamp),
+  },
+  {
+    key: 'patient_uid',
+    label: 'Patient/Donor UID',
+    sortable: true,
+    filterable: true,
+    width: 140,
+    getValue: (row) => row.patient_uid || '',
+  },
+  {
+    key: 'patient_name',
+    label: 'Name',
+    sortable: true,
+    filterable: true,
+    width: 130,
+    getValue: (row) => row.patient_name || (row.patient_id ? `Patient #${row.patient_id}` : ''),
+  },
+  {
+    key: 'tests',
+    label: 'Tests',
+    sortable: false,
+    filterable: false,
+    width: '48%',
+    getValue: (row) => {
+      const t = (row.tests || '').trim();
+      if (!t) return '';
+      return t.endsWith('.') ? t : `${t}.`;
+    },
+  },
+  {
+    key: 'test_count',
+    label: 'Test Count',
+    sortable: false,
+    filterable: false,
+    width: 100,
+    align: 'center',
+    getValue: (row) => row.test_count ?? 0,
+  },
+];
 
 interface TestReportRow {
   id: number;
@@ -52,6 +98,7 @@ interface TestRequestRow {
   numberOfEmployee?: number;
   status?: boolean | string;
   creation_timestamp?: string;
+  creationTimestamp?: string;
 }
 
 interface PaginatedEnvelope<T> {
@@ -67,6 +114,9 @@ function isPagedResult<T>(v: unknown): v is PaginatedEnvelope<T> {
 }
 
 export default function AdminDashboardPage() {
+  const router = useRouter();
+  const confirmDialog = useConfirm();
+
   const [waitingCount, setWaitingCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [requestCount, setRequestCount] = useState(0);
@@ -74,56 +124,83 @@ export default function AdminDashboardPage() {
   const [todaysCompletedTests, setTodaysCompletedTests] = useState(0);
   const [isCorporateEnabled, setIsCorporateEnabled] = useState(true);
 
-  const [recentPatients, setRecentPatients] = useState<PatientRow[]>([]);
   const [recentWaiting, setRecentWaiting] = useState<WaitingListRow[]>([]);
   const [recentReports, setRecentReports] = useState<TestReportRow[]>([]);
   const [recentRequests, setRecentRequests] = useState<TestRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchWaitingList = async () => {
+    try {
+      const waitingData = await apiFetch<PaginatedEnvelope<WaitingListRow> | WaitingListRow[]>(
+        '/api/WaitingList?page=1&limit=10&pending_only=true',
+        { tokenKey: 'admin_token' }
+      );
+      if (isPagedResult<WaitingListRow>(waitingData)) {
+        setWaitingCount(waitingData.total);
+        setPendingCount(waitingData.total);
+        setRecentWaiting(waitingData.items);
+      } else if (Array.isArray(waitingData)) {
+        setWaitingCount(waitingData.length);
+        setPendingCount(waitingData.length);
+        setRecentWaiting(waitingData.slice(0, 10));
+      }
+    } catch {
+      setRecentWaiting([]);
+    }
+  };
+
+  const removeWaiting = async (id: number) => {
+    const ok = await confirmDialog({
+      title: 'You are trying to remove Waiting List entry, Please confirm',
+      message: 'This cannot be restored once deleted.',
+      cancelText: 'NO, WAIT!',
+      confirmText: 'CONFIRM DELETION',
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/WaitingList/${id}`, {
+        method: 'DELETE',
+        headers: { token: getToken('admin_token') },
+      });
+      await handleApiResponse(res, {
+        successMessage: 'Waiting list entry deleted successfully.',
+        errorFallback: 'Failed to delete waiting list entry.',
+      });
+      fetchWaitingList();
+    } catch {
+      // Error toast handled by handleApiResponse
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch counts (limit=1 just to get the total field) and recent 5 rows in parallel
         const [
-          patientData,
           waitingData,
-          pendingData,
           reportData,
           requestData,
           badgesRes,
         ] = await Promise.all([
-          apiFetch<PaginatedEnvelope<PatientRow> | PatientRow[]>('/api/Patient?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
-          apiFetch<PaginatedEnvelope<WaitingListRow> | WaitingListRow[]>('/api/WaitingList?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
-          apiFetch<PaginatedEnvelope<WaitingListRow> | WaitingListRow[]>('/api/WaitingList?page=1&limit=1&pending_only=true', { tokenKey: 'admin_token' }).catch(() => null),
-          apiFetch<PaginatedEnvelope<TestReportRow> | TestReportRow[]>('/api/LabTestCategoryReport?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
-          apiFetch<PaginatedEnvelope<TestRequestRow> | TestRequestRow[]>('/api/TestRequest?page=1&limit=5', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<WaitingListRow> | WaitingListRow[]>('/api/WaitingList?page=1&limit=10&pending_only=true', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<TestReportRow> | TestReportRow[]>('/api/LabTestCategoryReport?page=1&limit=10', { tokenKey: 'admin_token' }).catch(() => null),
+          apiFetch<PaginatedEnvelope<TestRequestRow> | TestRequestRow[]>('/api/TestRequest?page=1&limit=10', { tokenKey: 'admin_token' }).catch(() => null),
           apiFetch<{ isCorporateEnabled?: boolean, todaysPatients?: number, todaysCompletedTests?: number }>('/api/TestRequest/sidebarBadgeCounts', { tokenKey: 'admin_token' }).catch(() => null),
         ]);
 
-        if (isPagedResult<PatientRow>(patientData)) {
-          setRecentPatients(patientData.items);
-        } else if (Array.isArray(patientData)) {
-          setRecentPatients(patientData.slice(0, 5));
-        }
-
         if (isPagedResult<WaitingListRow>(waitingData)) {
           setWaitingCount(waitingData.total);
+          setPendingCount(waitingData.total);
           setRecentWaiting(waitingData.items);
         } else if (Array.isArray(waitingData)) {
           setWaitingCount(waitingData.length);
-          setRecentWaiting(waitingData.slice(0, 5));
-        }
-
-        if (isPagedResult<WaitingListRow>(pendingData)) {
-          setPendingCount(pendingData.total);
-        } else if (Array.isArray(pendingData)) {
-          setPendingCount(pendingData.length);
+          setPendingCount(waitingData.length);
+          setRecentWaiting(waitingData.slice(0, 10));
         }
 
         if (isPagedResult<TestReportRow>(reportData)) {
           setRecentReports(reportData.items);
         } else if (Array.isArray(reportData)) {
-          setRecentReports(reportData.slice(0, 5));
+          setRecentReports(reportData.slice(0, 10));
         }
 
         if (isPagedResult<TestRequestRow>(requestData)) {
@@ -131,7 +208,7 @@ export default function AdminDashboardPage() {
           setRecentRequests(requestData.items);
         } else if (Array.isArray(requestData)) {
           setRequestCount(requestData.length);
-          setRecentRequests(requestData.slice(0, 5));
+          setRecentRequests(requestData.slice(0, 10));
         }
 
         if (badgesRes && typeof badgesRes === 'object') {
@@ -149,7 +226,13 @@ export default function AdminDashboardPage() {
     void fetchData();
   }, []);
 
-
+  const sortedWaiting = useMemo(() => {
+    return [...recentWaiting].sort((a, b) => {
+      const timeA = a.creation_timestamp ? new Date(a.creation_timestamp).getTime() : 0;
+      const timeB = b.creation_timestamp ? new Date(b.creation_timestamp).getTime() : 0;
+      return timeB - timeA || b.id - a.id;
+    });
+  }, [recentWaiting]);
 
   return (
     <div className="page-content" style={{ paddingTop: 0 }}>
@@ -193,75 +276,69 @@ export default function AdminDashboardPage() {
               />
             </div>
 
-            <div className="admin-dashboard-tables">
-              <DashboardTableCard
+            <div className="admin-dashboard-tables-stacked">
+              <ListingTable
+                className="waiting-list-table"
                 title="Recent Waiting List"
-                viewHref="/admin/dashboard/labtest"
-                headers={['ID', 'Patient', 'Tests', 'Date']}
-                emptyText="No waiting list entries found."
-                rows={recentWaiting.map((row) => [
-                  <span key="id" style={{ color: '#3b82f6', fontWeight: 500 }}>#{row.id}</span>,
-                  <div key="patient">
-                    <div style={{ fontWeight: 500, color: '#334155' }}>{row.patient_name || 'N/A'}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{row.patient_mobile || 'N/A'}</div>
-                  </div>,
-                  <span key="tests" style={{ color: '#475569' }}>{row.tests || `${row.test_count || 0} test(s)`}</span>,
-                  <span key="date" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                    {row.creation_timestamp ? formatDate(row.creation_timestamp) : 'N/A'}
-                  </span>,
-                ])}
+                headerActions={
+                  <Link href="/admin/dashboard/labtest" className="admin-dashboard-view-all">
+                    View All →
+                  </Link>
+                }
+                columns={waitingColumns}
+                rows={sortedWaiting}
+                defaultSortKey={null}
+                defaultPageSize={10}
+                emptyText="Waiting list is empty. Add patients from Patient Demographic."
+                actionsLabel="Actions"
+                actionsWidth={100}
+                rowActions={(e) => (
+                  <ActionIcons
+                    deleteFirst
+                    editVariant="outline"
+                    editTitle="Edit / Apply Test"
+                    onDelete={() => removeWaiting(e.id)}
+                    onEdit={() => router.push(`/admin/dashboard/labtest/${e.id}`)}
+                  />
+                )}
               />
 
               <DashboardTableCard
                 title="Recent Test Reports"
                 viewHref="/admin/dashboard/manageothertest"
-                headers={['Report UID', 'Patient', 'Test', 'Date']}
+                headers={['Report UID', 'Patient', 'Test', 'Status / Result', 'Date']}
                 emptyText="No test reports found."
                 rows={recentReports.map((row) => [
                   <span key="uid" style={{ color: '#10b981', fontWeight: 500 }}>{row.uid || `#${row.id}`}</span>,
                   <span key="patient" style={{ color: '#334155', fontWeight: 500 }}>{row.patient_name || 'N/A'}</span>,
-                  <div key="test">
-                    <div style={{ fontWeight: 500, color: '#334155' }}>{row.lab_test_name || 'N/A'}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{row.final_result || row.report_status || '—'}</div>
-                  </div>,
+                  <span key="test" style={{ color: '#334155' }}>{row.lab_test_name || 'N/A'}</span>,
+                  <span key="status" style={{ fontSize: '0.85rem', color: '#64748b' }}>{row.final_result || row.report_status || '—'}</span>,
                   <span key="date" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                    {row.creation_timestamp ? formatDate(row.creation_timestamp) : 'N/A'}
+                    {row.creation_timestamp ? formatDateTime(row.creation_timestamp) : 'N/A'}
                   </span>,
                 ])}
               />
 
-              <DashboardTableCard
-                title="Recent Corporate Requests"
-                viewHref="/admin/dashboard/testrequests"
-                headers={['Request ID', 'Title', 'Corporate Client', 'Date']}
-                emptyText="No corporate requests found."
-                rows={recentRequests.map((row) => [
-                  <span key="id" style={{ color: '#3b82f6', fontWeight: 500 }}>#{row.id}</span>,
-                  <span key="title" style={{ color: '#334155', fontWeight: 500 }}>{row.title || 'N/A'}</span>,
-                  <span key="corp">{row.corporateClientCompany || 'N/A'}</span>,
-                  <span key="date" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                    {row.creation_timestamp ? formatDate(row.creation_timestamp) : 'N/A'}
-                  </span>,
-                ])}
-              />
-
-              <DashboardTableCard
-                title="Recently Added Patients"
-                viewHref="/admin/dashboard/patientList"
-                headers={['UID', 'Name', 'Mobile', 'Date']}
-                emptyText="No patients found."
-                rows={recentPatients.map((row) => [
-                  <span key="uid" style={{ color: '#10b981', fontWeight: 500 }}>{row.uid || `#${row.id}`}</span>,
-                  <div key="name">
-                    <div style={{ fontWeight: 500, color: '#334155' }}>{row.name || 'N/A'}</div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>{row.email || '—'}</div>
-                  </div>,
-                  <span key="mobile">{row.mobile || 'N/A'}</span>,
-                  <span key="date" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
-                    {row.creation_timestamp ? formatDate(row.creation_timestamp) : 'N/A'}
-                  </span>,
-                ])}
-              />
+              {isCorporateEnabled && (
+                <DashboardTableCard
+                  title="Recent Corporate Requests"
+                  viewHref="/admin/dashboard/testrequests"
+                  headers={['Request ID', 'Title', 'Corporate Client', 'Date']}
+                  emptyText="No corporate requests found."
+                  rows={recentRequests.map((row) => [
+                    <span key="id" style={{ color: '#3b82f6', fontWeight: 500 }}>#{row.id}</span>,
+                    <span key="title" style={{ color: '#334155', fontWeight: 500 }}>{row.title || 'N/A'}</span>,
+                    <span key="corp">{row.corporateClientCompany || 'N/A'}</span>,
+                    <span key="date" style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}>
+                      {row.creation_timestamp
+                        ? formatDateTime(row.creation_timestamp)
+                        : row.creationTimestamp
+                        ? formatDateTime(row.creationTimestamp)
+                        : 'N/A'}
+                    </span>,
+                  ])}
+                />
+              )}
             </div>
 
           </div>

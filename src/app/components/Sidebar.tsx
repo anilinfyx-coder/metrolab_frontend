@@ -234,8 +234,23 @@ export default function Sidebar({
 
     const loadCorporateBranding = async () => {
       // Corporate users belong to a B2B client — load that client's logo
-      const b2bClientId = stored.b2b_client_id;
-      if (!b2bClientId) return; // no parent B2B → show blank (handled by showLabBranding being false)
+      let b2bClientId = stored.b2b_client_id;
+      if (!b2bClientId && stored.id) {
+        try {
+          const corp = await apiFetch<Record<string, unknown>>(`/api/CorporateClients/${stored.id}`, {
+            tokenKey: resolvedTokenKey,
+            silent: true,
+          });
+          if (corp && typeof corp === 'object' && corp.b2b_client_id) {
+            b2bClientId = corp.b2b_client_id;
+            localStorage.setItem(userKey, JSON.stringify({ ...stored, b2b_client_id: b2bClientId }));
+          }
+        } catch {
+          /* keep blank */
+        }
+      }
+
+      if (!b2bClientId) return;
       try {
         const client = await apiFetch<Record<string, unknown>>(`/api/B2bClients/${b2bClientId}`, {
           tokenKey: resolvedTokenKey,
@@ -266,14 +281,18 @@ export default function Sidebar({
 
   const toggleSidebar = () => setCollapsed((value) => !value);
 
+  const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
   // If we are on a whitelabel domain, use the config logo. Otherwise use the logged in user's logo.
   const activeLogoFile = isWhitelabel ? config?.logo_file : labBranding?.logoFile;
   const activeCompanyName = isWhitelabel ? config?.company_name : labBranding?.companyName;
   const activeTagline = isWhitelabel ? (config?.tagline || labBranding?.tagline) : labBranding?.tagline;
 
-  const hasLabLogo = Boolean(activeLogoFile);
+  const hasLabLogo = Boolean(activeLogoFile) || (isLocal && (isB2bPortal || isCorporatePortal));
   const showLabBranding = (usesLabBranding || isWhitelabel) && hasLabLogo;
-  const labLogoUrl = hasLabLogo ? (isWhitelabel && config?.logo_url ? config.logo_url : getUploadUrl(activeLogoFile)) : '';
+  const labLogoUrl = activeLogoFile
+    ? (isWhitelabel && config?.logo_url ? config.logo_url : getUploadUrl(activeLogoFile))
+    : '/login-logo.png';
 
   const toggleButton = (
     <button
@@ -295,6 +314,12 @@ export default function Sidebar({
         src={labLogoUrl}
         alt={activeCompanyName || 'Lab logo'}
         className={`sidebar-lab-logo${collapsed ? ' sidebar-lab-logo-collapsed' : ''}`}
+        onError={(e) => {
+          if (!e.currentTarget.dataset.fallback) {
+            e.currentTarget.dataset.fallback = '1';
+            e.currentTarget.src = '/login-logo.png';
+          }
+        }}
       />
       {!collapsed && activeTagline ? (
         <div className="sidebar-logo-tagline">{activeTagline}</div>

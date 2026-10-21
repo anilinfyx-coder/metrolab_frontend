@@ -155,7 +155,7 @@ export default function TestRequestDetailPage() {
 
   const filteredEmployees = useMemo(() => {
     if (!detail) return [];
-    let list = [...(detail.employees || [])];
+    let list = (detail.employees || []).filter(employeeHasSelectedTest);
 
     const match = (val: string, q: string) =>
       !q.trim() || String(val || '').toLowerCase().includes(q.trim().toLowerCase());
