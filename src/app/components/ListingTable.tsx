@@ -54,6 +54,8 @@ type ListingTableProps<T extends { id: number | string }> = {
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
   hidePaginationTotal?: boolean;
+  defaultSortKey?: string | null;
+  defaultSortAsc?: boolean;
 };
 
 function getCellText<T>(row: T, col: ListingColumn<T>): string {
@@ -262,13 +264,15 @@ export default function ListingTable<T extends { id: number | string }>({
   onPageChange,
   onPageSizeChange,
   hidePaginationTotal = false,
+  defaultSortKey,
+  defaultSortAsc,
 }: ListingTableProps<T>) {
   const isServerPagination = paginationMode === 'server';
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [sortKey, setSortKey] = useState<string | null>(
-    isServerPagination ? null : (columns.find(c => c.sortable)?.key || null)
+    defaultSortKey !== undefined ? defaultSortKey : (isServerPagination ? null : (columns.find(c => c.sortable)?.key || null))
   );
-  const [sortAsc, setSortAsc] = useState(true);
+  const [sortAsc, setSortAsc] = useState(defaultSortAsc ?? true);
 
   const filteredSorted = useMemo(() => {
     let list = [...rows];

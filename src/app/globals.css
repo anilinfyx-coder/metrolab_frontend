@@ -4876,6 +4876,14 @@ select { cursor: pointer; }
   margin-bottom: 1.5rem;
 }
 
+.admin-dashboard-tables-stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+  margin-bottom: 1.5rem;
+}
+
 .admin-dashboard-table-card {
   border-radius: 12px;
   border: none;

@@ -98,11 +98,61 @@ export default function TestRequestsPage() {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm<TestRequestFormValues>({
     resolver: formResolver<TestRequestFormValues>(schema),
     defaultValues: emptyForm,
   });
+
+  const openGenerateForm = () => {
+    reset({
+      title: '',
+      year: new Date().getFullYear().toString(),
+      frequency: 'Quarter',
+      quarter: '1',
+      testType: 'DOT',
+      reasonForTest: '',
+      selectionType: '1',
+      isDrugSelected: false,
+      drugCount: undefined,
+      isAlcoholSelected: false,
+      alcoholCount: undefined,
+      isAlternateSelected: false,
+      alternateCount: undefined,
+    });
+    setEmployees(prev =>
+      prev.map(e => ({
+        ...e,
+        isSelectedForDrug: false,
+        isSelectedForAlcohol: false,
+        isSelectedForAlternate: false,
+        is_selected_for_drug: false,
+        is_selected_for_alcohol: false,
+        is_selected_for_alternate: false,
+      }))
+    );
+    setViewMode('GENERATE');
+  };
+
+  const closeGenerateForm = () => {
+    reset({
+      title: '',
+      year: new Date().getFullYear().toString(),
+      frequency: 'Quarter',
+      quarter: '1',
+      testType: 'DOT',
+      reasonForTest: '',
+      selectionType: '1',
+      isDrugSelected: false,
+      drugCount: undefined,
+      isAlcoholSelected: false,
+      alcoholCount: undefined,
+      isAlternateSelected: false,
+      alternateCount: undefined,
+    });
+    setViewMode('LIST');
+  };
 
   const frequency = watch('frequency');
   const selectionType = watch('selectionType');
@@ -170,23 +220,25 @@ export default function TestRequestsPage() {
 
     setSaving(true);
 
-    let emps = [...employees];
+    let emps: EmployeeRecord[] = employees.map(e => ({
+      ...e,
+      isSelectedForAlternate: false,
+      isSelectedForAlcohol: false,
+      isSelectedForDrug: false,
+    }));
     // Assign Alternate
-    emps.forEach(e => e.isSelectedForAlternate = false);
     emps.sort(() => Math.random() - 0.5);
     for (let i = 0; i < altC && i < total; i++) {
         emps[i].isSelectedForAlternate = true;
     }
 
     // Assign Alcohol
-    emps.forEach(e => e.isSelectedForAlcohol = false);
     emps = sortRandomlyExceptSelected(emps, 'isSelectedForAlternate');
     for (let i = 0; i < alcC && i < emps.length; i++) {
         emps[i].isSelectedForAlcohol = true;
     }
 
     // Assign Drug
-    emps.forEach(e => e.isSelectedForDrug = false);
     emps = sortRandomlyExceptSelected(emps, 'isSelectedForAlternate');
     for (let i = 0; i < drugC && i < emps.length; i++) {
         emps[i].isSelectedForDrug = true;
@@ -206,7 +258,7 @@ export default function TestRequestsPage() {
         successMessage: 'Successfully generated test request',
         errorFallback: 'Unable to generate test request.',
       });
-      setViewMode('LIST');
+      closeGenerateForm();
       loadData();
     } catch {
       /* toast handled by apiFetch */
@@ -391,7 +443,7 @@ export default function TestRequestsPage() {
               loading={loading}
               emptyText="No test requests found."
               headerActions={(
-                <button type="button" className="test-request-generate-button" onClick={() => setViewMode('GENERATE')}>
+                <button type="button" className="test-request-generate-button" onClick={openGenerateForm}>
                   Generate Test Request
                 </button>
               )}
@@ -439,7 +491,7 @@ export default function TestRequestsPage() {
               }}
             >
               <span className="card-title">Test Request Detail</span>
-              <button type="button" className="listing-header-link" onClick={() => setViewMode('LIST')}>
+              <button type="button" className="listing-header-link" onClick={closeGenerateForm}>
                 Close
               </button>
             </div>
