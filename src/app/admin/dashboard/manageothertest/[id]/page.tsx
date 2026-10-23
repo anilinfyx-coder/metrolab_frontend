@@ -536,153 +536,173 @@ export default function EditTestReportPage() {
                   />
                 ) : (
                   <>
-                    {form.testResultParameterList.length > 0 && (
-                      <div className="report-param-table-wrap">
-                        <table className="report-param-table">
-                      <thead>
-                        <tr>
-                          <th>Report Parameter</th>
-                          <th>Screening Cutt-off Value</th>
-                          <th>Confirmation Cutt-off Value</th>
-                          <th style={{ minWidth: '220px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-                              <span>Value</span>
-                              {uniqueParamOptions.length > 0 && (
-                                uniqueParamOptions.length <= 3 ? (
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'normal' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Select All:</span>
-                                    {uniqueParamOptions.map((opt) => {
-                                      const checked = isOptionAllSelected(opt);
-                                      return (
-                                        <label
-                                          key={opt}
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '0.3rem',
-                                            fontSize: '0.75rem',
-                                            fontWeight: 500,
-                                            cursor: 'pointer',
-                                            userSelect: 'none',
-                                            padding: '0.15rem 0.45rem',
-                                            borderRadius: '4px',
-                                            backgroundColor: checked ? '#eff6ff' : '#f8fafc',
-                                            color: checked ? '#1d4ed8' : '#334155',
-                                            border: `1px solid ${checked ? '#93c5fd' : '#cbd5e1'}`,
-                                            lineHeight: 1.2,
-                                            transition: 'all 0.15s ease',
-                                          }}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={() => handleBulkSelectOption(opt)}
-                                            style={{ cursor: 'pointer', margin: 0, width: '13px', height: '13px', accentColor: '#2563eb' }}
-                                          />
-                                          <span>{opt}</span>
-                                        </label>
-                                      );
-                                    })}
+                    {form.testResultParameterList.length > 0 && (() => {
+                      const hasAnyCutoff = form.testResultParameterList.some((p) =>
+                        (p.screening_cutoff && String(p.screening_cutoff).trim() !== '' && String(p.screening_cutoff).toLowerCase() !== 'null') ||
+                        (p.confirmation_cutoff && String(p.confirmation_cutoff).trim() !== '' && String(p.confirmation_cutoff).toLowerCase() !== 'null')
+                      );
+                      return (
+                        <div className="report-param-table-wrap">
+                          <table className="report-param-table">
+                            <thead>
+                              <tr>
+                                <th>Report Parameter</th>
+                                {hasAnyCutoff && <th>Screening Cutt-off Value</th>}
+                                {hasAnyCutoff && <th>Confirmation Cutt-off Value</th>}
+                                <th style={{ minWidth: '220px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <span>Value</span>
+                                    {uniqueParamOptions.length > 0 && (
+                                      uniqueParamOptions.length <= 3 ? (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'normal' }}>
+                                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Select All:</span>
+                                          {uniqueParamOptions.map((opt) => {
+                                            const checked = isOptionAllSelected(opt);
+                                            return (
+                                              <label
+                                                key={opt}
+                                                style={{
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '0.3rem',
+                                                  fontSize: '0.75rem',
+                                                  fontWeight: 500,
+                                                  cursor: 'pointer',
+                                                  userSelect: 'none',
+                                                  padding: '0.15rem 0.45rem',
+                                                  borderRadius: '4px',
+                                                  backgroundColor: checked ? '#eff6ff' : '#f8fafc',
+                                                  color: checked ? '#1d4ed8' : '#334155',
+                                                  border: `1px solid ${checked ? '#93c5fd' : '#cbd5e1'}`,
+                                                  lineHeight: 1.2,
+                                                  transition: 'all 0.15s ease',
+                                                }}
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={checked}
+                                                  onChange={() => handleBulkSelectOption(opt)}
+                                                  style={{ cursor: 'pointer', margin: 0, width: '13px', height: '13px', accentColor: '#2563eb' }}
+                                                />
+                                                <span>{opt}</span>
+                                              </label>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'normal' }}>
+                                          <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Select All:</span>
+                                          <select
+                                            value={uniqueParamOptions.find(opt => isOptionAllSelected(opt)) || ''}
+                                            onChange={(e) => {
+                                              const val = e.target.value;
+                                              if (!val || val === '__clear__') {
+                                                handleBulkSelectOption('__clear_all__');
+                                              } else {
+                                                handleBulkSelectOption(val, true);
+                                              }
+                                            }}
+                                            style={{
+                                              fontSize: '0.75rem',
+                                              padding: '0.15rem 0.5rem',
+                                              borderRadius: '4px',
+                                              border: '1px solid #cbd5e1',
+                                              backgroundColor: '#f8fafc',
+                                              color: '#334155',
+                                              cursor: 'pointer',
+                                              outline: 'none',
+                                              height: '24px',
+                                              maxWidth: '180px',
+                                            }}
+                                          >
+                                            <option value="">Choose value...</option>
+                                            {uniqueParamOptions.map(opt => (
+                                              <option key={opt} value={opt}>{opt}</option>
+                                            ))}
+                                            <option value="__clear__">— Clear All —</option>
+                                          </select>
+                                        </div>
+                                      )
+                                    )}
                                   </div>
-                                ) : (
-                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 'normal' }}>
-                                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Select All:</span>
-                                    <select
-                                      value={uniqueParamOptions.find(opt => isOptionAllSelected(opt)) || ''}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        if (!val || val === '__clear__') {
-                                          handleBulkSelectOption('__clear_all__');
-                                        } else {
-                                          handleBulkSelectOption(val, true);
-                                        }
-                                      }}
-                                      style={{
-                                        fontSize: '0.75rem',
-                                        padding: '0.15rem 0.5rem',
-                                        borderRadius: '4px',
-                                        border: '1px solid #cbd5e1',
-                                        backgroundColor: '#f8fafc',
-                                        color: '#334155',
-                                        cursor: 'pointer',
-                                        outline: 'none',
-                                        height: '24px',
-                                        maxWidth: '180px',
-                                      }}
-                                    >
-                                      <option value="">Choose value...</option>
-                                      {uniqueParamOptions.map(opt => (
-                                        <option key={opt} value={opt}>{opt}</option>
-                                      ))}
-                                      <option value="__clear__">— Clear All —</option>
-                                    </select>
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {form.testResultParameterList.map((p, i) => (
-                          <tr key={p.report_request_parameters_id || i}>
-                            <td>
-                              <div className="report-param-name">{paramLabel(p)}</div>
-                              {p.description && (
-                                <div className="report-param-desc">{p.description}</div>
-                              )}
-                            </td>
-                            <td>{formatCutoff(p.screening_cutoff, p.unit_text)}</td>
-                            <td>{formatCutoff(p.confirmation_cutoff, p.unit_text)}</td>
-                            <td>
-                              {Number(p.input_type) === 2 ? (
-                                <select
-                                  className="form-input report-edit-input"
-                                  value={p.value || ''}
-                                  onChange={(e) => setParamValue(i, e.target.value)}
-                                >
-                                  <option value="">Select</option>
-                                  {String(p.input_option || '')
-                                    .split(',')
-                                    .map((opt) => opt.trim())
-                                    .filter(Boolean)
-                                    .map((opt) => (
-                                      <option key={opt} value={opt}>{opt}</option>
-                                    ))}
-                                </select>
-                              ) : (
-                                <input
-                                  type="text"
-                                  className="form-input report-edit-input"
-                                  placeholder={p.placeholder || ''}
-                                  value={p.value}
-                                  onChange={(e) => setParamValue(i, e.target.value)}
-                                />
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {form.testResultParameterList.map((p, i) => (
+                                <tr key={p.report_request_parameters_id || i}>
+                                  <td>
+                                    <div className="report-param-name">{paramLabel(p)}</div>
+                                    {p.description && (
+                                      <div className="report-param-desc">{p.description}</div>
+                                    )}
+                                  </td>
+                                  {hasAnyCutoff && <td>{formatCutoff(p.screening_cutoff, p.unit_text)}</td>}
+                                  {hasAnyCutoff && <td>{formatCutoff(p.confirmation_cutoff, p.unit_text)}</td>}
+                                  <td>
+                                    {Number(p.input_type) === 2 ? (
+                                      <select
+                                        className="form-input report-edit-input"
+                                        value={p.value || ''}
+                                        onChange={(e) => setParamValue(i, e.target.value)}
+                                      >
+                                        <option value="">Select</option>
+                                        {String(p.input_option || '')
+                                          .split(',')
+                                          .map((opt) => opt.trim())
+                                          .filter(Boolean)
+                                          .map((opt) => (
+                                            <option key={opt} value={opt}>{opt}</option>
+                                          ))}
+                                      </select>
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        className="form-input report-edit-input"
+                                        placeholder={p.placeholder || ''}
+                                        value={p.value}
+                                        onChange={(e) => setParamValue(i, e.target.value)}
+                                      />
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
 
                 {form.testReportQuestionList.length > 0 && (
                   <div className="wl-questions-block">
                     <h4>Please answer the following</h4>
                     {form.testReportQuestionList.map((q, i) => (
-                      <div key={q.report_question_id} className="wl-question-row">
-                        <span>{i + 1}. {q.question_text}</span>
+                      <div key={q.report_question_id || i} className="wl-question-row">
+                        <span>{i + 1}. {q.question_text?.endsWith('?') ? q.question_text : `${q.question_text}?`}</span>
                         <div className="wl-question-input">
                           {q.answer_type === 1 ? (
-                            <select
-                              className="form-input report-edit-input"
-                              value={q.value}
-                              onChange={(e) => setQuestionValue(i, e.target.value)}
-                            >
-                              <option value="Yes">Yes</option>
-                              <option value="No">No</option>
-                            </select>
+                            <div className="wl-radio-group">
+                              <label className="wl-radio-label">
+                                <input
+                                  type="radio"
+                                  name={`edit_q_${q.report_question_id ?? i}`}
+                                  value="Yes"
+                                  checked={String(q.value).trim().toLowerCase() === 'yes' || q.value === '1'}
+                                  onChange={() => setQuestionValue(i, 'Yes')}
+                                />
+                                <span>Yes</span>
+                              </label>
+                              <label className="wl-radio-label">
+                                <input
+                                  type="radio"
+                                  name={`edit_q_${q.report_question_id ?? i}`}
+                                  value="No"
+                                  checked={String(q.value).trim().toLowerCase() === 'no' || q.value === '0'}
+                                  onChange={() => setQuestionValue(i, 'No')}
+                                />
+                                <span>No</span>
+                              </label>
+                            </div>
                           ) : q.answer_type === 2 ? (
                             <select
                               className="form-input report-edit-input"

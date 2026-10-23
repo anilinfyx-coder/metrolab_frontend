@@ -266,31 +266,37 @@ export default function PrintLabTestReport() {
           </section>
         ) : null}
 
-        {params.length > 0 ? (
-          <section className="ltr-section">
-            <h2 className="ltr-section-title">Drugs Tested</h2>
-            <table className="ltr-table">
-              <thead>
-                <tr>
-                  <th>Drug Name</th>
-                  <th>Result</th>
-                  <th>Laboratory Screening Cutoff*</th>
-                  <th>Laboratory Confirmation Cutoff*</th>
-                </tr>
-              </thead>
-              <tbody>
-                {params.map((p) => (
-                  <tr key={p.report_request_parameters_id || p.id}>
-                    <td>{p.label || p.name || '—'}</td>
-                    <td>{p.value || '—'}</td>
-                    <td>{p.screening_cutoff ?? '—'}{p.unit_text ? ` ${p.unit_text}` : ''}</td>
-                    <td>{p.confirmation_cutoff ?? '—'}{p.unit_text ? ` ${p.unit_text}` : ''}</td>
+        {params.length > 0 && (() => {
+          const hasCutoffs = params.some((p) =>
+            (p.screening_cutoff && String(p.screening_cutoff).trim() !== '' && String(p.screening_cutoff).toLowerCase() !== 'null') ||
+            (p.confirmation_cutoff && String(p.confirmation_cutoff).trim() !== '' && String(p.confirmation_cutoff).toLowerCase() !== 'null')
+          );
+          return (
+            <section className="ltr-section">
+              <h2 className="ltr-section-title">{hasCutoffs ? 'Drugs Tested' : (report?.lab_test_name || 'Test Parameters')}</h2>
+              <table className="ltr-table">
+                <thead>
+                  <tr>
+                    <th>{hasCutoffs ? 'Drug Name' : 'Parameter'}</th>
+                    <th>Result</th>
+                    {hasCutoffs && <th>Laboratory Screening Cutoff*</th>}
+                    {hasCutoffs && <th>Laboratory Confirmation Cutoff*</th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-        ) : null}
+                </thead>
+                <tbody>
+                  {params.map((p) => (
+                    <tr key={p.report_request_parameters_id || p.id}>
+                      <td>{p.label || p.name || '—'}</td>
+                      <td>{p.value || '—'}</td>
+                      {hasCutoffs && <td>{p.screening_cutoff ?? '—'}{p.unit_text ? ` ${p.unit_text}` : ''}</td>}
+                      {hasCutoffs && <td>{p.confirmation_cutoff ?? '—'}{p.unit_text ? ` ${p.unit_text}` : ''}</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          );
+        })()}
 
         {mroFields.length > 0 ? (
           <section className="ltr-section">
@@ -303,7 +309,12 @@ export default function PrintLabTestReport() {
           </section>
         ) : null}
 
-        <p className="ltr-footnote">* Represents laboratory screening and confirmation values</p>
+        {params.some((p) =>
+          (p.screening_cutoff && String(p.screening_cutoff).trim() !== '' && String(p.screening_cutoff).toLowerCase() !== 'null') ||
+          (p.confirmation_cutoff && String(p.confirmation_cutoff).trim() !== '' && String(p.confirmation_cutoff).toLowerCase() !== 'null')
+        ) ? (
+          <p className="ltr-footnote">* Represents laboratory screening and confirmation values</p>
+        ) : null}
       </div>
     </div>
   );
@@ -326,11 +337,52 @@ const LTR_STYLES = `
   .ltr-printed { text-align: right; font-size: 12px; font-family: Arial, sans-serif; margin-bottom: 12px; }
   .ltr-hr { border: none; border-top: 1px solid #111; margin: 0 0 16px; }
   .ltr-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 24px; font-size: 13px; font-family: Arial, sans-serif; margin-bottom: 20px; }
-  .ltr-section { margin-bottom: 24px; }
-  .ltr-section-title { font-size: 14px; color: #1a5f9e; margin: 0 0 12px; font-family: Arial, sans-serif; }
-  .ltr-table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; }
-  .ltr-table th, .ltr-table td { border: 1px solid #111; padding: 6px 8px; text-align: left; }
+  .ltr-section { margin-bottom: 20px; }
+  .ltr-section-title { font-size: 14px; color: #1a5f9e; margin: 0 0 10px; font-family: Arial, sans-serif; }
+  .ltr-table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 12px; table-layout: fixed; }
+  .ltr-table th, .ltr-table td { border: 1px solid #111; padding: 6px 8px; text-align: left; word-break: break-word; }
+  .ltr-table th:nth-child(1), .ltr-table td:nth-child(1) { width: 38%; }
+  .ltr-table th:nth-child(2), .ltr-table td:nth-child(2) { width: 16%; }
+  .ltr-table th:nth-child(3), .ltr-table td:nth-child(3) { width: 23%; }
+  .ltr-table th:nth-child(4), .ltr-table td:nth-child(4) { width: 23%; }
   .ltr-table th { background: #f8fafc; font-weight: 700; }
-  .ltr-mro-row { font-family: Arial, sans-serif; font-size: 13px; margin-bottom: 8px; }
-  .ltr-footnote { font-size: 11px; font-family: Arial, sans-serif; color: #444; margin-top: 24px; }
+  .ltr-mro-row { font-family: Arial, sans-serif; font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
+  .ltr-footnote { font-size: 11px; font-family: Arial, sans-serif; color: #444; margin-top: 20px; }
+
+  @media print {
+    @page {
+      size: letter portrait;
+      margin: 0.35in;
+    }
+    body, html {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .ltr-page {
+      background: #fff !important;
+      padding: 0 !important;
+      min-height: auto !important;
+    }
+    .ltr-sheet {
+      box-shadow: none !important;
+      padding: 0 !important;
+      max-width: 100% !important;
+      page-break-inside: avoid !important;
+    }
+    .no-print {
+      display: none !important;
+    }
+    .ltr-section {
+      page-break-inside: avoid !important;
+      margin-bottom: 12px !important;
+    }
+    .ltr-table {
+      page-break-inside: avoid !important;
+    }
+    .ltr-meta-grid {
+      margin-bottom: 12px !important;
+      gap: 8px 18px !important;
+    }
+  }
 `;

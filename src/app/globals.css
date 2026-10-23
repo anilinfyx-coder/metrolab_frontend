@@ -3356,6 +3356,35 @@ body.sidebar-collapsed .sidebar-metro-footer-tagline {
   flex-shrink: 0;
 }
 
+.wl-radio-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1.5rem;
+  height: 38px;
+}
+
+.wl-radio-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-color, #1f2937);
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+}
+
+.wl-radio-label input[type="radio"] {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+  accent-color: var(--primary, #0076A3);
+  margin: 0;
+  vertical-align: middle;
+}
+
 .wl-form-remarks {
   display: flex;
   flex-direction: column;
