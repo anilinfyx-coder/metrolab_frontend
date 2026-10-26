@@ -317,6 +317,37 @@ export default function PatientDemographicPage() {
         setSaving(false);
         return;
       }
+    } else {
+      const updatePayload = {
+        name: values.name,
+        mobile: values.mobile,
+        gender: Number(values.gender),
+        dob: values.dob || null,
+        driving_license_state: values.driving_license_state,
+        driving_license: values.driving_license,
+        street1: values.street1,
+        street2: values.street2,
+        country_id: values.country_id ? Number(values.country_id) : null,
+        state_id: values.state_id ? Number(values.state_id) : null,
+        city_id: values.city_id ? Number(values.city_id) : null,
+        country: countryName,
+        city: cityName,
+        state: stateName,
+        zipcode: values.zipcode,
+        email: values.email,
+        ssn: values.ssn,
+      };
+
+      try {
+        const patRes = await fetch(`${API_BASE}/api/Patient/${patientId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', token: getToken('admin_token') },
+          body: JSON.stringify(updatePayload),
+        });
+        await handleApiResponse(patRes, { silent: true });
+      } catch {
+        // Proceed even if update fails
+      }
     }
 
     const wlPayload = {
